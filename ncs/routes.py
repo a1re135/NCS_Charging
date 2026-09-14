@@ -18,6 +18,11 @@ def body():
     if not isinstance(data,dict): raise BusinessError('请提交 JSON 对象')
     return data
 
+def day(value,label):
+    try: datetime.strptime(value,'%Y-%m-%d')
+    except (ValueError,TypeError): raise BusinessError(f'{label}格式应为 YYYY-MM-DD')
+    return value
+
 def public_user(u):
     return {k:u[k] for k in ('id','phone','nickname','role','balance_cents','avatar','active','created_at')}
 
@@ -67,11 +72,30 @@ def logout():
 @auth()
 def stations():
     lat=number(request.args.get('lat',39.9593),-90,90,'纬度'); lng=number(request.args.get('lng',116.2981),-180,180,'经度')
+    status=request.args.get('status',''); kind=request.args.get('kind',''); sort=request.args.get('sort','distance')
+    if status not in ('','idle','fault','maintenance','offline'): raise BusinessError('电站状态筛选无效')
+    if kind not in ('','fast','slow'): raise BusinessError('充电类型筛选无效')
+    if sort not in ('distance','usage'): raise BusinessError('排序方式无效')
+    sql='''SELECT s.*,COUNT(c.id) total,
+     SUM(CASE WHEN c.status='idle' THEN 1 ELSE 0 END) free,
+     SUM(CASE WHEN c.kind='fast' THEN 1 ELSE 0 END) fast,
+     SUM(CASE WHEN c.kind='slow' THEN 1 ELSE 0 END) slow,
+     COALESCE(SUM(c.total_count),0) usage,
+     SUM(CASE WHEN c.status='fault' THEN 1 ELSE 0 END) fault,
+     SUM(CASE WHEN c.status='maintenance' THEN 1 ELSE 0 END) maintenance,
+     SUM(CASE WHEN c.status='offline' THEN 1 ELSE 0 END) offline
+     FROM stations s LEFT JOIN chargers c ON c.station_id=s.id'''
+    conds=[]; args=[]
+    if status: conds.append('EXISTS(SELECT 1 FROM chargers x WHERE x.station_id=s.id AND x.status=?)'); args.append(status)
+    if kind: conds.append('EXISTS(SELECT 1 FROM chargers x WHERE x.station_id=s.id AND x.kind=?)'); args.append(kind)
+    if conds: sql+=' WHERE '+' AND '.join(conds)
+    sql+=' GROUP BY s.id'
     result=[]
-    for row in get_db().execute('''SELECT s.*,COUNT(c.id) total,SUM(CASE WHEN c.status='idle' THEN 1 ELSE 0 END) free
-        FROM stations s LEFT JOIN chargers c ON c.station_id=s.id GROUP BY s.id'''):
+    for row in get_db().execute(sql,args):
         r=dict(row); r['distance']=distance(lat,lng,r['lat'],r['lng']); result.append(r)
-    return jsonify(sorted(result,key=lambda r:r['distance']))
+    if sort=='usage': result.sort(key=lambda r:(-r['usage'],r['distance']))
+    else: result.sort(key=lambda r:r['distance'])
+    return jsonify(result)
 
 @api.get('/stations/<int:sid>')
 @auth()
@@ -85,7 +109,13 @@ def station(sid):
 def orders():
     where='' if g.user['role']=='admin' else ' WHERE o.user_id=?'
     args=() if not where else (g.user['id'],)
-    return jsonify([quote(r) for r in get_db().execute(ORDER_SELECT+where+' ORDER BY o.id DESC',args)])
+    conds=[]; params=list(args)
+    date_from=request.args.get('date_from',''); date_to=request.args.get('date_to','')
+    if date_from: day(date_from,'开始日期'); conds.append('substr(o.created_at,1,10)>=?'); params.append(date_from)
+    if date_to: day(date_to,'结束日期'); conds.append('substr(o.created_at,1,10)<=?'); params.append(date_to)
+    if date_from and date_to and date_from>date_to: raise BusinessError('开始日期不能晚于结束日期')
+    if conds: where=(where+' AND ' if where else ' WHERE ')+' AND '.join(conds)
+    return jsonify([quote(r) for r in get_db().execute(ORDER_SELECT+where+' ORDER BY o.id DESC',params)])
 
 @api.post('/orders')
 @auth()
@@ -162,7 +192,27 @@ def dashboard():
 @api.get('/admin/users')
 @auth(True)
 def users():
-    return jsonify([public_user(r) for r in get_db().execute("SELECT * FROM users WHERE role='user' ORDER BY id")])
+    status=request.args.get('status',''); sort=request.args.get('sort','newest')
+    date_from=request.args.get('date_from',''); date_to=request.args.get('date_to','')
+    if status not in ('','normal','debt','frozen'): raise BusinessError('用户状态筛选无效')
+    if sort not in ('newest','oldest'): raise BusinessError('排序方式无效')
+    if date_from: day(date_from,'开始日期')
+    if date_to: day(date_to,'结束日期')
+    if date_from and date_to and date_from>date_to: raise BusinessError('开始日期不能晚于结束日期')
+    sql='''SELECT u.id,u.phone,u.nickname,u.role,u.balance_cents,u.avatar,u.active,u.created_at,
+     COALESCE(SUM(o.debt_cents),0) debt_cents
+     FROM users u LEFT JOIN orders o ON o.user_id=u.id AND o.debt_cents>0
+     WHERE u.role='user' '''
+    conds=[]; params=[]
+    if date_from: conds.append('substr(u.created_at,1,10)>=?'); params.append(date_from)
+    if date_to: conds.append('substr(u.created_at,1,10)<=?'); params.append(date_to)
+    if conds: sql+=' AND '+' AND '.join(conds)
+    sql+=' GROUP BY u.id'
+    rows=[dict(r) for r in get_db().execute(sql,params)]
+    def state(r): return 'debt' if r['debt_cents']>0 else ('frozen' if not r['active'] else 'normal')
+    if status: rows=[r for r in rows if state(r)==status]
+    rows.sort(key=lambda r:r['created_at'],reverse=(sort=='newest'))
+    return jsonify(rows)
 
 @api.post('/admin/users/<int:uid>')
 @auth(True)
@@ -230,8 +280,8 @@ def charger_action(cid):
         if not c: raise BusinessError('电桩不存在',404)
         if c['status'] in ('charging','reserved'): raise BusinessError('电桩有未完成订单，不能操作',409)
         if action=='delete': db.execute('DELETE FROM chargers WHERE id=?',(cid,))
-        elif action in ('fault','restore','restart'):
-            db.execute('UPDATE chargers SET status=? WHERE id=?',('fault' if action=='fault' else 'idle',cid))
+        elif action in ('fault','maintenance','offline','restore','restart'):
+            db.execute('UPDATE chargers SET status=? WHERE id=?',({'fault':'fault','maintenance':'maintenance','offline':'offline','restore':'idle','restart':'idle'}[action],cid))
         else: raise BusinessError('操作无效')
         audit(g.user['id'],f'电桩 #{cid}：{action}'+('（软件模拟）' if action=='restart' else ''))
     return jsonify(ok=True)
@@ -265,6 +315,11 @@ def export():
     def safe(v):
         s=str(v or '')
         return "'"+s if s[:1] in ('=','+','-','@','\t','\r') else s
-    for r in get_db().execute(ORDER_SELECT+' ORDER BY o.id DESC'):
+    where=''; params=[]
+    date_from=request.args.get('date_from',''); date_to=request.args.get('date_to','')
+    if date_from: day(date_from,'开始日期'); where+=' WHERE substr(o.created_at,1,10)>=?'; params.append(date_from)
+    if date_to: day(date_to,'结束日期'); where+=((' AND ' if where else ' WHERE ')+'substr(o.created_at,1,10)<=?'); params.append(date_to)
+    if date_from and date_to and date_from>date_to: raise BusinessError('开始日期不能晚于结束日期')
+    for r in get_db().execute(ORDER_SELECT+where+' ORDER BY o.id DESC',params):
         writer.writerow([r['id'],safe(r['nickname']),safe(r['station_name']),safe(r['charger_number']),r['status'],r['energy'],r['amount_cents']/100,r['paid_cents']/100,r['debt_cents']/100,r['started_at'],r['ended_at']])
     return Response('\ufeff'+out.getvalue(),mimetype='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename=ncs-orders.csv'})
