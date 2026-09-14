@@ -48,9 +48,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.sql('SELECT status FROM chargers WHERE id=1')[0][0],'idle')
     def test_settlement_snapshots_and_no_double_charge(self):
         oid=self.start(mode='reserve');self.assertEqual(self.post(f'/orders/{oid}/start').status_code,200)
-        self.age(oid);self.sql('UPDATE stations SET price_cents=999 WHERE id=1');self.sql('UPDATE chargers SET power=999 WHERE id=1')
+        snap=self.sql('SELECT price_cents,power FROM orders WHERE id=?',(oid,))[0]
+        self.age(oid);self.sql('UPDATE stations SET price_cents=999 WHERE id=1');self.sql('UPDATE pricing_rules SET electricity_fee_cents=999 WHERE station_id=1');self.sql('UPDATE chargers SET power=999 WHERE id=1')
         r=self.post(f'/orders/{oid}/finish');self.assertEqual(r.status_code,200);o=r.json['order']
-        self.assertEqual(o['price_cents'],160);self.assertEqual(o['power'],60);self.assertTrue(9600<=o['amount_cents']<=10080,o)
+        self.assertEqual(o['price_cents'],snap['price_cents']);self.assertEqual(o['power'],snap['power']);self.assertTrue(60*snap['price_cents']<=o['amount_cents']<=64*snap['price_cents'],o)
         balance=self.sql('SELECT balance_cents FROM users WHERE id=1')[0][0]
         self.assertEqual(self.post(f'/orders/{oid}/finish').status_code,409)
         self.assertEqual(self.sql('SELECT balance_cents FROM users WHERE id=1')[0][0],balance)
@@ -104,5 +105,24 @@ class WorkflowTests(unittest.TestCase):
         a,t=self.login('admin','Admin123456');p=a.get('/api/admin/prediction?station_id=1').json
         self.assertEqual(len(p['points']),12);self.assertGreater(p['sample_count'],0)
         r=a.get('/api/admin/export');self.assertEqual(r.status_code,200);self.assertTrue(r.data.startswith(b'\xef\xbb\xbf'))
+
+    def test_station_info_pricing_fault_and_qr_features(self):
+        a,t=self.login('admin','Admin123456')
+        station_data={'name':'完整信息站','address':'北京市测试路 1 号','city':'北京市测试区','business_hours':'06:00-23:00','contact_phone':'010-12345678','operating_status':'operating','parking_info':'充电前两小时免费','lng':116.1,'lat':39.9,'price':1.5}
+        r=self.post('/admin/stations',station_data,a,t);self.assertEqual(r.status_code,200,r.json);sid=r.json['id']
+        detail=a.get(f'/api/stations/{sid}').json
+        self.assertEqual(detail['station']['city'],'北京市测试区');self.assertEqual(detail['station']['business_hours'],'06:00-23:00');self.assertEqual(len(detail['pricing']),3)
+        rules=a.get(f'/api/admin/pricing?station_id={sid}').json;self.assertEqual(len(rules),3)
+        first=rules[0];r=self.post(f"/admin/pricing/{first['id']}",{'station_id':sid,'start_time':first['start_time'],'end_time':first['end_time'],'electricity_fee':'0.88','service_fee':'0.22'},a,t);self.assertEqual(r.status_code,200,r.json)
+        r=self.post('/admin/chargers',{'station_id':sid,'number':'QR-FAULT-01','kind':'fast','power':60},a,t);self.assertEqual(r.status_code,200,r.json);cid=r.json['id']
+        r=self.post('/admin/faults',{'charger_id':cid,'fault_type':'通信故障','description':'无法连接服务器'},a,t);self.assertEqual(r.status_code,201,r.json);fid=r.json['id']
+        self.assertEqual(self.sql('SELECT status FROM chargers WHERE id=?',(cid,))[0][0],'fault')
+        self.assertEqual(self.post(f'/admin/faults/{fid}',{'status':'processing','resolution':''},a,t).status_code,200)
+        self.assertEqual(self.sql('SELECT status FROM chargers WHERE id=?',(cid,))[0][0],'maintenance')
+        self.assertEqual(self.post(f'/admin/faults/{fid}',{'status':'resolved','resolution':'更换通信模块'},a,t).status_code,200)
+        self.assertEqual(self.sql('SELECT status FROM chargers WHERE id=?',(cid,))[0][0],'idle')
+        qr=a.get(f'/api/chargers/{cid}/qr');self.assertEqual(qr.status_code,200);self.assertIn('image/svg+xml',qr.content_type)
+        self.assertEqual(a.get('/api/chargers/by-number/QR-FAULT-01').json['id'],cid)
+        self.assertEqual(a.get('/charge/QR-FAULT-01').status_code,200)
 
 if __name__=='__main__': unittest.main(verbosity=2)

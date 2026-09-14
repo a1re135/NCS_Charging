@@ -42,7 +42,8 @@ def create_app(config=None):
     @app.errorhandler(413)
     def too_large(e): return jsonify(error='文件或请求过大，最多 2 MB'),413
     @app.get('/')
-    def index(): return render_template('index.html')
+    @app.get('/charge/<charger_number>')
+    def index(charger_number=None): return render_template('index.html')
     from .routes import api
     app.register_blueprint(api,url_prefix='/api')
     with app.app_context(): init_db()

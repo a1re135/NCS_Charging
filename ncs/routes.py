@@ -7,9 +7,11 @@ from datetime import datetime,timedelta
 from functools import wraps
 from flask import Blueprint,request,session,jsonify,g,Response,current_app
 from werkzeug.security import check_password_hash,generate_password_hash
+import qrcode
+import qrcode.image.svg
 from .db import get_db,now
 from .services import (BusinessError,transaction,money,number,required,distance,
-    expire_reservations,quote,ORDER_SELECT,create_order,act_order,audit)
+    expire_reservations,quote,ORDER_SELECT,create_order,act_order,audit,pricing_for_station)
 
 api=Blueprint('api',__name__)
 
@@ -32,6 +34,29 @@ def auth(admin=False):
             return fn(*args,**kwargs)
         return wrapped
     return deco
+
+def parse_clock(value,label,allow_24=False):
+    if not isinstance(value,str) or not re.fullmatch(r'\d{2}:\d{2}',value):
+        raise BusinessError(f'{label}格式应为 HH:MM')
+    h,m=map(int,value.split(':'))
+    if allow_24 and h==24 and m==0: return 1440
+    if not (0<=h<=23 and 0<=m<=59): raise BusinessError(f'{label}无效')
+    return h*60+m
+
+def clock_text(minute):
+    return '24:00' if minute==1440 else f'{minute//60:02d}:{minute%60:02d}'
+
+def pricing_json(row):
+    r=dict(row)
+    r['start_time']=clock_text(r['start_minute']); r['end_time']=clock_text(r['end_minute'])
+    r['price_cents']=r['electricity_fee_cents']+r['service_fee_cents']
+    return r
+
+def add_default_pricing(db,sid,base):
+    service=30; totals=(max(40,base-20),base,base+20)
+    for start,end,total in ((0,480,totals[0]),(480,1080,totals[1]),(1080,1440,totals[2])):
+        db.execute('''INSERT INTO pricing_rules(station_id,start_minute,end_minute,electricity_fee_cents,service_fee_cents)
+                      VALUES(?,?,?,?,?)''',(sid,start,end,max(0,total-service),service))
 
 @api.get('/session')
 def get_session():
@@ -67,18 +92,46 @@ def logout():
 @auth()
 def stations():
     lat=number(request.args.get('lat',39.9593),-90,90,'纬度'); lng=number(request.args.get('lng',116.2981),-180,180,'经度')
-    result=[]
-    for row in get_db().execute('''SELECT s.*,COUNT(c.id) total,SUM(CASE WHEN c.status='idle' THEN 1 ELSE 0 END) free
+    db=get_db(); result=[]
+    for row in db.execute('''SELECT s.*,COUNT(c.id) total,
+        SUM(CASE WHEN c.status='idle' THEN 1 ELSE 0 END) free,
+        SUM(CASE WHEN c.kind='fast' THEN 1 ELSE 0 END) fast_count,
+        SUM(CASE WHEN c.kind='slow' THEN 1 ELSE 0 END) slow_count
         FROM stations s LEFT JOIN chargers c ON c.station_id=s.id GROUP BY s.id'''):
-        r=dict(row); r['distance']=distance(lat,lng,r['lat'],r['lng']); result.append(r)
+        r=dict(row); tariff=pricing_for_station(db,r['id']);
+        r.update(current_price_cents=tariff['price_cents'],electricity_fee_cents=tariff['electricity_fee_cents'],service_fee_cents=tariff['service_fee_cents'])
+        r['distance']=distance(lat,lng,r['lat'],r['lng']); result.append(r)
     return jsonify(sorted(result,key=lambda r:r['distance']))
 
 @api.get('/stations/<int:sid>')
 @auth()
 def station(sid):
-    row=get_db().execute('SELECT * FROM stations WHERE id=?',(sid,)).fetchone()
+    db=get_db(); row=db.execute('SELECT * FROM stations WHERE id=?',(sid,)).fetchone()
     if not row: raise BusinessError('电站不存在',404)
-    return jsonify(station=dict(row),chargers=[dict(r) for r in get_db().execute('SELECT * FROM chargers WHERE station_id=? ORDER BY number',(sid,))])
+    station_data=dict(row); tariff=pricing_for_station(db,sid)
+    station_data.update(current_price_cents=tariff['price_cents'],electricity_fee_cents=tariff['electricity_fee_cents'],service_fee_cents=tariff['service_fee_cents'])
+    rules=[pricing_json(r) for r in db.execute('SELECT * FROM pricing_rules WHERE station_id=? ORDER BY start_minute',(sid,))]
+    return jsonify(station=station_data,
+                   chargers=[dict(r) for r in db.execute('SELECT * FROM chargers WHERE station_id=? ORDER BY number',(sid,))],
+                   pricing=rules)
+
+@api.get('/chargers/by-number/<string:number_value>')
+@auth()
+def charger_by_number(number_value):
+    row=get_db().execute('''SELECT c.*,s.name station_name,s.address,s.city,s.business_hours,s.operating_status,
+                            s.parking_info FROM chargers c JOIN stations s ON s.id=c.station_id WHERE c.number=?''',(number_value,)).fetchone()
+    if not row: raise BusinessError('二维码对应的充电桩不存在',404)
+    return jsonify(dict(row))
+
+@api.get('/chargers/<int:cid>/qr')
+@auth()
+def charger_qr(cid):
+    c=get_db().execute('SELECT id,number FROM chargers WHERE id=?',(cid,)).fetchone()
+    if not c: raise BusinessError('充电桩不存在',404)
+    charge_url=request.host_url.rstrip('/')+'/charge/'+c['number']
+    image=qrcode.make(charge_url,image_factory=qrcode.image.svg.SvgPathImage,box_size=8,border=2)
+    out=io.BytesIO(); image.save(out)
+    return Response(out.getvalue(),mimetype='image/svg+xml',headers={'Cache-Control':'no-store','Content-Disposition':f'inline; filename={c["number"]}.svg'})
 
 @api.get('/orders')
 @auth()
@@ -157,7 +210,10 @@ def dashboard():
         row=db.execute("SELECT COALESCE(SUM(energy),0) energy,COALESCE(SUM(paid_cents),0) cents,COUNT(*) orders FROM orders WHERE status='completed' AND substr(ended_at,1,10)=?"+filt,(day,*args)).fetchone()
         days.append(dict(day=day,**dict(row)))
     active=[quote(r) for r in db.execute(ORDER_SELECT+" WHERE o.status IN ('reserved','charging')"+('' if admin else ' AND o.user_id=?')+' ORDER BY o.id DESC',args)]
-    return jsonify(totals=totals,counts=counts,days=days,active=active,stations=db.execute('SELECT COUNT(*) FROM stations').fetchone()[0])
+    return jsonify(totals=totals,counts=counts,days=days,active=active,
+                   stations=db.execute('SELECT COUNT(*) FROM stations').fetchone()[0],
+                   users=db.execute("SELECT COUNT(*) FROM users WHERE role='user'").fetchone()[0],
+                   open_faults=db.execute("SELECT COUNT(*) FROM fault_records WHERE status IN ('pending','processing')").fetchone()[0])
 
 @api.get('/admin/users')
 @auth(True)
@@ -179,11 +235,19 @@ def user_update(uid):
 @api.post('/admin/stations/<int:sid>')
 @auth(True)
 def station_save(sid=None):
-    d=body(); vals=(required(d.get('name'),'站名',60),required(d.get('address'),'地址',160),number(d.get('lng'),-180,180,'经度'),number(d.get('lat'),-90,90,'纬度'),money(d.get('price'),100))
+    d=body(); status=d.get('operating_status','operating')
+    if status not in ('operating','paused','maintenance'): raise BusinessError('运营状态无效')
+    vals=(required(d.get('name'),'站名',60),required(d.get('address'),'地址',160),required(d.get('city','北京市'),'所属城市',60),
+          required(d.get('business_hours','00:00-24:00'),'营业时间',60),required(d.get('contact_phone','010-00000000'),'联系方式',40),status,
+          required(d.get('parking_info','以现场停车规定为准'),'停车说明',240),number(d.get('lng'),-180,180,'经度'),number(d.get('lat'),-90,90,'纬度'),money(d.get('price'),100))
     with transaction() as db:
         if sid:
-            if not db.execute('UPDATE stations SET name=?,address=?,lng=?,lat=?,price_cents=? WHERE id=?',(*vals,sid)).rowcount: raise BusinessError('电站不存在',404)
-        else: sid=db.execute('INSERT INTO stations(name,address,lng,lat,price_cents) VALUES(?,?,?,?,?)',vals).lastrowid
+            if not db.execute('''UPDATE stations SET name=?,address=?,city=?,business_hours=?,contact_phone=?,operating_status=?,parking_info=?,lng=?,lat=?,price_cents=? WHERE id=?''',(*vals,sid)).rowcount:
+                raise BusinessError('电站不存在',404)
+        else:
+            sid=db.execute('''INSERT INTO stations(name,address,city,business_hours,contact_phone,operating_status,parking_info,lng,lat,price_cents)
+                              VALUES(?,?,?,?,?,?,?,?,?,?)''',vals).lastrowid
+            add_default_pricing(db,sid,vals[-1])
         audit(g.user['id'],f'保存电站 #{sid}')
     return jsonify(id=sid)
 
@@ -194,6 +258,54 @@ def station_delete(sid):
         if db.execute('SELECT 1 FROM chargers WHERE station_id=?',(sid,)).fetchone(): raise BusinessError('请先处理该站充电桩；有历史订单的设备需保留')
         if not db.execute('DELETE FROM stations WHERE id=?',(sid,)).rowcount: raise BusinessError('电站不存在',404)
         audit(g.user['id'],f'删除电站 #{sid}')
+    return jsonify(ok=True)
+
+@api.get('/admin/pricing')
+@auth(True)
+def pricing_list():
+    sid=request.args.get('station_id',type=int); db=get_db()
+    if sid and not db.execute('SELECT 1 FROM stations WHERE id=?',(sid,)).fetchone(): raise BusinessError('电站不存在',404)
+    sql='''SELECT p.*,s.name station_name FROM pricing_rules p JOIN stations s ON s.id=p.station_id'''
+    args=()
+    if sid: sql+=' WHERE p.station_id=?'; args=(sid,)
+    sql+=' ORDER BY s.id,p.start_minute'
+    return jsonify([pricing_json(r) for r in db.execute(sql,args)])
+
+@api.post('/admin/pricing')
+@api.post('/admin/pricing/<int:pid>')
+@auth(True)
+def pricing_save(pid=None):
+    d=body(); sid=d.get('station_id')
+    if not isinstance(sid,int): raise BusinessError('电站编号无效')
+    start=parse_clock(d.get('start_time'),'开始时间'); end=parse_clock(d.get('end_time'),'结束时间',True)
+    if end<=start: raise BusinessError('结束时间必须晚于开始时间；跨午夜请拆成两个时段')
+    electricity=money(d.get('electricity_fee'),100,allow_zero=True); service=money(d.get('service_fee'),100,allow_zero=True)
+    if electricity+service<=0: raise BusinessError('电费和服务费不能同时为 0')
+    with transaction() as db:
+        if not db.execute('SELECT 1 FROM stations WHERE id=?',(sid,)).fetchone(): raise BusinessError('电站不存在',404)
+        clash=db.execute('''SELECT id FROM pricing_rules WHERE station_id=? AND start_minute<? AND end_minute>?
+                            AND (? IS NULL OR id<>?) LIMIT 1''',(sid,end,start,pid,pid)).fetchone()
+        if clash: raise BusinessError('该时段与已有价格规则重叠，请先调整时间')
+        if pid:
+            cur=db.execute('''UPDATE pricing_rules SET station_id=?,start_minute=?,end_minute=?,electricity_fee_cents=?,service_fee_cents=? WHERE id=?''',
+                           (sid,start,end,electricity,service,pid))
+            if not cur.rowcount: raise BusinessError('价格规则不存在',404)
+        else:
+            pid=db.execute('''INSERT INTO pricing_rules(station_id,start_minute,end_minute,electricity_fee_cents,service_fee_cents)
+                              VALUES(?,?,?,?,?)''',(sid,start,end,electricity,service)).lastrowid
+        audit(g.user['id'],f'保存分时价格规则 #{pid}')
+    return jsonify(id=pid)
+
+@api.delete('/admin/pricing/<int:pid>')
+@auth(True)
+def pricing_delete(pid):
+    with transaction() as db:
+        row=db.execute('SELECT * FROM pricing_rules WHERE id=?',(pid,)).fetchone()
+        if not row: raise BusinessError('价格规则不存在',404)
+        if db.execute('SELECT COUNT(*) FROM pricing_rules WHERE station_id=?',(row['station_id'],)).fetchone()[0]<=1:
+            raise BusinessError('每个电站至少保留一条价格规则')
+        db.execute('DELETE FROM pricing_rules WHERE id=?',(pid,))
+        audit(g.user['id'],f'删除分时价格规则 #{pid}')
     return jsonify(ok=True)
 
 @api.get('/admin/chargers')
@@ -229,11 +341,64 @@ def charger_action(cid):
         c=db.execute('SELECT * FROM chargers WHERE id=?',(cid,)).fetchone()
         if not c: raise BusinessError('电桩不存在',404)
         if c['status'] in ('charging','reserved'): raise BusinessError('电桩有未完成订单，不能操作',409)
-        if action=='delete': db.execute('DELETE FROM chargers WHERE id=?',(cid,))
-        elif action in ('fault','restore','restart'):
-            db.execute('UPDATE chargers SET status=? WHERE id=?',('fault' if action=='fault' else 'idle',cid))
+        if action=='delete':
+            db.execute('DELETE FROM chargers WHERE id=?',(cid,))
+        elif action=='fault':
+            if not db.execute("SELECT 1 FROM fault_records WHERE charger_id=? AND status IN ('pending','processing')",(cid,)).fetchone():
+                db.execute('''INSERT INTO fault_records(charger_id,fault_type,description,status,reported_at,reporter_id)
+                              VALUES(?,?,'由设备管理页面手动标记','pending',?,?)''',(cid,'设备异常',now(),g.user['id']))
+            db.execute("UPDATE chargers SET status='fault' WHERE id=?",(cid,))
+        elif action in ('restore','restart'):
+            db.execute("UPDATE fault_records SET status='resolved',handled_at=?,resolution=COALESCE(resolution,?),handler_id=? WHERE charger_id=? AND status IN ('pending','processing')",
+                       (now(),'软件重启恢复' if action=='restart' else '管理员手动恢复',g.user['id'],cid))
+            db.execute("UPDATE chargers SET status='idle' WHERE id=?",(cid,))
+        elif action in ('offline','maintenance'):
+            db.execute('UPDATE chargers SET status=? WHERE id=?',(action,cid))
         else: raise BusinessError('操作无效')
         audit(g.user['id'],f'电桩 #{cid}：{action}'+('（软件模拟）' if action=='restart' else ''))
+    return jsonify(ok=True)
+
+@api.get('/admin/faults')
+@auth(True)
+def faults():
+    return jsonify([dict(r) for r in get_db().execute('''SELECT f.*,c.number charger_number,s.name station_name
+        FROM fault_records f JOIN chargers c ON c.id=f.charger_id JOIN stations s ON s.id=c.station_id
+        ORDER BY CASE f.status WHEN 'pending' THEN 0 WHEN 'processing' THEN 1 ELSE 2 END,f.id DESC''')])
+
+@api.post('/admin/faults')
+@auth(True)
+def fault_create():
+    d=body(); cid=d.get('charger_id')
+    if not isinstance(cid,int): raise BusinessError('充电桩编号无效')
+    fault_type=required(d.get('fault_type'),'故障类型',60); description=required(d.get('description'),'故障描述',300)
+    with transaction() as db:
+        c=db.execute('SELECT * FROM chargers WHERE id=?',(cid,)).fetchone()
+        if not c: raise BusinessError('充电桩不存在',404)
+        if c['status'] in ('reserved','charging'): raise BusinessError('设备正在被订单占用，不能登记故障',409)
+        if db.execute("SELECT 1 FROM fault_records WHERE charger_id=? AND status IN ('pending','processing')",(cid,)).fetchone():
+            raise BusinessError('该设备已有未处理故障',409)
+        fid=db.execute('''INSERT INTO fault_records(charger_id,fault_type,description,status,reported_at,reporter_id)
+                          VALUES(?,?,?,'pending',?,?)''',(cid,fault_type,description,now(),g.user['id'])).lastrowid
+        db.execute("UPDATE chargers SET status='fault' WHERE id=?",(cid,))
+        audit(g.user['id'],f'登记故障 #{fid} / 电桩 #{cid}')
+    return jsonify(id=fid),201
+
+@api.post('/admin/faults/<int:fid>')
+@auth(True)
+def fault_update(fid):
+    d=body(); status=d.get('status')
+    if status not in ('pending','processing','resolved'): raise BusinessError('故障处理状态无效')
+    resolution=str(d.get('resolution') or '').strip()
+    if status=='resolved' and not resolution: raise BusinessError('解决故障时请填写处理结果')
+    with transaction() as db:
+        f=db.execute('SELECT * FROM fault_records WHERE id=?',(fid,)).fetchone()
+        if not f: raise BusinessError('故障记录不存在',404)
+        handled=now() if status=='resolved' else None
+        db.execute('''UPDATE fault_records SET status=?,handled_at=?,resolution=?,handler_id=? WHERE id=?''',
+                   (status,handled,resolution or None,g.user['id'],fid))
+        target={'pending':'fault','processing':'maintenance','resolved':'idle'}[status]
+        db.execute('UPDATE chargers SET status=? WHERE id=?',(target,f['charger_id']))
+        audit(g.user['id'],f'更新故障 #{fid}：{status}')
     return jsonify(ok=True)
 
 @api.get('/admin/logs')
@@ -251,7 +416,6 @@ def prediction():
     points=[]
     for i in range(1,13):
         t=(datetime.now()+timedelta(hours=i)).replace(minute=0,second=0,microsecond=0)
-        # Average historical energy of sessions starting in this hour, over a 28-day window.
         energy=sum(r['energy'] for r in rows if datetime.fromisoformat(r['started_at']).hour==t.hour)/28
         load=min(capacity[0],energy); ratio=load/capacity[0] if capacity[0] else 0
         points.append(dict(time=t.isoformat(),load=round(load,2),free=max(0,round(capacity[1]*(1-ratio))),peak=ratio>=0.7))
