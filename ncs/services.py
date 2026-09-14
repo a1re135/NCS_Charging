@@ -12,12 +12,19 @@ class BusinessError(Exception):
 
 @contextmanager
 def transaction():
-    db=get_db(); db.execute('BEGIN IMMEDIATE')
+    db = get_db()
+
+    if current_app.config.get("DB_BACKEND") == "mysql":
+        db.begin()
+    else:
+        db.execute("BEGIN IMMEDIATE")
+
     try:
         yield db
         db.commit()
     except Exception:
-        db.rollback(); raise
+        db.rollback()
+        raise
 
 def money(value, maximum=100000, allow_zero=False):
     try:
@@ -64,7 +71,20 @@ def pricing_for_station(db, station_id, at=None):
 
 def expire_reservations():
     with transaction() as db:
-        rows=db.execute("SELECT id,charger_id FROM orders WHERE status='reserved' AND expires_at<=?",(now(),)).fetchall()
+        sql = """
+            SELECT id, charger_id
+            FROM orders
+            WHERE status='reserved'
+            AND expires_at<=?
+        """
+
+        if current_app.config.get("DB_BACKEND") == "mysql":
+            sql += " FOR UPDATE"
+
+        rows = db.execute(
+            sql,
+            (now(),)
+        ).fetchall()
         for row in rows:
             db.execute("UPDATE orders SET status='expired',ended_at=? WHERE id=?",(now(),row['id']))
             db.execute("UPDATE chargers SET status='idle' WHERE id=? AND status='reserved'",(row['charger_id'],))
@@ -82,15 +102,30 @@ ORDER_SELECT='''SELECT o.*,s.name station_name,s.address,s.city,s.lat,s.lng,c.nu
 
 def create_order(uid,cid,reserve):
     with transaction() as db:
-        user=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+        user = db.execute(
+            "SELECT * FROM users WHERE id=? FOR UPDATE",
+            (uid,)
+        ).fetchone()
         if not user['active']: raise BusinessError('账号已冻结，请联系管理员',403)
         existing=db.execute("SELECT id FROM orders WHERE user_id=? AND status IN ('reserved','charging')",(uid,)).fetchone()
         if existing: raise BusinessError('您有未完成的充电订单，请先处理',409,order_id=existing['id'])
         if db.execute('SELECT 1 FROM orders WHERE user_id=? AND debt_cents>0',(uid,)).fetchone():
             raise BusinessError('您有欠费订单，请先充值并补缴欠费',409)
         if user['balance_cents']<=0: raise BusinessError('请先充值后再预约或充电')
-        c=db.execute('''SELECT c.*,s.price_cents,s.operating_status FROM chargers c
-                        JOIN stations s ON s.id=c.station_id WHERE c.id=?''',(cid,)).fetchone()
+        c = db.execute(
+            """
+            SELECT
+                c.*,
+                s.price_cents,
+                s.operating_status
+            FROM chargers c
+            JOIN stations s
+                ON s.id = c.station_id
+            WHERE c.id=?
+            FOR UPDATE
+            """,
+            (cid,)
+        ).fetchone()
         if c is None: raise BusinessError('充电桩不存在',404)
         if c['operating_status']!='operating': raise BusinessError('该充电站当前暂停运营，暂时不能充电',409)
         if c['status']!='idle': raise BusinessError('充电桩已被占用、离线或处于故障/维修状态',409)
@@ -107,11 +142,38 @@ def create_order(uid,cid,reserve):
 
 def act_order(uid,oid,action):
     with transaction() as db:
-        o=db.execute('SELECT * FROM orders WHERE id=? AND user_id=?',(oid,uid)).fetchone()
+        o = db.execute(
+            """
+            SELECT *
+            FROM orders
+            WHERE id=? AND user_id=?
+            FOR UPDATE
+            """,
+            (oid, uid)
+        ).fetchone()
         if not o: raise BusinessError('订单不存在',404)
-        c=db.execute('''SELECT c.*,s.operating_status FROM chargers c JOIN stations s ON s.id=c.station_id
-                        WHERE c.id=?''',(o['charger_id'],)).fetchone()
-        u=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+        c = db.execute(
+            """
+            SELECT
+                c.*,
+                s.operating_status
+            FROM chargers c
+            JOIN stations s
+                ON s.id = c.station_id
+            WHERE c.id=?
+            FOR UPDATE
+            """,
+            (o["charger_id"],)
+        ).fetchone()
+        u = db.execute(
+            """
+            SELECT *
+            FROM users
+            WHERE id=?
+            FOR UPDATE
+            """,
+            (uid,)
+        ).fetchone()
         if action=='start':
             if o['status']!='reserved': raise BusinessError('订单不是有效预约',409)
             if not u['active'] or c['operating_status']!='operating': raise BusinessError('账号冻结或电站暂停运营，暂时无法开始')

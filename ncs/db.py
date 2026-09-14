@@ -1,6 +1,10 @@
 """SQLite schema, lightweight migrations, and reproducible course-demo seed data."""
 import random
 import sqlite3
+
+import pymysql
+from pymysql.cursors import DictCursor
+from .mysql_schema import MYSQL_SCHEMA
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import current_app, g
@@ -58,11 +62,101 @@ CREATE INDEX IF NOT EXISTS order_user ON orders(user_id,created_at);
 def now():
     return datetime.now().isoformat(timespec='seconds')
 
+class CompatRow(dict):
+    """
+    Behaves like sqlite3.Row:
+    row["id"] works
+    row[0] also works
+    """
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+
+        return super().__getitem__(key)
+
+
+class CompatCursor(DictCursor):
+    dict_type = CompatRow
+
+class MySQLDatabase:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def _convert_sql(self, sql):
+        sql = sql.strip()
+
+        # SQLite transaction command -> MySQL transaction
+        if sql.upper() == "BEGIN IMMEDIATE":
+            return None
+
+        # Existing project uses SQLite ? placeholders.
+        # PyMySQL uses %s.
+        return sql.replace("?", "%s")
+
+    def execute(self, sql, params=()):
+        converted = self._convert_sql(sql)
+
+        if converted is None:
+            self.connection.begin()
+            return None
+
+        cursor = self.connection.cursor()
+        cursor.execute(converted, params)
+
+        return cursor
+
+    def begin(self):
+        self.connection.begin()
+
+    def commit(self):
+        self.connection.commit()
+
+    def rollback(self):
+        self.connection.rollback()
+
+    def close(self):
+        self.connection.close()
+
 def get_db():
-    if 'db' not in g:
-        g.db = sqlite3.connect(current_app.config['DATABASE'], timeout=15, isolation_level=None)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute('PRAGMA foreign_keys=ON')
+    if "db" not in g:
+
+        backend = current_app.config.get("DB_BACKEND", "mysql")
+
+        if backend == "mysql":
+            connection = pymysql.connect(
+                host=current_app.config["MYSQL_HOST"],
+                port=current_app.config["MYSQL_PORT"],
+                user=current_app.config["MYSQL_USER"],
+                password=current_app.config["MYSQL_PASSWORD"],
+                database=current_app.config["MYSQL_DATABASE"],
+                charset="utf8mb4",
+                cursorclass=CompatCursor,
+
+                # Important:
+                # Most existing routes expect individual INSERT/UPDATE
+                # statements to save automatically.
+                autocommit=True,
+
+                connect_timeout=10,
+                read_timeout=30,
+                write_timeout=30,
+            )
+
+            g.db = MySQLDatabase(connection)
+
+        else:
+            connection = sqlite3.connect(
+                current_app.config["DATABASE"],
+                timeout=15,
+                isolation_level=None,
+            )
+
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys=ON")
+
+            g.db = connection
+
     return g.db
 
 def close_db(_=None):
@@ -111,14 +205,38 @@ def migrate_db(db):
                           VALUES(?,?,'由旧版设备故障状态自动迁移','pending',?)''', (c['id'], '设备异常', now()))
 
 def init_db():
-    Path(current_app.config['DATABASE']).parent.mkdir(parents=True, exist_ok=True)
+    backend = current_app.config.get("DB_BACKEND", "mysql")
+
     db = get_db()
-    db.execute('PRAGMA journal_mode=WAL')
-    db.executescript(SCHEMA)
-    migrate_db(db)
-    if db.execute('SELECT COUNT(*) FROM users').fetchone()[0]:
+
+    if backend == "mysql":
+
+        for statement in MYSQL_SCHEMA:
+            db.execute(statement)
+
+    else:
+
+        Path(
+            current_app.config["DATABASE"]
+        ).parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        db.execute(
+            "PRAGMA journal_mode=WAL"
+        )
+
+        db.executescript(SCHEMA)
+
+        migrate_db(db)
+    count = db.execute(
+        "SELECT COUNT(*) AS count FROM users"
+    ).fetchone()
+
+    if count["count"] > 0:
         return
-    db.execute('BEGIN IMMEDIATE')
+        db.execute('BEGIN IMMEDIATE')
     try:
         for phone, name, role, balance, password in [
             ('13800138000','小林','user',28800,'User123456'),
