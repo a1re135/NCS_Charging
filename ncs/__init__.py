@@ -1,38 +1,57 @@
-"""Application factory: configuration, CSRF protection, API errors, database setup."""
+"""Application factory: configuration, CSRF protection, database setup."""
 import os
 import secrets
 import sqlite3
 from pathlib import Path
 from flask import Flask, jsonify, request, session, render_template
+from werkzeug.middleware.proxy_fix import ProxyFix
 from .db import close_db, init_db
 from .services import BusinessError
 
+
 def create_app(config=None):
-    root=Path(__file__).resolve().parent.parent
-    app=Flask(__name__,template_folder=str(root/'templates'),static_folder=str(root/'static'))
-    data=root/'data'; data.mkdir(exist_ok=True)
-    secret=data/'secret.key'
+    root = Path(__file__).resolve().parent.parent
+    app = Flask(__name__, template_folder=str(root/'templates'), static_folder=str(root/'static'))
+    data = root/'data'; data.mkdir(exist_ok=True)
+    secret = data/'secret.key'
     if not secret.exists():
         try:
-            with secret.open('x',encoding='utf-8') as f: f.write(secrets.token_hex(32))
-        except FileExistsError: pass
-    app.config.update(SECRET_KEY=os.getenv('NCS_SECRET_KEY') or secret.read_text().strip(),
-        DATABASE=str(data/'ncs.db'),TIME_SCALE=60,MAX_CONTENT_LENGTH=2*1024*1024,
-        SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Lax')
-    if config: app.config.update(config)
+            with secret.open('x', encoding='utf-8') as f:
+                f.write(secrets.token_hex(32))
+        except FileExistsError:
+            pass
+    app.config.update(
+        SECRET_KEY=os.getenv('NCS_SECRET_KEY') or os.getenv('SECRET_KEY') or secret.read_text().strip(),
+        DATABASE=os.getenv('NCS_DATABASE') or str(data/'ncs.db'),
+        TIME_SCALE=60,
+        MAX_CONTENT_LENGTH=2*1024*1024,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+        SESSION_COOKIE_SECURE=os.getenv('NCS_COOKIE_SECURE','0').lower() in ('1','true','yes'),
+        TRUST_PROXY=os.getenv('NCS_TRUST_PROXY','0').lower() in ('1','true','yes'),
+    )
+    if config:
+        app.config.update(config)
+    if app.config.get('TRUST_PROXY'):
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
     app.teardown_appcontext(close_db)
+
     @app.before_request
     def csrf_check():
         if request.path.startswith('/api/') and request.method not in ('GET','HEAD','OPTIONS'):
             supplied=request.headers.get('X-CSRF-Token','')
             if not supplied or not secrets.compare_digest(supplied,session.get('csrf','')):
                 raise BusinessError('页面会话已过期，请刷新页面后重试',403)
+
     @app.after_request
     def headers(response):
         response.headers['X-Content-Type-Options']='nosniff'
         response.headers['X-Frame-Options']='DENY'
-        if request.path.startswith('/api/'): response.headers['Cache-Control']='no-store'
+        response.headers['Referrer-Policy']='strict-origin-when-cross-origin'
+        if request.path.startswith('/api/'):
+            response.headers['Cache-Control']='no-store'
         return response
+
     @app.errorhandler(BusinessError)
     def business_error(e): return jsonify(error=e.message,**e.extra),e.status
     @app.errorhandler(sqlite3.IntegrityError)
