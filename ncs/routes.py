@@ -57,13 +57,13 @@ def permission(key):
         return wrapped
     return deco
 
-def auth(admin=False):
+def auth(admin=False, allow_frozen=False):
     def deco(fn):
         @wraps(fn)
         def wrapped(*args,**kwargs):
             g.user=get_db().execute('SELECT * FROM users WHERE id=?',(session.get('uid'),)).fetchone()
             if g.user is None: raise BusinessError('请先登录',401)
-            if not g.user['active']: raise BusinessError('账号已冻结，暂时无法访问',403)
+            if not g.user['active'] and not allow_frozen:raise BusinessError('账号已冻结，暂时无法访问',403)
             if admin and g.user['role']!='admin': raise BusinessError('需要系统管理员权限',403)
             expire_reservations(); return fn(*args,**kwargs)
         return wrapped
@@ -182,10 +182,21 @@ def new_order():
     return jsonify(id=oid),201
 
 @api.post('/orders/<int:oid>/<action>')
-@auth()
+@auth(allow_frozen=True)
 def order_action(oid,action):
+    if not g.user['active'] and action != 'finish':
+        raise BusinessError('账号已冻结，无法执行该操作',403)
+
     act_order(g.user['id'],oid,action)
-    return jsonify(order=quote(get_db().execute(ORDER_SELECT+' WHERE o.id=?',(oid,)).fetchone()))
+
+    return jsonify(
+        order=quote(
+            get_db().execute(
+                ORDER_SELECT+' WHERE o.id=?',
+                (oid,)
+            ).fetchone()
+        )
+    )
 
 @api.get('/orders/<int:oid>/receipt')
 @auth()
