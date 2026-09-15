@@ -38,6 +38,20 @@ def create_app(config=None):
         SESSION_COOKIE_SAMESITE="Lax",
 )
     if config: app.config.update(config)
+    backend = app.config.get("DB_BACKEND", "sqlite")
+
+    if backend == "mysql":
+        print(
+            f"[Database] MySQL "
+            f"{app.config['MYSQL_HOST']}:"
+            f"{app.config['MYSQL_PORT']}/"
+            f"{app.config['MYSQL_DATABASE']}"
+        )
+    else:
+        print(
+            f"[Database] SQLite "
+            f"{app.config['DATABASE']}"
+        )
     app.teardown_appcontext(close_db)
     @app.before_request
     def csrf_check():

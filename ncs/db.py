@@ -86,13 +86,21 @@ class MySQLDatabase:
     def _convert_sql(self, sql):
         sql = sql.strip()
 
-        # SQLite transaction command -> MySQL transaction
-        if sql.upper() == "BEGIN IMMEDIATE":
+        upper = sql.upper()
+
+        if upper == "BEGIN IMMEDIATE":
             return None
 
-        # Existing project uses SQLite ? placeholders.
-        # PyMySQL uses %s.
-        return sql.replace("?", "%s")
+        # SQLite placeholders -> PyMySQL placeholders
+        sql = sql.replace("?", "%s")
+
+        # Common SQLite syntax compatibility
+        sql = sql.replace(
+            "INSERT OR IGNORE",
+            "INSERT IGNORE"
+        )
+
+        return sql
 
     def execute(self, sql, params=()):
         converted = self._convert_sql(sql)

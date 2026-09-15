@@ -158,3 +158,27 @@ py -3 -m venv .venv
 Windows 批处理、VS Code 配置已提供并检查内容，但本环境不是 Windows，未实际运行 Windows 批处理或 VS Code GUI。请按第 1 节在你的电脑运行；如报错，把完整终端文字发来即可进一步定位。
 
 依赖与虚拟环境用法参考：[Flask 官方安装文档](https://flask.palletsprojects.com/en/stable/installation/)。本项目用例、界面和验证结果来自本次实现。
+
+## MySQL Setup
+
+The project uses MySQL 8.4.
+
+Create database:
+
+```sql
+CREATE DATABASE ncs_charging
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+
+Create User:
+CREATE USER 'ncs_app'@'localhost'
+IDENTIFIED BY 'YOUR_PASSWORD';
+
+GRANT ALL PRIVILEGES
+ON ncs_charging.*
+TO 'ncs_app'@'localhost';
+
+Copy .env.example to .env
+
+Install dependancies:
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
