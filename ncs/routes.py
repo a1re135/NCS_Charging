@@ -196,7 +196,7 @@ def stations():
                 THEN 1 ELSE 0 END
             ) AS slow,
 
-            COALESCE(SUM(c.total_count), 0) AS usage,
+            COALESCE(SUM(c.total_count), 0) AS `usage`,
 
             SUM(
                 CASE WHEN c.status='fault'

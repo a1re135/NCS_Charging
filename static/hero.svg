@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 370" fill="none">
+<ellipse cx="313" cy="327" rx="252" ry="24" fill="#d7d0f1"/>
+<circle cx="343" cy="172" r="133" fill="#e5e1fa"/><circle cx="482" cy="65" r="17" fill="#ffdaaf"/>
+<path d="M81 110h42m-21-21v42M532 151h24m-12-12v24" stroke="#b7a8df" stroke-width="3" stroke-linecap="round"/>
+<rect x="210" y="80" width="172" height="120" rx="13" fill="#fff"/><rect x="223" y="94" width="146" height="83" rx="6" fill="#cbd3fa"/><path d="m243 155 25-24 27 11 25-29 29 10" stroke="#8b7be4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M284 200v27m-23 0h58" stroke="#a69acb" stroke-width="9" stroke-linecap="round"/>
+<path d="M178 229h231" stroke="#9c8ec6" stroke-width="10" stroke-linecap="round"/><path d="m203 235-13 85m191-85 12 85" stroke="#a69acb" stroke-width="8"/>
+<rect x="434" y="199" width="55" height="123" rx="15" fill="#a296dc"/><rect x="443" y="212" width="36" height="45" rx="7" fill="#e6e4fa"/><path d="m465 218-13 20h10l-4 13 15-22h-10z" fill="#8c7be8"/><path d="M489 233c35-5 26 61 9 57-12-3-2-15-10-13" stroke="#8e83b6" stroke-width="5"/>
+<path d="M108 202c-30-30-40-72-17-83 27-13 32 38 24 68 1-44 20-67 38-53 17 13-5 39-34 65" fill="#a3cabb"/><path d="M112 178v92" stroke="#76a596" stroke-width="4"/><path d="m90 253 8 67h37l8-67z" fill="#f4b9c8"/>
+<!-- A seated person using the workstation. -->
+<path d="M203 245c-28 7-40 14-33 41l20 36h25l-18-39 53-3 12-31" fill="#696a9a"/><path d="m196 319 1 9h35c3-12-19-7-23-12" fill="#494b74"/>
+<path d="m233 260 30 18 32 36 14-9-30-52-22-14" fill="#7c7cac"/><path d="m296 308 3 15h31c1-11-14-10-23-19" fill="#494b74"/>
+<path d="M207 181c-14 15-16 61-8 71 15 12 52 7 59-9l-12-57z" fill="#b6a0e0"/>
+<path d="m236 191 26 24 33 4" stroke="#f4c4ad" stroke-width="15" stroke-linecap="round"/><path d="m228 182 19 7 15 26-17 10-17-22" fill="#b6a0e0"/>
+<path d="m219 169 1 18 15 2 2-22" fill="#f4c4ad"/><ellipse cx="227" cy="150" rx="20" ry="27" fill="#f5c7b0"/>
+<path d="M208 167c-16-24-4-49 18-48 19 1 25 14 21 23-10 4-12-5-20-8 5 14-10 19-11 29z" fill="#555273"/>
+<path d="M180 237v38h49" stroke="#9ea7d6" stroke-width="10" stroke-linecap="round"/>
+<!-- A standing collaborator holding a tablet. -->
+<path d="m357 238-1 77 15 1 11-74m7-4 10 76 15-2-4-76" fill="#69698f"/><path d="m356 312-8 16h26v-15m25-2 1 17h30c-2-9-13-11-17-16" fill="#4c4e70"/>
+<path d="M366 153c-18 12-18 43-15 90 18 10 41 11 63-4l-8-70c-2-15-18-19-40-16" fill="#efb7c9"/>
+<path d="m372 140 2 18 13 1 3-20" fill="#edb797"/><ellipse cx="383" cy="122" rx="20" ry="26" fill="#f4c4a8"/><path d="M363 125c-4-16 0-32 18-33 28-3 30 21 22 32l-7-14-30 2z" fill="#555273"/>
+<path d="m365 179-16 28-25-11m72-17-12 25-26-2" stroke="#f4c4a8" stroke-width="13" stroke-linecap="round"/>
+<path d="m307 170 32-6 15 39-31 5z" fill="#8d91bf"/><path d="m312 174 24-4 10 28-20 3z" fill="#c8d1ee"/>
+<circle cx="156" cy="71" r="28" fill="#fff"/><path d="m163 52-20 24h14l-5 15 21-26h-15z" fill="#a494df"/>
+</svg>
