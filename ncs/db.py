@@ -245,7 +245,11 @@ def init_db():
         "SELECT COUNT(*) AS count FROM users"
     ).fetchone()
 
+    from .avatars import init_avatars
+    from .expansion import expand_network
+    init_avatars(db, backend)
     if count["count"] > 0:
+        expand_network(db, backend)
         return
 
     if backend == "mysql":
@@ -355,3 +359,5 @@ def init_db():
         db.commit()
     except Exception:
         db.rollback(); raise
+
+    expand_network(db, backend)

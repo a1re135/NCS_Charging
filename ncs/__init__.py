@@ -58,7 +58,7 @@ def create_app(config=None):
         MYSQL_PASSWORD=os.getenv("MYSQL_PASSWORD", ""),
 
         TIME_SCALE=60,
-        MAX_CONTENT_LENGTH=2 * 1024 * 1024,
+        MAX_CONTENT_LENGTH=6 * 1024 * 1024,
 
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -162,7 +162,7 @@ def create_app(config=None):
 
     @app.errorhandler(413)
     def too_large(e):
-        return jsonify(error=translate("文件或请求过大，最多 2 MB")), 413
+        return jsonify(error=translate("文件或请求过大，最多 6 MB（头像图片最多 5 MB）")), 413
 
     @app.get("/")
     def index():

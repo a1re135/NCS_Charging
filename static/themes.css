@@ -481,3 +481,73 @@ html[data-theme="dark"] [style*="color:#c67588"] {
     background: #eee;
   }
 }
+
+/* Wallet text must stay readable on the light card surface. */
+/* 浅色模式：柔和的紫色钱包卡片 */
+html[data-theme="light"] .wallet {
+  background: linear-gradient(
+    135deg,
+    #ede7fc 0%,
+    #e4e6fc 60%,
+    #f5e5f0 100%
+  );
+  color: #39324d;
+  border: 1px solid #e0d8f2;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(116, 95, 166, 0.09);
+}
+
+/* 钱包标题 */
+html[data-theme="light"] .wallet h3 {
+  color: #5e507b;
+  font-weight: 600;
+}
+
+/* 余额数字：深紫灰，保持清晰 */
+html[data-theme="light"] .wallet .balance {
+  color: #332b45;
+  font-weight: 650;
+  letter-spacing: 0.3px;
+}
+
+/* 辅助说明 */
+html[data-theme="light"] .wallet small,
+html[data-theme="light"] .wallet-bottom {
+  color: #665976;
+}
+
+/* 右上角装饰圆环 */
+html[data-theme="light"] .wallet::after {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 充值、营收详情等按钮 */
+html[data-theme="light"] .wallet .btn.white {
+  background: #7862b5;
+  color: #ffffff;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 12px rgba(120, 98, 181, 0.16);
+}
+
+html[data-theme="light"] .wallet .btn.white:hover {
+  background: #6953a4;
+}
+.avatar { position: relative; overflow: hidden; flex-shrink: 0; }
+.avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.account-menu { position: relative; flex-shrink: 0; }
+.account-menu summary { display: block; cursor: pointer; border-radius: 50%; list-style: none; }
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-menu summary:focus-visible { outline: 2px solid var(--purple); outline-offset: 4px; }
+.account-dropdown { position: absolute; right: 0; top: calc(100% + 10px); z-index: 30; width: 210px; max-width: 80vw; background: var(--surface); border: 1px solid var(--line); border-radius: 15px; padding: 14px; box-shadow: var(--shadow); }
+.account-dropdown strong, .account-dropdown small { display: block; overflow-wrap: anywhere; margin: 0 7px 7px; }
+.account-dropdown small { color: var(--muted); }
+.account-dropdown button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 8px; text-align: left; background: transparent; color: var(--ink); border-radius: 9px; }
+.account-dropdown button:hover { background: var(--purple-soft); }
+.avatar-profile { display: flex; align-items: center; gap: 22px; margin-bottom: 24px; }
+.avatar-profile .actions { margin-top: 14px; }
+.avatar-large .avatar, .avatar-preview .avatar { width: 88px; height: 88px; font-size: 32px; }
+.avatar-preview { width: 220px; height: 220px; max-width: 100%; margin: 12px auto; display: grid; place-items: center; background: var(--surface-raised); border-radius: 18px; overflow: hidden; }
+.avatar-preview > img, .avatar-preview > video { width: 100%; height: 100%; object-fit: cover; }
+#avatar-editor .actions { flex-wrap: wrap; margin-top: 18px; }
+#avatar-editor [hidden] { display: none !important; }
+@media(max-width: 700px) { .avatar-profile { align-items: flex-start; flex-wrap: wrap; } }

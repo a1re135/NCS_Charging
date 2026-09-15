@@ -63,7 +63,7 @@ class PreferenceTests(unittest.TestCase):
     def test_english_export_and_data_remain_original(self):
         admin,_=self.login('admin','Admin123456')
         text=admin.get('/api/admin/export?lang=en').data.decode('utf-8-sig')
-        self.assertTrue(text.startswith('Order ID,User,Station,Charger,Status'));self.assertIn('小林',text)
+        self.assertTrue(text.startswith('Order ID,User ID,Station,Charger,Status'));self.assertIn('海淀',text);self.assertNotIn('小林',text)
         s=self.c.get('/api/stations',headers={'X-NCS-Language':'en'}).json[0]
         self.assertIn('海淀',s['name'])
     def test_concurrent_preference_saves_do_not_duplicate_rows(self):

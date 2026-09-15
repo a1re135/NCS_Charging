@@ -15,6 +15,7 @@ from .services import (BusinessError,transaction,money,number,required,distance,
     expire_reservations,quote,ORDER_SELECT,create_order,act_order,audit,pricing_for_station)
 from .capacity import CAPACITY_LEVEL, get_capacity
 from .preferences import get_preferences, save_preferences
+from .avatars import avatar_url, store_avatar, MAX_BYTES
 from .i18n import translate, current_language, operation_display
 
 api=Blueprint('api',__name__)
@@ -27,6 +28,7 @@ def body():
 def public_user(u):
     result = {k:u[k] for k in ('id','phone','nickname','role','balance_cents','avatar','active','created_at')}
     result['preferences'] = get_preferences(u['id'])
+    result['avatar_url'] = avatar_url(u['id'])
     return result
 
 def day(value, field):
@@ -838,10 +840,37 @@ def prediction():
 @auth(True)
 def export():
     out=io.StringIO(); writer=csv.writer(out)
-    writer.writerow([translate(label) for label in ['订单号','用户','电站','电桩','状态','电量(kWh)','金额(元)','已付(元)','欠费(元)','开始时间','结束时间']])
+    writer.writerow([translate(label) for label in ['订单号','用户编号','电站','电桩','状态','电量(kWh)','金额(元)','已付(元)','欠费(元)','开始时间','结束时间']])
     def safe(v):
         s=str(v or '')
         return "'"+s if s[:1] in ('=','+','-','@','\t','\r') else s
     for r in get_db().execute(ORDER_SELECT+' ORDER BY o.id DESC'):
-        writer.writerow([r['id'],safe(r['nickname']),safe(r['station_name']),safe(r['charger_number']),r['status'],r['energy'],r['amount_cents']/100,r['paid_cents']/100,r['debt_cents']/100,r['started_at'],r['ended_at']])
+        writer.writerow([r['id'],r['user_id'],safe(r['station_name']),safe(r['charger_number']),r['status'],r['energy'],r['amount_cents']/100,r['paid_cents']/100,r['debt_cents']/100,r['started_at'],r['ended_at']])
     return Response('\ufeff'+out.getvalue(),mimetype='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename=ncs-orders.csv'})
+
+
+@api.get('/profile/avatar')
+@auth()
+def get_avatar():
+    row = get_db().execute('SELECT image_data FROM user_avatars WHERE user_id=?', (g.user['id'],)).fetchone()
+    if not row:
+        raise BusinessError('尚未上传头像', 404)
+    response = Response(bytes(row['image_data']), mimetype='image/jpeg')
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+@api.post('/profile/avatar')
+@auth()
+def upload_avatar():
+    image = request.files.get('image')
+    if image is None:
+        raise BusinessError('请选择头像图片')
+    url = store_avatar(g.user['id'], image.read(MAX_BYTES + 1), current_app.config['DB_BACKEND'])
+    return jsonify(ok=True, avatar_url=url)
+
+@api.delete('/profile/avatar')
+@auth()
+def reset_avatar():
+    get_db().execute('DELETE FROM user_avatars WHERE user_id=?', (g.user['id'],))
+    return jsonify(ok=True, avatar_url=None)
