@@ -3,6 +3,8 @@ import csv
 import io
 import re
 import secrets
+import threading
+import time
 import pymysql
 from datetime import datetime,timedelta
 from functools import wraps
@@ -11,15 +13,108 @@ from werkzeug.security import check_password_hash,generate_password_hash
 import qrcode
 import qrcode.image.svg
 from .db import get_db,now
-from .agent import chat as agent_chat
+from .llm_agent import hybrid_chat as agent_chat
 from .services import (BusinessError,transaction,money,number,required,distance,
-    expire_reservations,quote,ORDER_SELECT,create_order,act_order,audit,pricing_for_station)
+    maybe_expire_reservations,quote,ORDER_SELECT,create_order,act_order,audit,pricing_for_station)
 from .capacity import CAPACITY_LEVEL, get_capacity
 from .preferences import get_preferences, save_preferences
 from .avatars import avatar_url, store_avatar, MAX_BYTES
 from .i18n import translate, current_language, operation_display
 
 api=Blueprint('api',__name__)
+_station_cache = {}
+
+_station_cache_lock = (
+    threading.Lock()
+)
+
+# Only one request may rebuild an expired
+# station-list cache entry at a time.
+_station_refresh_lock = (
+    threading.Lock()
+)
+
+# Station list does not need millisecond-level
+# freshness. Realtime monitoring is handled by
+# the dedicated realtime endpoint/page.
+_STATION_CACHE_TTL = 1.0
+
+_STATION_CACHE_MAX = 64
+
+def station_cache_get(key):
+    now_value = time.monotonic()
+
+    with _station_cache_lock:
+        item = _station_cache.get(key)
+
+        if item is None:
+            return None
+
+        created_at, value = item
+
+        if (
+            now_value - created_at
+            > _STATION_CACHE_TTL
+        ):
+            _station_cache.pop(
+                key,
+                None,
+            )
+            return None
+
+        return value
+
+
+def station_cache_set(key, value):
+    with _station_cache_lock:
+
+        # Prevent unlimited cache growth if clients
+        # supply many different coordinates.
+        if (
+            len(_station_cache)
+            >= _STATION_CACHE_MAX
+        ):
+            _station_cache.clear()
+
+        _station_cache[key] = (
+            time.monotonic(),
+            value,
+        )
+
+def station_cache_get_or_lock(
+    key,
+):
+    """
+    Return cached data when available.
+
+    When the cache has expired, only one
+    request becomes the refresh owner.
+    Other requests wait briefly and then
+    reuse the refreshed value.
+    """
+
+    cached = station_cache_get(
+        key
+    )
+
+    if cached is not None:
+        return cached, False
+
+    _station_refresh_lock.acquire()
+
+    # Another request may have rebuilt the
+    # cache while this request was waiting.
+    cached = station_cache_get(
+        key
+    )
+
+    if cached is not None:
+        _station_refresh_lock.release()
+        return cached, False
+
+    # Caller owns the refresh lock and must
+    # release it after rebuilding the cache.
+    return None, True
 
 def body():
     data=request.get_json(silent=True)
@@ -87,7 +182,7 @@ def auth(admin=False, allow_frozen=False):
             if g.user is None: raise BusinessError('请先登录',401)
             if not g.user['active'] and not allow_frozen:raise BusinessError('账号已冻结，暂时无法访问',403)
             if admin and g.user['role']!='admin': raise BusinessError('需要系统管理员权限',403)
-            expire_reservations(); return fn(*args,**kwargs)
+            maybe_expire_reservations(); return fn(*args,**kwargs)
         return wrapped
     return deco
 
@@ -156,9 +251,32 @@ def agent():
 
 @api.get('/session')
 def get_session():
-    session.setdefault('csrf',secrets.token_hex(24))
-    u=get_db().execute('SELECT * FROM users WHERE id=?',(session.get('uid'),)).fetchone()
-    return jsonify(csrf=session['csrf'],user=public_user(u) if u else None,time_scale=current_app.config['TIME_SCALE'])
+    session.setdefault(
+        'csrf',
+        secrets.token_hex(24)
+    )
+
+    uid = session.get('uid')
+
+    u = None
+
+    if uid is not None:
+        u = get_db().execute(
+            'SELECT * FROM users WHERE id=?',
+            (uid,)
+        ).fetchone()
+
+    return jsonify(
+        csrf=session['csrf'],
+        user=(
+            public_user(u)
+            if u
+            else None
+        ),
+        time_scale=current_app.config[
+            'TIME_SCALE'
+        ],
+    )
 
 @api.get('/preferences')
 @auth()
@@ -254,149 +372,434 @@ def logout():
 @auth()
 def stations():
     lat = number(
-        request.args.get('lat', 39.9593),
-        -90, 90, '纬度'
+        request.args.get(
+            'lat',
+            39.9593,
+        ),
+        -90,
+        90,
+        '纬度',
     )
+
     lng = number(
-        request.args.get('lng', 116.2981),
-        -180, 180, '经度'
+        request.args.get(
+            'lng',
+            116.2981,
+        ),
+        -180,
+        180,
+        '经度',
     )
 
-    status = request.args.get('status', '')
-    kind = request.args.get('kind', '')
-    sort = request.args.get('sort', 'distance')
+    status = request.args.get(
+        'status',
+        '',
+    )
 
-    if status not in ('', 'idle', 'fault', 'maintenance', 'offline'):
-        raise BusinessError('电站状态筛选无效')
+    kind = request.args.get(
+        'kind',
+        '',
+    )
 
-    if kind not in ('', 'fast', 'slow'):
-        raise BusinessError('充电类型筛选无效')
+    sort = request.args.get(
+        'sort',
+        'distance',
+    )
 
-    if sort not in ('distance', 'usage'):
-        raise BusinessError('排序方式无效')
+    # -----------------------------
+    # Validate filters
+    # -----------------------------
 
-    db = get_db()
+    if status not in (
+        '',
+        'idle',
+        'fault',
+        'maintenance',
+        'offline',
+    ):
+        raise BusinessError(
+            '电站状态筛选无效'
+        )
 
-    sql = '''
-        SELECT
-            s.*,
+    if kind not in (
+        '',
+        'fast',
+        'slow',
+    ):
+        raise BusinessError(
+            '充电类型筛选无效'
+        )
 
-            COUNT(c.id) AS total,
+    if sort not in (
+        'distance',
+        'usage',
+    ):
+        raise BusinessError(
+            '排序方式无效'
+        )
 
-            SUM(
-                CASE WHEN c.status='idle'
-                THEN 1 ELSE 0 END
-            ) AS free,
+    # -----------------------------
+    # Station-list cache
+    # -----------------------------
 
-            SUM(
-                CASE WHEN c.kind='fast'
-                THEN 1 ELSE 0 END
-            ) AS fast,
+    cache_key = (
+        round(lat, 4),
+        round(lng, 4),
+        status,
+        kind,
+        sort,
+    )
 
-            SUM(
-                CASE WHEN c.kind='slow'
-                THEN 1 ELSE 0 END
-            ) AS slow,
+    cached, refresh_owner = (
+        station_cache_get_or_lock(
+            cache_key
+        )
+    )
 
-            COALESCE(SUM(c.total_count), 0) AS `usage`,
+    if cached is not None:
+        return jsonify(cached)
 
-            SUM(
-                CASE WHEN c.status='fault'
-                THEN 1 ELSE 0 END
-            ) AS fault,
+    # Only the refresh owner reaches this
+    # section. The lock MUST always be
+    # released, even if SQL fails.
+    try:
+        db = get_db()
 
-            SUM(
-                CASE WHEN c.status='maintenance'
-                THEN 1 ELSE 0 END
-            ) AS maintenance,
+        # -----------------------------
+        # Main station query
+        # -----------------------------
 
-            SUM(
-                CASE WHEN c.status='offline'
-                THEN 1 ELSE 0 END
-            ) AS offline
+        sql = '''
+            SELECT
+                s.*,
 
-        FROM stations s
+                COUNT(c.id) AS total,
 
-        LEFT JOIN chargers c
-            ON c.station_id = s.id
-    '''
+                SUM(
+                    CASE
+                        WHEN c.status='idle'
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS free,
 
-    conditions = []
-    args = []
+                SUM(
+                    CASE
+                        WHEN c.kind='fast'
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS fast,
 
-    if status:
-        conditions.append(
-            '''
-            EXISTS(
-                SELECT 1
-                FROM chargers x
-                WHERE x.station_id=s.id
-                AND x.status=?
+                SUM(
+                    CASE
+                        WHEN c.kind='slow'
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS slow,
+
+                COALESCE(
+                    SUM(c.total_count),
+                    0
+                ) AS `usage`,
+
+                SUM(
+                    CASE
+                        WHEN c.status='fault'
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS fault,
+
+                SUM(
+                    CASE
+                        WHEN c.status='maintenance'
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS maintenance,
+
+                SUM(
+                    CASE
+                        WHEN c.status='offline'
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS offline
+
+            FROM stations s
+
+            LEFT JOIN chargers c
+                ON c.station_id = s.id
+        '''
+
+        conditions = []
+        args = []
+
+        # -----------------------------
+        # Status filter
+        # -----------------------------
+
+        if status:
+            conditions.append(
+                '''
+                EXISTS(
+                    SELECT 1
+                    FROM chargers x
+                    WHERE x.station_id = s.id
+                      AND x.status = ?
+                )
+                '''
             )
-            '''
-        )
-        args.append(status)
 
-    if kind:
-        conditions.append(
-            '''
-            EXISTS(
-                SELECT 1
-                FROM chargers x
-                WHERE x.station_id=s.id
-                AND x.kind=?
+            args.append(status)
+
+        # -----------------------------
+        # Charger type filter
+        # -----------------------------
+
+        if kind:
+            conditions.append(
+                '''
+                EXISTS(
+                    SELECT 1
+                    FROM chargers x
+                    WHERE x.station_id = s.id
+                      AND x.kind = ?
+                )
+                '''
             )
-            '''
-        )
-        args.append(kind)
 
-    if conditions:
-        sql += ' WHERE ' + ' AND '.join(conditions)
+            args.append(kind)
 
-    sql += ' GROUP BY s.id'
-
-    result = []
-
-    for row in db.execute(sql, args):
-        r = dict(row)
-
-        # Keep Rey frontend compatibility
-        r['fast_count'] = r['fast']
-        r['slow_count'] = r['slow']
-
-        tariff = pricing_for_station(
-            db,
-            r['id']
-        )
-
-        r.update(
-            current_price_cents=tariff['price_cents'],
-            electricity_fee_cents=tariff['electricity_fee_cents'],
-            service_fee_cents=tariff['service_fee_cents'],
-        )
-
-        r['distance'] = distance(
-            lat,
-            lng,
-            r['lat'],
-            r['lng']
-        )
-
-        result.append(r)
-
-    if sort == 'usage':
-        result.sort(
-            key=lambda r: (
-                -r['usage'],
-                r['distance']
+        if conditions:
+            sql += (
+                ' WHERE '
+                + ' AND '.join(
+                    conditions
+                )
             )
-        )
-    else:
-        result.sort(
-            key=lambda r: r['distance']
+
+        sql += ' GROUP BY s.id'
+
+        # -----------------------------
+        # Fetch all stations
+        # -----------------------------
+
+        rows = [
+            dict(row)
+            for row
+            in db.execute(
+                sql,
+                args,
+            ).fetchall()
+        ]
+
+        # -----------------------------
+        # Get all current tariffs
+        # in ONE query
+        # -----------------------------
+
+        current_time = datetime.now()
+
+        minute = (
+            current_time.hour * 60
+            + current_time.minute
         )
 
-    return jsonify(result)
+        pricing_rows = db.execute(
+            '''
+            SELECT
+                station_id,
+                electricity_fee_cents,
+                service_fee_cents,
+                start_minute
+
+            FROM pricing_rules
+
+            WHERE start_minute <= ?
+              AND end_minute > ?
+
+            ORDER BY
+                station_id,
+                start_minute DESC
+            ''',
+            (
+                minute,
+                minute,
+            ),
+        ).fetchall()
+
+        tariffs = {}
+
+        for rule in pricing_rows:
+            station_id = (
+                rule['station_id']
+            )
+
+            # Keep only the first matching
+            # active tariff per station.
+            if station_id in tariffs:
+                continue
+
+            electricity = int(
+                rule[
+                    'electricity_fee_cents'
+                ]
+                or 0
+            )
+
+            service = int(
+                rule[
+                    'service_fee_cents'
+                ]
+                or 0
+            )
+
+            tariffs[station_id] = {
+                'electricity_fee_cents':
+                    electricity,
+
+                'service_fee_cents':
+                    service,
+
+                'price_cents':
+                    electricity
+                    + service,
+            }
+
+        # -----------------------------
+        # Build frontend result
+        # -----------------------------
+
+        result = []
+
+        for r in rows:
+            # Keep compatibility with the
+            # existing frontend.
+            r['fast_count'] = (
+                r['fast']
+                or 0
+            )
+
+            r['slow_count'] = (
+                r['slow']
+                or 0
+            )
+
+            r['free'] = (
+                r['free']
+                or 0
+            )
+
+            r['fault'] = (
+                r['fault']
+                or 0
+            )
+
+            r['maintenance'] = (
+                r['maintenance']
+                or 0
+            )
+
+            r['offline'] = (
+                r['offline']
+                or 0
+            )
+
+            r['usage'] = (
+                r['usage']
+                or 0
+            )
+
+            # Current pricing
+            tariff = tariffs.get(
+                r['id']
+            )
+
+            # Legacy fallback if the station
+            # has no pricing rule.
+            if tariff is None:
+                legacy_price = int(
+                    r.get(
+                        'price_cents'
+                    )
+                    or 0
+                )
+
+                tariff = {
+                    'electricity_fee_cents':
+                        legacy_price,
+
+                    'service_fee_cents':
+                        0,
+
+                    'price_cents':
+                        legacy_price,
+                }
+
+            r.update(
+                current_price_cents=
+                    tariff[
+                        'price_cents'
+                    ],
+
+                electricity_fee_cents=
+                    tariff[
+                        'electricity_fee_cents'
+                    ],
+
+                service_fee_cents=
+                    tariff[
+                        'service_fee_cents'
+                    ],
+            )
+
+            # Calculate distance from user.
+            r['distance'] = distance(
+                lat,
+                lng,
+                r['lat'],
+                r['lng'],
+            )
+
+            result.append(r)
+
+        # -----------------------------
+        # Sort result
+        # -----------------------------
+
+        if sort == 'usage':
+            result.sort(
+                key=lambda r: (
+                    -r['usage'],
+                    r['distance'],
+                )
+            )
+
+        else:
+            result.sort(
+                key=lambda r:
+                    r['distance']
+            )
+
+        # -----------------------------
+        # Cache final result
+        # -----------------------------
+
+        station_cache_set(
+            cache_key,
+            result,
+        )
+
+        return jsonify(
+            result
+        )
+
+    finally:
+        if refresh_owner:
+            _station_refresh_lock.release()
 
 @api.get('/stations/<int:sid>')
 @auth()

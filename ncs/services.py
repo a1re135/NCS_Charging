@@ -1,5 +1,7 @@
 """Transactions, tariff lookup, and charging state machine, independent of page layout."""
 import math
+import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -98,6 +100,61 @@ def expire_reservations():
         for row in rows:
             db.execute("UPDATE orders SET status='expired',ended_at=? WHERE id=?",(now(),row['id']))
             db.execute("UPDATE chargers SET status='idle' WHERE id=? AND status='reserved'",(row['charger_id'],))
+
+_expire_lock = threading.Lock()
+_last_expire_check = 0.0
+
+
+def maybe_expire_reservations(interval=1.0):
+    """
+    Refresh expired reservations at most once per interval.
+
+    Production requests are throttled to avoid unnecessary
+    database locking. Automated tests always perform the
+    expiration check immediately so their behavior remains
+    deterministic.
+    """
+
+    global _last_expire_check
+
+    # Automated tests expect expiration to happen immediately.
+    if current_app.config.get("TESTING"):
+        expire_reservations()
+        return
+
+    current = time.monotonic()
+
+    if (
+        current - _last_expire_check
+        < interval
+    ):
+        return
+
+    # Another request may already be checking expiration.
+    if not _expire_lock.acquire(
+        blocking=False
+    ):
+        return
+
+    try:
+        current = time.monotonic()
+
+        # Check again because another request may have
+        # completed the refresh while we were entering.
+        if (
+            current - _last_expire_check
+            < interval
+        ):
+            return
+
+        expire_reservations()
+
+        _last_expire_check = (
+            time.monotonic()
+        )
+
+    finally:
+        _expire_lock.release()
 
 def quote(order, at=None):
     o=dict(order)

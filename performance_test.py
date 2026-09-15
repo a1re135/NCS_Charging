@@ -47,20 +47,47 @@ def percentile(values: list[float], p: float) -> float:
     return x[f] if f == c else x[f] + (x[c] - x[f]) * (k - f)
 
 
-def login(session: requests.Session, base: str, phone: str, password: str) -> bool:
-    r = session.get(base + "/api/session", timeout=REQUEST_TIMEOUT)
-    r.raise_for_status()
-    token = r.json().get("csrf")
-    if not token:
-        raise RuntimeError("Login preflight did not return CSRF token")
-    r = session.post(
-        base + "/api/login",
-        json={"phone": phone, "password": password},
-        headers={"X-CSRF-Token": token},
+def login(
+    session: requests.Session,
+    base: str,
+    phone: str,
+    password: str,
+) -> str:
+    r = session.get(
+        base + "/api/session",
         timeout=REQUEST_TIMEOUT,
     )
     r.raise_for_status()
-    return bool(r.json().get("csrf"))
+
+    token = r.json().get("csrf")
+
+    if not token:
+        raise RuntimeError(
+            "Login preflight did not return CSRF token"
+        )
+
+    r = session.post(
+        base + "/api/login",
+        json={
+            "phone": phone,
+            "password": password,
+        },
+        headers={
+            "X-CSRF-Token": token,
+        },
+        timeout=REQUEST_TIMEOUT,
+    )
+
+    r.raise_for_status()
+
+    csrf = r.json().get("csrf")
+
+    if not csrf:
+        raise RuntimeError(
+            "Login did not return CSRF token"
+        )
+
+    return csrf
 
 
 def record_call(
@@ -117,79 +144,245 @@ def health_check(base: str, retries: int = 8) -> tuple[bool, str]:
     return False, last_error
 
 
-def paced_worker(base: str, endpoint: str, duration: float, worker_id: int, target_qps: float):
-    session = requests.Session()
-    phone, password = USERS[worker_id % len(USERS)]
-    try:
-        login(session, base, phone, password)
-    except (requests.RequestException, ValueError, RuntimeError):
-        return {"ok": 0, "err": 1, "lat": [], "codes": [0], "login_error": 1}
+def paced_worker(
+    session: requests.Session,
+    base: str,
+    endpoint: str,
+    duration: float,
+    worker_id: int,
+    target_qps: float,
+    worker_count: int,
+    start_event: threading.Event,
+):
+    # All worker sessions are already authenticated
+    # before the measured benchmark begins.
 
-    deadline = time.perf_counter() + duration
-    interval = max(0.001, (1.0 / max(target_qps, 0.001)) * max(1, worker_id + 1))
-    ok = err = 0
-    lat: list[float] = []
-    codes: list[int] = []
-    next_at = time.perf_counter() + worker_id * (1.0 / max(target_qps, 0.001))
+    start_event.wait()
+
+    started = time.perf_counter()
+    deadline = started + duration
+
+    interval = max(
+        0.001,
+        worker_count
+        / max(
+            target_qps,
+            0.001,
+        ),
+    )
+
+    next_at = (
+        started
+        + worker_id
+        / max(
+            target_qps,
+            0.001,
+        )
+    )
+
+    ok = 0
+    err = 0
+    lat = []
+    codes = []
 
     while time.perf_counter() < deadline:
-        sleep_for = next_at - time.perf_counter()
+        sleep_for = (
+            next_at
+            - time.perf_counter()
+        )
+
         if sleep_for > 0:
-            time.sleep(min(sleep_for, max(0.0, deadline - time.perf_counter())))
+            time.sleep(
+                min(
+                    sleep_for,
+                    max(
+                        0.0,
+                        deadline
+                        - time.perf_counter(),
+                    ),
+                )
+            )
+
         if time.perf_counter() >= deadline:
             break
-        good, ms, code, _ = record_call(session, "GET", base + endpoint, retries=1)
+
+        good, ms, code, _ = record_call(
+            session,
+            "GET",
+            base + endpoint,
+            retries=1,
+        )
+
         lat.append(ms)
         codes.append(code)
+
         ok += int(good)
         err += int(not good)
+
         next_at += interval
 
-    return {"ok": ok, "err": err, "lat": lat, "codes": codes, "login_error": 0}
+    return {
+        "ok": ok,
+        "err": err,
+        "lat": lat,
+        "codes": codes,
+        "login_error": 0,
+    }
 
 
-def login_worker(base: str, duration: float, worker_id: int, offered_qps: float):
-    deadline = time.perf_counter() + duration
-    phone, password = USERS[worker_id % len(USERS)]
-    ok = err = 0
-    lat: list[float] = []
-    codes: list[int] = []
-    interval = max(0.001, 1.0 / max(offered_qps, 0.001))
-    next_at = time.perf_counter() + worker_id * interval
+def login_worker(
+    base: str,
+    duration: float,
+    worker_id: int,
+    offered_qps: float,
+    worker_count: int,
+):
+    deadline = (
+        time.perf_counter()
+        + duration
+    )
 
-    while time.perf_counter() < deadline:
-        sleep_for = next_at - time.perf_counter()
+    phone, password = USERS[
+        worker_id % len(USERS)
+    ]
+
+    ok = 0
+    err = 0
+
+    lat = []
+    codes = []
+
+    # Divide total offered QPS across all workers.
+    interval = max(
+        0.001,
+        worker_count
+        / max(
+            offered_qps,
+            0.001,
+        ),
+    )
+
+    next_at = (
+        time.perf_counter()
+        + worker_id
+        / max(
+            offered_qps,
+            0.001,
+        )
+    )
+
+    while (
+        time.perf_counter()
+        < deadline
+    ):
+        sleep_for = (
+            next_at
+            - time.perf_counter()
+        )
+
         if sleep_for > 0:
-            time.sleep(min(sleep_for, max(0.0, deadline - time.perf_counter())))
-        if time.perf_counter() >= deadline:
+            time.sleep(
+                min(
+                    sleep_for,
+                    max(
+                        0.0,
+                        deadline
+                        - time.perf_counter(),
+                    ),
+                )
+            )
+
+        if (
+            time.perf_counter()
+            >= deadline
+        ):
             break
-        session = requests.Session()
-        started = time.perf_counter()
+
+        session = (
+            requests.Session()
+        )
+
+        started = (
+            time.perf_counter()
+        )
+
         try:
-            pre = session.get(base + "/api/session", timeout=REQUEST_TIMEOUT)
-            token = pre.json().get("csrf")
-            if not token:
-                raise RuntimeError("missing CSRF token")
-            response = session.post(
-                base + "/api/login",
-                json={"phone": phone, "password": password},
-                headers={"X-CSRF-Token": token},
+            pre = session.get(
+                base + "/api/session",
                 timeout=REQUEST_TIMEOUT,
             )
+
+            token = (
+                pre.json()
+                .get("csrf")
+            )
+
+            if not token:
+                raise RuntimeError(
+                    "missing CSRF token"
+                )
+
+            response = session.post(
+                base + "/api/login",
+                json={
+                    "phone":
+                        phone,
+                    "password":
+                        password,
+                },
+                headers={
+                    "X-CSRF-Token":
+                        token,
+                },
+                timeout=REQUEST_TIMEOUT,
+            )
+
             good = response.ok
-            code = response.status_code
-        except (requests.RequestException, ValueError, RuntimeError):
+            code = (
+                response.status_code
+            )
+
+        except (
+            requests.RequestException,
+            ValueError,
+            RuntimeError,
+        ):
             good = False
             code = 0
-        lat.append((time.perf_counter() - started) * 1000)
+
+        lat.append(
+            (
+                time.perf_counter()
+                - started
+            )
+            * 1000
+        )
+
         codes.append(code)
+
         ok += int(good)
-        err += int(not good)
+        err += int(
+            not good
+        )
+
         next_at += interval
-    return {"ok": ok, "err": err, "lat": lat, "codes": codes, "login_error": 0}
+
+    return {
+        "ok": ok,
+        "err": err,
+        "lat": lat,
+        "codes": codes,
+        "login_error": 0,
+    }
 
 
-def write_cycle_worker(base: str, duration: float, worker_id: int, offered_qps: float):
+def write_cycle_worker(
+    base: str,
+    duration: float,
+    worker_id: int,
+    offered_qps: float,
+    worker_count: int,
+):
     session = requests.Session()
     phone, password = USERS[worker_id % len(USERS)]
     charger_id = (worker_id % 100) + 1
@@ -199,8 +392,22 @@ def write_cycle_worker(base: str, duration: float, worker_id: int, offered_qps: 
         return {"start": (0, 1, []), "finish": (0, 1, [])}
 
     deadline = time.perf_counter() + duration
-    interval = max(0.001, 1.0 / max(offered_qps, 0.001))
-    next_at = time.perf_counter() + worker_id * interval
+    interval = max(
+        0.001,
+        worker_count
+        / max(
+            offered_qps,
+            0.001,
+        ),
+    )
+    next_at = (
+        time.perf_counter()
+        + worker_id
+        / max(
+            offered_qps,
+            0.001,
+        )
+    )
     sc = fc = se = fe = 0
     start_lat: list[float] = []
     finish_lat: list[float] = []
@@ -250,6 +457,177 @@ def write_cycle_worker(base: str, duration: float, worker_id: int, offered_qps: 
         "finish": (fc, fe, finish_lat),
     }
 
+def agent_worker(
+    base: str,
+    duration: float,
+    worker_id: int,
+    offered_qps: float,
+    worker_count: int,
+):
+    session = requests.Session()
+
+    phone, password = USERS[
+        worker_id % len(USERS)
+    ]
+
+    try:
+        csrf = login(
+            session,
+            base,
+            phone,
+            password,
+        )
+    except (
+        requests.RequestException,
+        ValueError,
+        RuntimeError,
+    ):
+        return {
+            "ok": 0,
+            "err": 1,
+            "lat": [],
+            "codes": [0],
+            "fallbacks": 0,
+            "login_error": 1,
+        }
+
+    deadline = (
+        time.perf_counter()
+        + duration
+    )
+
+    # Each worker contributes part of the total
+    # offered QPS.
+    interval = max(
+        0.001,
+        worker_count
+        / max(
+            offered_qps,
+            0.001,
+        ),
+    )
+
+    # Stagger requests so we do not send all
+    # workers at exactly the same instant.
+    next_at = (
+        time.perf_counter()
+        + worker_id
+        / max(
+            offered_qps,
+            0.001,
+        )
+    )
+
+    ok = 0
+    err = 0
+    fallbacks = 0
+
+    lat = []
+    codes = []
+
+    while (
+        time.perf_counter()
+        < deadline
+    ):
+        sleep_for = (
+            next_at
+            - time.perf_counter()
+        )
+
+        if sleep_for > 0:
+            time.sleep(
+                min(
+                    sleep_for,
+                    max(
+                        0.0,
+                        deadline
+                        - time.perf_counter(),
+                    ),
+                )
+            )
+
+        if (
+            time.perf_counter()
+            >= deadline
+        ):
+            break
+
+        good, ms, code, payload = (
+            record_call(
+                session,
+                "POST",
+                base + "/api/agent/chat",
+                json={
+                    "message":
+                        "我附近有没有地方可以快速给车充电？",
+
+                    "lat":
+                        39.9593,
+
+                    "lng":
+                        116.2981,
+                },
+                headers={
+                    "X-CSRF-Token":
+                        csrf,
+                },
+            )
+        )
+
+        # HTTP 200 alone is not enough.
+        #
+        # If GLM fails, our application intentionally
+        # falls back to the local Agent and still
+        # returns HTTP 200.
+        #
+        # For this benchmark we only count a request
+        # as successful when the real GLM path ran.
+        glm_ok = (
+            good
+            and isinstance(
+                payload,
+                dict,
+            )
+            and payload.get(
+                "agent_mode"
+            ) == "glm"
+            and bool(
+                payload.get(
+                    "answer"
+                )
+            )
+        )
+
+        if (
+            good
+            and isinstance(
+                payload,
+                dict,
+            )
+            and payload.get(
+                "agent_mode"
+            ) != "glm"
+        ):
+            fallbacks += 1
+
+        lat.append(ms)
+        codes.append(code)
+
+        ok += int(glm_ok)
+        err += int(
+            not glm_ok
+        )
+
+        next_at += interval
+
+    return {
+        "ok": ok,
+        "err": err,
+        "lat": lat,
+        "codes": codes,
+        "fallbacks": fallbacks,
+        "login_error": 0,
+    }
 
 def aggregate(parts):
     ok = sum(x.get("ok", 0) for x in parts)
@@ -258,50 +636,245 @@ def aggregate(parts):
     return ok, err, lat
 
 
-def run_read_case(base: str, name: str, endpoint: str, target_qps: float, duration: float, workers: int):
-    worker_count = max(1, min(workers, 120))
-    started = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=worker_count) as pool:
-        futures = [pool.submit(paced_worker, base, endpoint, duration, i, target_qps) for i in range(worker_count)]
-        parts = [f.result() for f in as_completed(futures)]
-    elapsed = max(time.perf_counter() - started, 0.001)
-    ok, err, lat = aggregate(parts)
+def run_read_case(
+    base: str,
+    name: str,
+    endpoint: str,
+    target_qps: float,
+    duration: float,
+    workers: int,
+):
+    worker_count = max(
+        1,
+        min(
+            workers,
+            120,
+        ),
+    )
+
+    # Authenticate all worker sessions BEFORE
+    # starting the measured benchmark window.
+    sessions = []
+
+    for i in range(worker_count):
+        session = requests.Session()
+
+        phone, password = USERS[
+            i % len(USERS)
+        ]
+
+        try:
+            login(
+                session,
+                base,
+                phone,
+                password,
+            )
+
+        except (
+            requests.RequestException,
+            ValueError,
+            RuntimeError,
+        ):
+            return {
+                "name": name,
+                "endpoint": endpoint,
+                "requests": 1,
+                "success": 0,
+                "errors": 1,
+                "error_rate": 1.0,
+                "elapsed_seconds": 0,
+                "qps": 0,
+                "target_qps": target_qps,
+                "avg_ms": 0,
+                "p95_ms": 0,
+                "p99_ms": 0,
+                "target_met": False,
+            }
+
+        sessions.append(session)
+
+    start_event = (
+        threading.Event()
+    )
+
+    with ThreadPoolExecutor(
+        max_workers=worker_count
+    ) as pool:
+
+        futures = [
+            pool.submit(
+                paced_worker,
+                sessions[i],
+                base,
+                endpoint,
+                duration,
+                i,
+                target_qps,
+                worker_count,
+                start_event,
+            )
+            for i in range(
+                worker_count
+            )
+        ]
+
+        # Start every worker from the same
+        # measurement boundary.
+        started = (
+            time.perf_counter()
+        )
+
+        start_event.set()
+
+        parts = [
+            future.result()
+            for future
+            in as_completed(
+                futures
+            )
+        ]
+
+    elapsed = max(
+        time.perf_counter()
+        - started,
+        0.001,
+    )
+
+    ok, err, lat = aggregate(
+        parts
+    )
+
     total = ok + err
-    actual_qps = ok / elapsed
+
+    actual_qps = (
+        ok / elapsed
+    )
+
     return {
         "name": name,
         "endpoint": endpoint,
         "requests": total,
         "success": ok,
         "errors": err,
-        "error_rate": err / max(total, 1),
-        "elapsed_seconds": elapsed,
+        "error_rate":
+            err / max(total, 1),
+        "elapsed_seconds":
+            elapsed,
         "qps": actual_qps,
-        "target_qps": target_qps,
-        "avg_ms": statistics.fmean(lat) if lat else 0,
-        "p95_ms": percentile(lat, 95),
-        "p99_ms": percentile(lat, 99),
-        "target_met": ok > 0 and actual_qps >= target_qps and err == 0,
+        "target_qps":
+            target_qps,
+        "avg_ms":
+            statistics.fmean(lat)
+            if lat
+            else 0,
+        "p95_ms":
+            percentile(lat, 95),
+        "p99_ms":
+            percentile(lat, 99),
+        "target_met": (
+            ok > 0
+            and actual_qps
+                >= target_qps
+            and err == 0
+        ),
     }
 
 
-def bench_reads(base, duration, workers, scale=1.0):
+def bench_reads(
+    base,
+    duration,
+    workers,
+    scale=1.0,
+):
     specs = [
-        ("station_query", "/api/stations"),
-        ("device_view", "/api/stations/1"),
+        (
+            "station_query",
+            "/api/stations",
+        ),
+        (
+            "device_view",
+            "/api/stations/1",
+        ),
     ]
-    return [
-        run_read_case(base, name, endpoint, TARGETS["qps"][name] * scale, duration, workers)
-        for name, endpoint in specs
-    ]
+
+    results = []
+
+    for name, endpoint in specs:
+
+        required_target = (
+            TARGETS["qps"][name]
+            * scale
+        )
+
+        offered_target = (
+            required_target
+            * 1.10
+        )
+
+        result = run_read_case(
+            base,
+            name,
+            endpoint,
+            offered_target,
+            duration,
+            workers,
+        )
+
+        # The benchmark offered 110%, but
+        # acceptance is against the official
+        # course requirement.
+        result["offered_qps"] = (
+            offered_target
+        )
+
+        result["target_qps"] = (
+            required_target
+        )
+
+        result["target_met"] = (
+            result["success"] > 0
+            and result["qps"]
+                >= required_target
+            and result["errors"] == 0
+        )
+
+        results.append(
+            result
+        )
+
+    return results
 
 
 def bench_login(base, duration, workers, scale=1.0):
-    target = TARGETS["qps"]["login"] * scale
+    required_target = (
+        TARGETS["qps"]["login"]
+        * scale
+    )
+
+    # Offer 10% above the required capacity.
+    # Pass/fail is still judged against the real
+    # course requirement, not the higher offered load.
+    offered_target = (
+        required_target
+        * 1.10
+    )
     worker_count = max(1, min(workers, 60))
     started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=worker_count) as pool:
-        futures = [pool.submit(login_worker, base, duration, i, target) for i in range(worker_count)]
+        futures = [
+            pool.submit(
+                login_worker,
+                base,
+                duration,
+                i,
+                offered_target,
+                worker_count,
+            )
+            for i in range(
+                worker_count
+            )
+        ]
         parts = [f.result() for f in as_completed(futures)]
     elapsed = max(time.perf_counter() - started, 0.001)
     ok, err, lat = aggregate(parts)
@@ -316,13 +889,149 @@ def bench_login(base, duration, workers, scale=1.0):
         "error_rate": err / max(total, 1),
         "elapsed_seconds": elapsed,
         "qps": qps,
-        "target_qps": target,
+        "target_qps": required_target,
         "avg_ms": statistics.fmean(lat) if lat else 0,
         "p95_ms": percentile(lat, 95),
         "p99_ms": percentile(lat, 99),
-        "target_met": ok > 0 and qps >= target and err == 0,
+        "target_met": ok > 0 and qps >= required_target and err == 0,
     }
 
+def bench_agent(
+    base,
+    duration,
+    workers,
+    scale=1.0,
+):
+    target = (
+        TARGETS["qps"]["agent"]
+        * scale
+    )
+
+    # app.py currently serves with 32 Waitress
+    # threads, so never create more than 32
+    # simultaneous Agent workers.
+    worker_count = max(
+        1,
+        min(
+            workers,
+            32,
+        ),
+    )
+
+    started = (
+        time.perf_counter()
+    )
+
+    with ThreadPoolExecutor(
+        max_workers=worker_count
+    ) as pool:
+        futures = [
+            pool.submit(
+                agent_worker,
+                base,
+                duration,
+                i,
+                target,
+                worker_count,
+            )
+            for i in range(
+                worker_count
+            )
+        ]
+
+        parts = [
+            future.result()
+            for future
+            in as_completed(
+                futures
+            )
+        ]
+
+    elapsed = max(
+        time.perf_counter()
+        - started,
+        0.001,
+    )
+
+    ok, err, lat = aggregate(
+        parts
+    )
+
+    fallbacks = sum(
+        part.get(
+            "fallbacks",
+            0,
+        )
+        for part in parts
+    )
+
+    total = ok + err
+
+    qps = (
+        ok / elapsed
+    )
+
+    return {
+        "name":
+            "agent",
+
+        "endpoint":
+            "/api/agent/chat",
+
+        "requests":
+            total,
+
+        "success":
+            ok,
+
+        "errors":
+            err,
+
+        "fallbacks":
+            fallbacks,
+
+        "error_rate":
+            err
+            / max(
+                total,
+                1,
+            ),
+
+        "elapsed_seconds":
+            elapsed,
+
+        "qps":
+            qps,
+
+        "target_qps":
+            target,
+
+        "avg_ms":
+            statistics.fmean(
+                lat
+            )
+            if lat
+            else 0,
+
+        "p95_ms":
+            percentile(
+                lat,
+                95,
+            ),
+
+        "p99_ms":
+            percentile(
+                lat,
+                99,
+            ),
+
+        "target_met": (
+            ok > 0
+            and qps >= target
+            and err == 0
+            and fallbacks == 0
+        ),
+    }
 
 def bench_writes(base, duration, workers, scale=1.0):
     target_start = TARGETS["qps"]["start_charging"] * scale
@@ -330,9 +1039,30 @@ def bench_writes(base, duration, workers, scale=1.0):
     target = min(target_start, target_finish)
     worker_count = max(1, min(workers, 100))
     started = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=worker_count) as pool:
-        futures = [pool.submit(write_cycle_worker, base, duration, i, target) for i in range(worker_count)]
-        parts = [f.result() for f in as_completed(futures)]
+    with ThreadPoolExecutor(
+        max_workers=worker_count
+    ) as pool:
+        futures = [
+            pool.submit(
+                write_cycle_worker,
+                base,
+                duration,
+                i,
+                target,
+                worker_count,
+            )
+            for i in range(
+                worker_count
+            )
+        ]
+
+        parts = [
+            future.result()
+            for future
+            in as_completed(
+                futures
+            )
+        ]
     elapsed = max(time.perf_counter() - started, 0.001)
     out = []
     for key, name, endpoint, target_qps in [
@@ -362,14 +1092,59 @@ def bench_writes(base, duration, workers, scale=1.0):
     return out
 
 
-def run(base, duration, workers, write_test, scale=1.0):
-    healthy, detail = health_check(base)
+def run(
+    base,
+    duration,
+    workers,
+    write_test,
+    scale=1.0,
+    agent_test=False,
+):
+    healthy, detail = (
+        health_check(base)
+    )
+
     if not healthy:
-        raise RuntimeError(f"Service health check failed after retries: {detail}")
-    results = [bench_login(base, duration, workers, scale)]
-    results += bench_reads(base, duration, workers, scale)
+        raise RuntimeError(
+            "Service health check "
+            f"failed after retries: "
+            f"{detail}"
+        )
+
+    results = [
+        bench_login(
+            base,
+            duration,
+            workers,
+            scale,
+        )
+    ]
+
+    results += bench_reads(
+        base,
+        duration,
+        workers,
+        scale,
+    )
+
+    if agent_test:
+        results.append(
+            bench_agent(
+                base,
+                duration,
+                workers,
+                scale,
+            )
+        )
+
     if write_test:
-        results += bench_writes(base, duration, workers, scale)
+        results += bench_writes(
+            base,
+            duration,
+            workers,
+            scale,
+        )
+
     return results
 
 
@@ -379,6 +1154,15 @@ def main():
     ap.add_argument("--duration", type=float, default=30)
     ap.add_argument("--workers", type=int, default=60)
     ap.add_argument("--write-test", action="store_true")
+    ap.add_argument(
+        "--agent-test",
+        action="store_true",
+        help=(
+            "Benchmark the real GLM-backed "
+            "AI Agent. This consumes AI API "
+            "credits."
+        ),
+    )
     ap.add_argument(
         "--stages",
         action="store_true",
@@ -393,7 +1177,14 @@ def main():
         f"duration={args.duration}s workers={args.workers}; write_test={args.write_test}"
     )
 
-    results = run(base, args.duration, args.workers, args.write_test, scale=1.0)
+    results = run(
+        base,
+        args.duration,
+        args.workers,
+        args.write_test,
+        scale=1.0,
+        agent_test=args.agent_test,
+    )
     stress = []
     if args.stages:
         for ratio in (0.25, 0.50, 0.75, 1.00, 1.25):
@@ -404,7 +1195,17 @@ def main():
                 f"{stage_workers} workers x {stage_duration:.1f}s"
             )
             try:
-                sr = run(base, stage_duration, stage_workers, args.write_test, scale=ratio)
+                sr = run(
+                    base,
+                    stage_duration,
+                    stage_workers,
+                    args.write_test,
+                    scale=ratio,
+
+                    # Don't repeatedly spend GLM API credits
+                    # during all five stress stages.
+                    agent_test=False,
+                )
             except RuntimeError as exc:
                 sr = [{"name": "health", "target_met": False, "error": str(exc)}]
                 print(f"  Stage skipped: {exc}")
@@ -424,6 +1225,7 @@ def main():
         "duration": args.duration,
         "workers": args.workers,
         "write_test": args.write_test,
+        "agent_test": args.agent_test,
         "stages": stress,
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "results": results,
@@ -432,6 +1234,12 @@ def main():
             "stage_ratios": [0.25, 0.50, 0.75, 1.00, 1.25] if args.stages else [],
             "pass_rule": "successful QPS >= offered target and error rate == 0",
             "writes": "real /api/orders start + finish endpoints when --write-test is enabled",
+            "agent": (
+                "real /api/agent/chat with "
+                "agent_mode=glm required for success"
+                if args.agent_test
+                else "not tested"
+            ),
         },
     }
     Path(args.output).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -444,6 +1252,14 @@ def main():
         f"- 主测试持续时间：{args.duration} 秒",
         f"- 最大工作线程：{args.workers}",
         f'- 写场景：{"启用（使用 L1 测试夹具）" if args.write_test else "关闭（只读安全模式）"}',
+        (
+            "- AI Agent 场景："
+            + (
+                "启用（真实 GLM API）"
+                if args.agent_test
+                else "关闭"
+            )
+        ),
         "- 负载模型：按目标 QPS 进行开环限速，而不是把 worker 数直接当作 QPS。",
         "",
         "| 场景 | 实测 QPS | 目标 QPS | Avg ms | P95 ms | P99 ms | 错误率 | 达标 |",
@@ -463,6 +1279,7 @@ def main():
         "- 单项达标条件：实测成功 QPS ≥ 对应目标 QPS 且错误率 = 0。",
         "- 压力阶段按 25% / 50% / 75% / 100% / 125% 的目标 QPS 逐级增加。",
         "- 写场景使用真实 `/api/orders` 业务接口，覆盖订单创建、结算和电桩释放。",
+        "- Agent 场景只有返回 `agent_mode=glm` 才计为成功；本地 fallback 不计入达标请求。",
     ]
     if stress:
         lines += [
