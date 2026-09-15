@@ -120,7 +120,11 @@ def _seed_initial(db):
             db.execute('INSERT INTO stations VALUES(?,?,?,?,?,?)',(sid,*item))
             for j in range(1,11):
                 kind='fast' if j<=7 else 'slow'; power=60 if kind=='fast' else 7
-                status='fault' if j==10 and sid in (2,4) else 'idle'
+                status='idle'
+                if j==10 and sid in (2,4): status='fault'
+                if j==6 and sid==2: status='maintenance'
+                if j==6 and sid==3: status='fault'
+                if j==6 and sid==4: status='offline'
                 db.execute('INSERT INTO chargers(station_id,number,kind,power,status) VALUES(?,?,?,?,?)',
                            (sid,f'NCS-{sid:02d}{j:02d}',kind,power,status))
         rng = random.Random(26)
@@ -130,9 +134,11 @@ def _seed_initial(db):
                 c=db.execute('SELECT c.*,s.price_cents FROM chargers c JOIN stations s ON s.id=c.station_id WHERE c.id=?',(cid,)).fetchone()
                 start=(datetime.now()-timedelta(days=days)).replace(hour=rng.choice([8,9,12,15,18,19,20]),minute=rng.randint(0,59),second=0,microsecond=0)
                 minutes=rng.randint(18,70); energy=round(c['power']*minutes/60,3); amount=round(energy*c['price_cents'])
-                db.execute('''INSERT INTO orders(user_id,charger_id,status,created_at,started_at,ended_at,price_cents,power,time_scale,energy,amount_cents,paid_cents,simulated_seconds)
-                VALUES(?,?,'completed',?,?,?,?,?,1,?,?,?,?)''',
-                (1 if k==0 else 3,cid,start.isoformat(),start.isoformat(),(start+timedelta(minutes=minutes)).isoformat(),c['price_cents'],c['power'],energy,amount,amount,minutes*60))
+                uid=1 if k==0 else 3
+                paid=0 if (uid==3 and days==1 and k==2) else amount
+                db.execute('''INSERT INTO orders(user_id,charger_id,status,created_at,started_at,ended_at,price_cents,power,time_scale,energy,amount_cents,paid_cents,debt_cents,simulated_seconds)
+                VALUES(?,?,'completed',?,?,?,?,?,1,?,?,?,?,?)''',
+                (uid,cid,start.isoformat(),start.isoformat(),(start+timedelta(minutes=minutes)).isoformat(),c['price_cents'],c['power'],energy,amount,paid,amount-paid,minutes*60))
                 db.execute('UPDATE chargers SET total_count=total_count+1,total_minutes=total_minutes+? WHERE id=?',(minutes,cid))
         db.commit()
     except Exception:

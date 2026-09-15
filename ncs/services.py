@@ -82,7 +82,7 @@ def create_order(uid,cid,reserve):
         if user['balance_cents']<=0: raise BusinessError('请先充值后再预约或充电')
         c=db.execute('SELECT c.*,s.price_cents FROM chargers c JOIN stations s ON s.id=c.station_id WHERE c.id=?',(cid,)).fetchone()
         if c is None: raise BusinessError('充电桩不存在',404)
-        if c['status']!='idle': raise BusinessError('充电桩已被占用或处于故障状态',409)
+        if c['status']!='idle': raise BusinessError('充电桩当前不可用（占用/故障/维修中/离线），请选择空闲桩',409)
         status='reserved' if reserve else 'charging'; t=now()
         cur=db.execute('''INSERT INTO orders(user_id,charger_id,status,created_at,expires_at,started_at,price_cents,power,time_scale)
         VALUES(?,?,?,?,?,?,?,?,?)''',(uid,cid,status,t,(datetime.now()+timedelta(minutes=15)).isoformat(timespec='seconds') if reserve else None,None if reserve else t,c['price_cents'],c['power'],current_app.config['TIME_SCALE']))
@@ -97,7 +97,7 @@ def act_order(uid,oid,action):
         u=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
         if action=='start':
             if o['status']!='reserved': raise BusinessError('订单不是有效预约',409)
-            if not u['active'] or c['status']=='fault': raise BusinessError('账号冻结或设备故障，暂时无法开始')
+            if not u['active'] or c['status'] not in ('idle','reserved'): raise BusinessError('账号冻结或设备不可用，暂时无法开始')
             db.execute("UPDATE orders SET status='charging',started_at=?,expires_at=NULL WHERE id=?",(now(),oid))
             db.execute("UPDATE chargers SET status='charging' WHERE id=?",(c['id'],))
         elif action=='cancel':
