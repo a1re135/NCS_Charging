@@ -158,3 +158,77 @@ py -3 -m venv .venv
 Windows 批处理、VS Code 配置已提供并检查内容，但本环境不是 Windows，未实际运行 Windows 批处理或 VS Code GUI。请按第 1 节在你的电脑运行；如报错，把完整终端文字发来即可进一步定位。
 
 依赖与虚拟环境用法参考：[Flask 官方安装文档](https://flask.palletsprojects.com/en/stable/installation/)。本项目用例、界面和验证结果来自本次实现。
+
+## 10. L1 容量等级、性能测试与云端部署
+
+本版本已按课程要求申报 **L1 基础业务级**，目标规模为 10,000 注册用户、1,000 日活用户、10 个充电站、100 台充电设备、100 个同时在线用户。L1 峰值目标为：登录 20 QPS、查询充电站 50 QPS、查看设备 30 QPS、开始充电 10 QPS、结束充电 10 QPS、Agent 咨询 5 QPS。
+
+容量目标集中定义在 `ncs/capacity.py`，后台管理员登录后可在 **容量等级** 页面查看。
+
+### 性能测试
+
+先启动服务：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+再在另一个终端执行：
+
+```powershell
+.\.venv\Scripts\python.exe performance_test.py --base-url http://127.0.0.1:5000 --duration 15 --concurrency 20
+```
+
+测试结束后会生成：
+
+- `performance_report.json`
+- `PERFORMANCE_REPORT.md`
+
+脚本会统计 QPS、平均延迟、P95、P99 和错误率，并与 L1 目标进行对照。
+
+### 云端部署
+
+项目已提供：
+
+- `Dockerfile`
+- `docker-compose.yml`
+- `Procfile`
+- `deploy.md`
+
+Docker 运行：
+
+```bash
+docker compose up -d --build
+```
+
+程序监听 `PORT` 环境变量，也兼容本地 `NCS_PORT`。生产环境建议设置随机的 `NCS_SECRET_KEY`，并将 `/app/data` 挂载到持久化磁盘/卷，以保存 SQLite 数据。
+
+部署后可以访问：
+
+```text
+/api/health
+```
+
+确认返回 `capacity_level: L1` 后，再从公网打开首页。
+
+## L1 容量等级、性能测试与云端交付（新增）
+
+本版本把课程要求明确落到可执行的工程流程：
+
+1. **容量等级：L1 基础业务级**
+   - 目标：10,000 注册用户、1,000 DAU、10 个电站、100 台电桩、100 同时在线用户。
+   - QPS：登录 20、查询电站 50、查看设备 30、开始/结束充电 10/10、Agent 5。
+   - 运行后进入管理员 → “容量等级”查看申报目标与当前数据规模。
+
+2. **性能测试**
+   - `performance_test.py` 支持登录、站点查询、设备查看等只读压测。
+   - `--write-test` 使用真实订单创建与结算链路验证开始/结束充电，并记录 QPS、错误率、平均延迟、P95、P99。
+   - 测试前执行 `python prepare_l1_loadtest.py --prepare`；测试结束执行 `python prepare_l1_loadtest.py --cleanup`。
+
+3. **云端部署**
+   - `Dockerfile`、`docker-compose.yml`、`docker-compose.prod.yml`、`nginx.conf` 已准备好。
+   - Flask/Waitress 使用 `PORT`，反向代理识别 `X-Forwarded-*`，SQLite 使用持久化 volume。
+   - `/api/health` 同时检查服务与数据库连通性。
+
+4. **持续集成**
+   - `.github/workflows/ci.yml` 自动进行依赖安装、Python 编译检查、业务回归测试和 Docker 构建。

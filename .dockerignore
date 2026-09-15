@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.vscode/
+tests/__pycache__/
+performance_report.json

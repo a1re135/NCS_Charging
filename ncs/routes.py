@@ -10,6 +10,7 @@ from werkzeug.security import check_password_hash,generate_password_hash
 from .db import get_db,now
 from .services import (BusinessError,transaction,money,number,required,distance,
     expire_reservations,quote,ORDER_SELECT,create_order,act_order,audit)
+from .capacity import CAPACITY_LEVEL, get_capacity
 
 api=Blueprint('api',__name__)
 
@@ -37,6 +38,27 @@ def auth(admin=False):
             return fn(*args,**kwargs)
         return wrapped
     return deco
+
+@api.get('/health')
+def health():
+    db_ok=True
+    try:
+        get_db().execute('SELECT 1').fetchone()
+    except Exception:
+        db_ok=False
+    return jsonify(ok=db_ok, service='ncs-charging', capacity_level=CAPACITY_LEVEL, database='ok' if db_ok else 'error')
+
+@api.get('/capacity')
+@auth()
+def capacity():
+    target=get_capacity(); db=get_db()
+    actual={
+        'registered_users': db.execute("SELECT COUNT(*) FROM users WHERE role='user'").fetchone()[0],
+        'stations': db.execute('SELECT COUNT(*) FROM stations').fetchone()[0],
+        'chargers': db.execute('SELECT COUNT(*) FROM chargers').fetchone()[0],
+        'online_users_approx': db.execute("SELECT COUNT(*) FROM users WHERE active=1").fetchone()[0],
+    }
+    return jsonify(level=CAPACITY_LEVEL, target=target, actual=actual)
 
 @api.get('/session')
 def get_session():
