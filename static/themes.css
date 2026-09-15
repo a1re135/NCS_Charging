@@ -1,0 +1,483 @@
+/* Appearance layer: business layout stays in style.css. */
+:root {
+  --surface: #fff;
+  --surface-raised: #faf9fd;
+  --control-border: #e9e5f2;
+  --hero-bg: #eeebfa;
+  --hero-text: #5d5587;
+  --hero-muted: #867b9f;
+  --accent-text: #7965c4;
+  --on-accent: #fff;
+  --chart-grid: #eeeaf5;
+  --chart-point: #fff;
+}
+html[data-theme="dark"] {
+  --bg: #171722;
+  --ink: #eeedf6;
+  --muted: #b4b0c5;
+  --purple: #b39cf5;
+  --purple-soft: #343047;
+  --line: #383445;
+  --blue: #283449;
+  --pink: #422d3e;
+  --green: #9ad6bd;
+  --shadow: 0 8px 28px #00000020;
+  --surface: #232330;
+  --surface-raised: #2c293a;
+  --control-border: #494359;
+  --hero-bg: #302940;
+  --hero-text: #e4dafa;
+  --hero-muted: #c3b5d8;
+  --accent-text: #cbb7ff;
+  --on-accent: #241a3b;
+  --chart-grid: #413950;
+  --chart-point: #282233;
+}
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+body {
+  accent-color: var(--purple);
+}
+.sidebar,
+.card,
+.date-pill,
+.circle-btn,
+.login-screen,
+dialog {
+  background: var(--surface);
+  border-color: var(--line);
+}
+.input,
+input,
+select,
+textarea {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--control-border);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+input:disabled {
+  opacity: 0.75;
+}
+select option {
+  background: var(--surface);
+  color: var(--ink);
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--purple);
+}
+.card h1,
+.card h2,
+.card h3 {
+  color: var(--ink);
+}
+.hero,
+.login-art {
+  background: var(--hero-bg);
+}
+.hero h2,
+.login-art h1 {
+  color: var(--hero-text);
+}
+.hero p,
+.login-art p {
+  color: var(--hero-muted);
+}
+.eyebrow {
+  color: var(--accent-text);
+}
+.nav button {
+  color: var(--muted);
+}
+.nav button:hover {
+  background: var(--surface-raised);
+  color: var(--accent-text);
+}
+.nav button.active {
+  color: var(--accent-text);
+}
+.side-promo,
+.demo-accounts {
+  background: var(--surface-raised);
+}
+.nav-label,
+.footer-note {
+  color: var(--muted);
+}
+.field label,
+.help-list p {
+  color: var(--muted);
+}
+.help-list b,
+.status-row b {
+  color: var(--ink);
+}
+.btn {
+  color: var(--on-accent);
+}
+.btn.secondary,
+.text-btn,
+.price {
+  color: var(--accent-text);
+}
+.btn.white {
+  background: var(--surface);
+  color: var(--accent-text);
+}
+.btn.ghost {
+  color: var(--muted);
+}
+.note,
+.live {
+  background: var(--purple-soft);
+  color: var(--hero-muted);
+  border-color: var(--line);
+}
+th {
+  background: var(--surface-raised);
+  color: var(--muted);
+}
+.donut::before {
+  background: var(--surface);
+}
+.modal-head button {
+  background: var(--surface-raised);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.modal-head h2 {
+  line-height: 1.5;
+}
+.chart path {
+  stroke: var(--chart-grid);
+}
+.chart circle {
+  fill: var(--chart-point);
+}
+.qr-box code {
+  background: var(--surface-raised);
+  color: var(--accent-text);
+}
+/* QR modules must remain black on white for camera scanning in both themes. */
+.qr-box img {
+  background: #fff;
+}
+.preference-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.preference-controls select {
+  font-size: 12px;
+  min-height: 39px;
+  padding: 9px 24px 9px 11px;
+  max-width: 145px;
+  cursor: pointer;
+}
+.preferences-card {
+  margin-bottom: 24px;
+}
+.preferences-card .section-head {
+  flex-wrap: wrap;
+}
+.preferences-message {
+  font-size: 12px;
+  color: var(--accent-text);
+  margin-top: 10px;
+  line-height: 1.7;
+}
+.preferences-message:empty {
+  display: none;
+}
+.login-preferences {
+  position: absolute;
+  right: 28px;
+  top: 24px;
+  z-index: 2;
+}
+.login-form {
+  padding-top: 70px;
+}
+.topbar > div:first-of-type {
+  min-width: 0;
+}
+.top-right {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+html[lang="en"] .hero h2 {
+  font-size: clamp(22px, 2vw, 28px);
+}
+html[lang="en"] .metric {
+  min-width: 0;
+  gap: 10px;
+}
+html[lang="en"] .metric small {
+  display: block;
+  line-height: 1.5;
+}
+html[lang="en"] .metric strong {
+  font-size: 23px;
+  overflow-wrap: anywhere;
+}
+html[lang="en"] .metric strong em {
+  display: block;
+  margin: 3px 0 0;
+}
+html[lang="en"] .nav button {
+  font-size: 13px;
+  gap: 10px;
+}
+html[lang="en"] .station-footer {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+html[lang="en"] .receipt-line b {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+html[lang="en"] .wallet .balance {
+  font-size: 31px;
+}
+html[lang="en"] .wallet-bottom {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+html[lang="en"] .section-head {
+  flex-wrap: wrap;
+}
+html[data-theme="dark"] .wallet {
+  background: linear-gradient(135deg, #4f3d74, #69518f);
+  color: #faf7ff;
+  border: 1px solid #7e63a0;
+}
+html[data-theme="dark"] .wallet h3 {
+  color: #faf7ff;
+}
+html[data-theme="dark"] .wallet small {
+  color: #e0d5f3;
+}
+html[data-theme="dark"] .wallet .btn.white {
+  background: #f0e9ff;
+  color: #4a326f;
+}
+html[data-theme="dark"] .avatar {
+  background: #3a304f;
+  color: #cfb9ff;
+}
+html[data-theme="dark"] .avatar.pink {
+  background: #4a3042;
+  color: #f0b8d4;
+}
+html[data-theme="dark"] .avatar.blue {
+  background: #293c54;
+  color: #b0d0fb;
+}
+html[data-theme="dark"] .avatar.mint {
+  background: #28443c;
+  color: #afe3cc;
+}
+html[data-theme="dark"] .metric-icon {
+  color: #c9b3f6;
+}
+html[data-theme="dark"] .metric:nth-child(2) .metric-icon {
+  color: #b4cef3;
+}
+html[data-theme="dark"] .metric:nth-child(3) .metric-icon {
+  color: #e8b7d1;
+}
+html[data-theme="dark"] .station-symbol {
+  background: #2c3850;
+  color: #b9cbed;
+}
+html[data-theme="dark"] .station-card:nth-child(even) .station-symbol {
+  background: #3f304c;
+  color: #d8b5ed;
+}
+html[data-theme="dark"] .badge {
+  background: #253e35;
+  color: #b0e3c7;
+}
+html[data-theme="dark"] .badge.charging,
+html[data-theme="dark"] .badge.reserved,
+html[data-theme="dark"] .badge.maintenance,
+html[data-theme="dark"] .badge.processing {
+  background: #473b28;
+  color: #f1d19d;
+}
+html[data-theme="dark"] .badge.fault,
+html[data-theme="dark"] .badge.expired,
+html[data-theme="dark"] .badge.debt,
+html[data-theme="dark"] .badge.pending {
+  background: #4b2d3a;
+  color: #f4b3c7;
+}
+html[data-theme="dark"] .badge.offline,
+html[data-theme="dark"] .badge.frozen,
+html[data-theme="dark"] .badge.paused,
+html[data-theme="dark"] .badge.cancelled {
+  background: #363543;
+  color: #cecbdb;
+}
+html[data-theme="dark"] .btn.danger,
+html[data-theme="dark"] .modal-error {
+  background: #4b2d3a;
+  color: #ffc0d3;
+}
+html[data-theme="dark"] .form-error {
+  color: #ffc0d3;
+}
+html[data-theme="dark"] .warning {
+  background: #473b28;
+  color: #f1d19d;
+}
+html[data-theme="dark"] .eco {
+  background: #253a32;
+}
+html[data-theme="dark"] .eco h3,
+html[data-theme="dark"] .eco strong {
+  color: #b2dfc7;
+}
+html[data-theme="dark"] .eco p {
+  color: #b5ccbf;
+}
+html[data-theme="dark"] .hero img,
+html[data-theme="dark"] .login-art > img {
+  filter: brightness(0.88) saturate(0.86);
+}
+html[data-theme="dark"] .hero-badge {
+  background: #ffffff0f;
+  border-color: var(--line);
+}
+html[data-theme="dark"] dialog::backdrop {
+  background: #070610aa;
+}
+html[data-theme="dark"] #toast {
+  background: #d6c5fa;
+  color: #281c3b;
+}
+html[data-theme="dark"] .bar-item i {
+  background: #ad92e4;
+}
+html[data-theme="dark"] [style*="color:#c67588"] {
+  color: #f4b3c7 !important;
+}
+@media (max-width: 1280px) {
+  .topbar .date-pill {
+    display: none;
+  }
+}
+@media (max-width: 1000px) {
+  .topbar {
+    align-items: flex-start;
+  }
+  .top-right {
+    max-width: 290px;
+  }
+}
+@media (max-width: 700px) {
+  .topbar {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .topbar > div:first-of-type {
+    flex: 1;
+  }
+  .top-right {
+    width: 100%;
+    max-width: none;
+    justify-content: space-between;
+  }
+  .preference-controls {
+    gap: 8px;
+  }
+  .preference-controls select {
+    max-width: 160px;
+    padding-right: 20px;
+  }
+  .login-preferences {
+    position: static;
+    background: var(--surface);
+    padding: 14px 18px;
+  }
+  .login-preferences .preference-controls {
+    justify-content: flex-end;
+  }
+  .login-form {
+    padding-top: 30px;
+  }
+  .metric strong,
+  html[lang="en"] .metric strong {
+    font-size: 18px;
+    overflow-wrap: anywhere;
+  }
+  .metric strong em {
+    display: block;
+    margin: 3px 0 0;
+  }
+  html[lang="en"] .hero-text {
+    width: 75%;
+  }
+  html[lang="en"] .hero h2 {
+    font-size: 21px;
+    line-height: 1.5;
+  }
+  html[lang="en"] .hero img {
+    width: 45%;
+    right: -35px;
+    top: 120px;
+  }
+  html[lang="en"] .hero {
+    min-height: 305px;
+  }
+  .preferences-card .section-head {
+    align-items: flex-start;
+  }
+  .section-head {
+    flex-wrap: wrap;
+  }
+  .receipt-line {
+    gap: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+  }
+}
+@media print {
+  html[data-theme] {
+    --bg: #fff;
+    --surface: #fff;
+    --surface-raised: #f6f6f6;
+    --ink: #111;
+    --muted: #444;
+    --line: #ddd;
+    --hero-muted: #444;
+    color-scheme: light;
+  }
+  .preference-controls,
+  .login-preferences,
+  .preferences-card {
+    display: none !important;
+  }
+  html[data-theme] dialog {
+    background: #fff;
+    color: #111;
+  }
+  html[data-theme] .badge {
+    color: #222;
+    background: #eee;
+  }
+}

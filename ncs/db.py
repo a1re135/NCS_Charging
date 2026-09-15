@@ -238,6 +238,9 @@ def init_db():
         db.executescript(SCHEMA)
 
         migrate_db(db)
+    from .preferences import SQLITE_SCHEMA as PREF_SQLITE, MYSQL_SCHEMA as PREF_MYSQL
+    db.execute(PREF_MYSQL if backend == 'mysql' else PREF_SQLITE)
+
     count = db.execute(
         "SELECT COUNT(*) AS count FROM users"
     ).fetchone()
