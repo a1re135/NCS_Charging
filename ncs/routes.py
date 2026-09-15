@@ -854,6 +854,186 @@ def prediction():
         points.append(dict(time=t.isoformat(),load=round(load,2),free=max(0,round(capacity[1]*(1-ratio))),peak=ratio>=0.7))
     return jsonify(points=points,sample_count=len(rows),method='近 28 天同小时订单电量均值；按装机功率估算空闲数，仅供课程演示')
 
+@api.get('/realtime')
+@auth()
+def realtime_metrics():
+    """
+    Live operations snapshot.
+
+    Used by the frontend realtime-monitoring page.
+    Operators, technicians and administrators may access it.
+    """
+
+    if not (
+        has_permission(g.user['role'], 'charger.view')
+        or has_permission(g.user['role'], 'analytics.view')
+    ):
+        raise BusinessError(
+            '当前角色没有实时监控权限',
+            403
+        )
+
+    db = get_db()
+
+    status_counts = {
+        'idle': 0,
+        'reserved': 0,
+        'charging': 0,
+        'fault': 0,
+        'offline': 0,
+        'maintenance': 0,
+    }
+
+    rows = db.execute(
+        '''
+        SELECT status, COUNT(*) AS n
+        FROM chargers
+        GROUP BY status
+        '''
+    ).fetchall()
+
+    for row in rows:
+        status_counts[row['status']] = row['n']
+
+    station_rows = db.execute(
+        '''
+        SELECT
+            s.id,
+            s.name,
+
+            COUNT(c.id) AS total,
+
+            SUM(
+                CASE
+                    WHEN c.status = 'idle'
+                    THEN 1 ELSE 0
+                END
+            ) AS idle,
+
+            SUM(
+                CASE
+                    WHEN c.status = 'charging'
+                    THEN 1 ELSE 0
+                END
+            ) AS charging,
+
+            SUM(
+                CASE
+                    WHEN c.status = 'reserved'
+                    THEN 1 ELSE 0
+                END
+            ) AS reserved,
+
+            SUM(
+                CASE
+                    WHEN c.status = 'fault'
+                    THEN 1 ELSE 0
+                END
+            ) AS fault,
+
+            SUM(
+                CASE
+                    WHEN c.status = 'offline'
+                    THEN 1 ELSE 0
+                END
+            ) AS offline,
+
+            SUM(
+                CASE
+                    WHEN c.status = 'maintenance'
+                    THEN 1 ELSE 0
+                END
+            ) AS maintenance
+
+        FROM stations s
+
+        LEFT JOIN chargers c
+            ON c.station_id = s.id
+
+        GROUP BY
+            s.id,
+            s.name
+
+        ORDER BY s.id
+        '''
+    ).fetchall()
+
+    stations = []
+
+    for row in station_rows:
+        total = int(row['total'] or 0)
+        idle = int(row['idle'] or 0)
+        charging = int(row['charging'] or 0)
+        reserved = int(row['reserved'] or 0)
+        fault = int(row['fault'] or 0)
+        offline = int(row['offline'] or 0)
+        maintenance = int(row['maintenance'] or 0)
+
+        busy = charging + reserved
+        abnormal = fault + offline + maintenance
+
+        utilization = (
+            round(
+                busy / total * 100,
+                1
+            )
+            if total
+            else 0
+        )
+
+        stations.append({
+            'id': row['id'],
+            'name': row['name'],
+            'total': total,
+            'idle': idle,
+            'charging': charging,
+            'reserved': reserved,
+            'fault': fault,
+            'offline': offline,
+            'maintenance': maintenance,
+            'busy': busy,
+            'abnormal': abnormal,
+            'utilization_pct': utilization,
+        })
+
+    total = sum(status_counts.values())
+
+    busy = (
+        status_counts['charging']
+        + status_counts['reserved']
+    )
+
+    abnormal = (
+        status_counts['fault']
+        + status_counts['offline']
+        + status_counts['maintenance']
+    )
+
+    utilization = (
+        round(
+            busy / total * 100,
+            1
+        )
+        if total
+        else 0
+    )
+
+    return jsonify(
+        generated_at=now(),
+
+        summary={
+            'total': total,
+            'idle': status_counts['idle'],
+            'busy': busy,
+            'abnormal': abnormal,
+            'utilization_pct': utilization,
+        },
+
+        status_counts=status_counts,
+
+        stations=stations,
+    )
+
 @api.get('/admin/export')
 @permission('order.export')
 @auth()

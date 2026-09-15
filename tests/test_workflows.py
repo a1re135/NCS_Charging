@@ -1,5 +1,7 @@
 """Business regression tests; isolated temporary databases, no modification of demo data."""
+import gc
 import tempfile
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime,timedelta
@@ -12,7 +14,25 @@ class WorkflowTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory()
         self.app=create_app({'TESTING':True,'SECRET_KEY':'test-only','DATABASE':str(Path(self.tmp.name)/'test.db')})
         self.client,self.token=self.login('13800138000','User123456')
-    def tearDown(self): self.tmp.cleanup()
+    def tearDown(self):
+        # On Windows, SQLite/WAL file handles can take a very short
+        # moment to be released after the Flask test request finishes.
+        gc.collect()
+
+        for attempt in range(5):
+            try:
+                self.tmp.cleanup()
+                return
+            except OSError as exc:
+                if getattr(exc, "winerror", None) != 145:
+                    raise
+
+                time.sleep(
+                    0.1 * (attempt + 1)
+                )
+
+        # Final attempt: if this still fails, show the real error.
+        self.tmp.cleanup()
     def login(self,user,pw):
         c=self.app.test_client();token=c.get('/api/session').json['csrf']
         r=c.post('/api/login',json={'phone':user,'password':pw},headers={'X-CSRF-Token':token})

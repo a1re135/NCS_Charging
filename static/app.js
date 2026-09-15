@@ -47,6 +47,7 @@ const S = {
   location: "海淀区",
 
   timer: null,
+  realtimeHistory: [],
   version: 0,
   scale: 60,
 
@@ -666,6 +667,7 @@ const roleNav = [
   ["dashboard", "home", "运营总览", null],
   ["stations", "pin", "电站管理", "station.view"],
   ["chargers", "bolt", "电桩管理", "charger.view"],
+  ["realtime", "chart", "实时监控", "charger.view"],
   ["pricing", "wallet", "价格管理", "pricing.manage"],
   ["faults", "help", "故障管理", "fault.manage"],
   ["users", "user", "用户管理", "user.manage"],
@@ -1107,6 +1109,722 @@ function metric(
           <em>${unit}</em>
         </strong>
       </div>
+    </div>
+  `;
+}
+
+function pushRealtimeHistory(data) {
+  if (!Array.isArray(S.realtimeHistory)) {
+    S.realtimeHistory = [];
+  }
+
+  const point = {
+    time: new Date(),
+
+    idle:
+      Number(
+        data.status_counts?.idle || 0,
+      ),
+
+    busy:
+      Number(
+        data.summary?.busy || 0,
+      ),
+
+    abnormal:
+      Number(
+        data.summary?.abnormal || 0,
+      ),
+  };
+
+  S.realtimeHistory.push(point);
+
+  // 5 seconds per point × 60 points = about 5 minutes
+  if (
+    S.realtimeHistory.length >
+    60
+  ) {
+    S.realtimeHistory.splice(
+      0,
+      S.realtimeHistory.length -
+        60,
+    );
+  }
+}
+
+function liveBars(
+  items,
+  valueKey,
+  labelKey,
+  suffix = "",
+) {
+  const max = Math.max(
+    ...items.map(
+      (x) =>
+        Number(
+          x[valueKey] || 0,
+        ),
+    ),
+    1,
+  );
+
+  return `
+    <div class="live-bar-list">
+      ${items
+        .map(
+          (x) => {
+            const value =
+              Number(
+                x[valueKey] || 0,
+              );
+
+            const width =
+              Math.max(
+                1,
+                value /
+                  max *
+                  100,
+              );
+
+            return `
+              <div class="live-bar-row">
+
+                <div class="live-bar-label">
+                  <span>
+                    ${esc(
+                      x[labelKey],
+                    )}
+                  </span>
+
+                  <b>
+                    ${value}${suffix}
+                  </b>
+                </div>
+
+                <div class="live-bar-track">
+                  <i
+                    style="
+                      width:${width}%
+                    "
+                  ></i>
+                </div>
+
+              </div>
+            `;
+          },
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function healthDonut(data) {
+  const total =
+    Number(
+      data.summary?.total || 0,
+    );
+
+  const abnormal =
+    Number(
+      data.summary?.abnormal || 0,
+    );
+
+  const healthy =
+    Math.max(
+      0,
+      total - abnormal,
+    );
+
+  const percentage =
+    total
+      ? (
+          healthy /
+          total *
+          100
+        ).toFixed(1)
+      : "0.0";
+
+  return `
+    <div class="health-wrap">
+
+      <div
+        class="health-donut"
+        style="
+          background:
+            conic-gradient(
+              var(--green)
+              0
+              ${percentage}%,
+
+              var(--purple-soft)
+              ${percentage}%
+              100%
+            )
+        "
+      >
+
+        <div class="health-donut-inner">
+
+          <strong>
+            ${percentage}%
+          </strong>
+
+          <small>
+            ${tr("健康率")}
+          </small>
+
+        </div>
+
+      </div>
+
+      <div class="health-stats">
+
+        <div>
+          <span>
+            ${tr("正常设备")}
+          </span>
+
+          <b>
+            ${healthy}
+            ${tr("台")}
+          </b>
+        </div>
+
+        <div>
+          <span>
+            ${tr("异常设备")}
+          </span>
+
+          <b>
+            ${abnormal}
+            ${tr("台")}
+          </b>
+        </div>
+
+        <div>
+          <span>
+            ${tr("设备总数")}
+          </span>
+
+          <b>
+            ${total}
+            ${tr("台")}
+          </b>
+        </div>
+
+      </div>
+
+    </div>
+  `;
+}
+
+function realtimeTrendChart() {
+  const history =
+    S.realtimeHistory || [];
+
+  if (
+    history.length <
+    2
+  ) {
+    return `
+      <div class="realtime-waiting">
+        ${tr(
+          "正在采集实时数据，请稍候…",
+        )}
+      </div>
+    `;
+  }
+
+  const width = 720;
+  const height = 220;
+
+  const left = 25;
+  const right = 15;
+  const top = 15;
+  const bottom = 35;
+
+  const chartWidth =
+    width -
+    left -
+    right;
+
+  const chartHeight =
+    height -
+    top -
+    bottom;
+
+  const values =
+    history.flatMap(
+      (x) => [
+        x.idle,
+        x.busy,
+        x.abnormal,
+      ],
+    );
+
+  const max =
+    Math.max(
+      ...values,
+      1,
+    );
+
+  const x =
+    (index) =>
+      left +
+      (
+        index *
+        chartWidth
+      ) /
+        Math.max(
+          history.length -
+            1,
+          1,
+        );
+
+  const y =
+    (value) =>
+      top +
+      chartHeight -
+      (
+        Number(value || 0) /
+        max
+      ) *
+        chartHeight;
+
+  const points =
+    (key) =>
+      history
+        .map(
+          (item, index) =>
+            `${x(index)},${y(
+              item[key],
+            )}`,
+        )
+        .join(" ");
+
+  const first =
+    history[0];
+
+  const middle =
+    history[
+      Math.floor(
+        history.length / 2,
+      )
+    ];
+
+  const last =
+    history[
+      history.length - 1
+    ];
+
+  const timeLabel =
+    (item) =>
+      item.time
+        .toLocaleTimeString(
+          [],
+          {
+            hour:
+              "2-digit",
+            minute:
+              "2-digit",
+            second:
+              "2-digit",
+          },
+        );
+
+  return `
+    <div class="realtime-chart-wrap">
+
+      <div class="realtime-chart-legend">
+
+        <span class="trend-legend idle">
+          <i></i>
+          ${tr("空闲")}
+          <b>
+            ${last.idle}
+          </b>
+        </span>
+
+        <span class="trend-legend busy">
+          <i></i>
+          ${tr("使用中")}
+          <b>
+            ${last.busy}
+          </b>
+        </span>
+
+        <span class="trend-legend abnormal">
+          <i></i>
+          ${tr("异常")}
+          <b>
+            ${last.abnormal}
+          </b>
+        </span>
+
+      </div>
+
+      <svg
+        class="realtime-line-chart"
+        viewBox="
+          0 0
+          ${width}
+          ${height}
+        "
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="${tr(
+          "最近五分钟设备实时趋势",
+        )}"
+      >
+
+        ${[
+          0,
+          0.25,
+          0.5,
+          0.75,
+          1,
+        ]
+          .map(
+            (ratio) => {
+              const gy =
+                top +
+                chartHeight *
+                  ratio;
+
+              return `
+                <line
+                  x1="${left}"
+                  x2="${width - right}"
+                  y1="${gy}"
+                  y2="${gy}"
+                  class="realtime-grid-line"
+                />
+              `;
+            },
+          )
+          .join("")}
+
+        <polyline
+          points="${points(
+            "idle",
+          )}"
+          class="
+            realtime-series
+            realtime-series-idle
+          "
+        />
+
+        <polyline
+          points="${points(
+            "busy",
+          )}"
+          class="
+            realtime-series
+            realtime-series-busy
+          "
+        />
+
+        <polyline
+          points="${points(
+            "abnormal",
+          )}"
+          class="
+            realtime-series
+            realtime-series-abnormal
+          "
+        />
+
+      </svg>
+
+      <div class="realtime-time-axis">
+
+        <span>
+          ${timeLabel(
+            first,
+          )}
+        </span>
+
+        <span>
+          ${timeLabel(
+            middle,
+          )}
+        </span>
+
+        <span>
+          ${timeLabel(
+            last,
+          )}
+        </span>
+
+      </div>
+
+    </div>
+  `;
+}
+
+function realtimeContent(d) {
+  const statusData = [
+    {
+      label: tr("空闲"),
+      value:
+        d.status_counts.idle ||
+        0,
+    },
+    {
+      label: tr("充电中"),
+      value:
+        d.status_counts.charging ||
+        0,
+    },
+    {
+      label: tr("已预约"),
+      value:
+        d.status_counts.reserved ||
+        0,
+    },
+    {
+      label: tr("故障"),
+      value:
+        d.status_counts.fault ||
+        0,
+    },
+    {
+      label: tr("离线"),
+      value:
+        d.status_counts.offline ||
+        0,
+    },
+    {
+      label: tr("维修中"),
+      value:
+        d.status_counts.maintenance ||
+        0,
+    },
+  ];
+
+  return trHtml`
+    <div class="stack">
+
+      <section class="card">
+
+        <div class="section-head">
+
+          <div>
+            <h2>
+              实时运营监控
+            </h2>
+
+            <p class="sub">
+              页面每 5 秒自动刷新，
+              无需手动重新加载。
+            </p>
+          </div>
+
+          <span class="role-chip">
+            LIVE ·
+            ${time(
+              d.generated_at,
+            ).slice(11)}
+          </span>
+
+        </div>
+
+        <div class="metric-grid">
+
+          ${metric(
+            "bolt",
+            tr("设备总数"),
+            d.summary.total,
+            tr("台"),
+          )}
+
+          ${metric(
+            "grid",
+            tr("空闲设备"),
+            d.summary.idle,
+            tr("台"),
+          )}
+
+          ${metric(
+            "bolt",
+            tr("使用中"),
+            d.summary.busy,
+            tr("台"),
+          )}
+
+          ${metric(
+            "help",
+            tr("异常设备"),
+            d.summary.abnormal,
+            tr("台"),
+          )}
+
+        </div>
+
+      </section>
+
+
+      <div class="realtime-grid">
+
+        <section class="card">
+
+          <div class="section-head">
+
+            <h2>
+              电桩实时状态分布
+            </h2>
+
+            <small>
+              当前设备状态
+            </small>
+
+          </div>
+
+          ${liveBars(
+            statusData,
+            "value",
+            "label",
+            tr(" 台"),
+          )}
+
+        </section>
+
+
+        <section class="card">
+
+          <div class="section-head">
+
+            <h2>
+              电站实时利用率
+            </h2>
+
+            <small>
+              充电中 + 已预约
+            </small>
+
+          </div>
+
+          ${liveBars(
+            d.stations,
+            "utilization_pct",
+            "name",
+            "%",
+          )}
+
+        </section>
+
+      </div>
+
+        <div class="realtime-extra-grid">
+
+        <section class="card">
+
+          <div class="section-head">
+
+            <div>
+              <h2>
+                ${tr("系统设备健康率")}
+              </h2>
+
+              <p class="sub">
+                ${tr(
+                  "正常设备占全部设备的比例",
+                )}
+              </p>
+            </div>
+
+            <span class="role-chip">
+              HEALTH
+            </span>
+
+          </div>
+
+          ${healthDonut(d)}
+
+        </section>
+
+
+        <section class="card">
+
+          <div class="section-head">
+
+            <div>
+
+              <h2>
+                ${tr(
+                  "最近 5 分钟设备实时趋势",
+                )}
+              </h2>
+
+              <p class="sub">
+                ${tr(
+                  "每 5 秒采集一次当前设备状态",
+                )}
+              </p>
+
+            </div>
+
+            <span class="live-indicator">
+              <i></i>
+              LIVE
+            </span>
+
+          </div>
+
+          ${realtimeTrendChart()}
+
+        </section>
+
+      </div>
+
+
+      <section class="card">
+
+        <div class="section-head">
+
+          <h2>
+            各电站异常设备
+          </h2>
+
+          <small>
+            故障 + 离线 + 维修
+          </small>
+
+        </div>
+
+        ${liveBars(
+          d.stations,
+          "abnormal",
+          "name",
+          tr(" 台"),
+        )}
+
+      </section>
+
+    </div>
+  `;
+}
+
+
+async function realtimePage() {
+  const data =
+    await api(
+      "/realtime",
+    );
+
+  // Start a fresh 5-minute history
+  // whenever the monitoring page is opened.
+  S.realtimeHistory = [];
+
+  pushRealtimeHistory(
+    data,
+  );
+
+  return `
+    <div id="realtime-root">
+      ${realtimeContent(
+        data,
+      )}
     </div>
   `;
 }
@@ -5018,6 +5736,8 @@ const renderers = {
     profilePage,
   chargers:
     chargersPage,
+  realtime:
+    realtimePage,
   pricing:
     pricingPage,
   faults:
@@ -5173,6 +5893,56 @@ async function go(
           3000,
         );
     }
+
+    if (
+        page ===
+            "realtime" &&
+        $("#realtime-root")
+        ) {
+        S.timer =
+            setInterval(
+            async () => {
+                try {
+                const data =
+                    await api(
+                    "/realtime",
+                    );
+                pushRealtimeHistory(
+                    data,
+                );
+
+                if (
+                    v !==
+                    S.version
+                ) {
+                    return;
+                }
+
+                const root =
+                    $("#realtime-root");
+
+                if (root) {
+                    root.innerHTML =
+                    realtimeContent(
+                        data,
+                    );
+                }
+
+                } catch (e) {
+                clearInterval(
+                    S.timer,
+                );
+
+                toast(
+                    e.message,
+                );
+                }
+            },
+
+            5000,
+            );
+        }
+
   } catch (e) {
     if (
       v !==
