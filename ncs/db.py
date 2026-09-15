@@ -160,11 +160,11 @@ def _seed_initial(db):
                         simulated_seconds
                     )
                     VALUES(
-                        ?,?,
+                        ?, ?,
                         'completed',
-                        ?,?,?,?,?,?,
+                        ?, ?, ?, ?, ?,
                         1,
-                        ?,?,?,?,?
+                        ?, ?, ?, ?, ?
                     )
                     ''',
                     (
