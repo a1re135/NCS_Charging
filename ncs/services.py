@@ -1,4 +1,4 @@
-"""Transactions and charging state machine, independent of page layout."""
+"""Transactions, tariff lookup, and charging state machine, independent of page layout."""
 import math
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -12,21 +12,39 @@ class BusinessError(Exception):
 
 @contextmanager
 def transaction():
-    db=get_db(); db.execute('BEGIN IMMEDIATE')
+    db = get_db()
+
+    if current_app.config.get("DB_BACKEND") == "mysql":
+        db.begin()
+    else:
+        db.execute("BEGIN IMMEDIATE")
+
     try:
         yield db
         db.commit()
     except Exception:
-        db.rollback(); raise
+        db.rollback()
+        raise
 
-def money(value, maximum=100000):
+def lock_sql(sql):
+    """
+    MySQL/InnoDB uses SELECT ... FOR UPDATE.
+    SQLite tests use the original SELECT statement.
+    """
+    if current_app.config.get("DB_BACKEND") == "mysql":
+        return sql.rstrip() + " FOR UPDATE"
+
+    return sql
+
+def money(value, maximum=100000, allow_zero=False):
     try:
         n=Decimal(str(value))
-        if not n.is_finite() or n<=0 or n>maximum or n*100 != (n*100).to_integral_value():
+        if not n.is_finite() or n<0 or (n==0 and not allow_zero) or n>maximum or n*100 != (n*100).to_integral_value():
             raise ValueError()
         return int(n*100)
     except (InvalidOperation,ValueError,TypeError):
-        raise BusinessError(f'金额须大于 0、不超过 {maximum} 元，最多两位小数')
+        lower='大于等于 0' if allow_zero else '大于 0'
+        raise BusinessError(f'金额须{lower}、不超过 {maximum} 元，最多两位小数')
 
 def number(value, low, high, label):
     try:
@@ -45,9 +63,38 @@ def distance(lat,lng,lat2,lng2):
     h=math.sin((b-a)/2)**2+math.cos(a)*math.cos(b)*math.sin(dl/2)**2
     return round(6371*2*math.asin(math.sqrt(min(1,max(0,h)))),1)
 
+def minute_of_day(at=None):
+    at=at or datetime.now()
+    return at.hour*60+at.minute
+
+def pricing_for_station(db, station_id, at=None):
+    """Return the active tariff. Fall back to legacy station price if a rule is missing."""
+    minute=minute_of_day(at)
+    rule=db.execute('''SELECT * FROM pricing_rules WHERE station_id=? AND start_minute<=? AND end_minute>?
+                       ORDER BY start_minute DESC LIMIT 1''',(station_id,minute,minute)).fetchone()
+    if rule:
+        r=dict(rule); r['price_cents']=r['electricity_fee_cents']+r['service_fee_cents']; return r
+    station=db.execute('SELECT price_cents FROM stations WHERE id=?',(station_id,)).fetchone()
+    if not station: raise BusinessError('电站不存在',404)
+    return dict(id=None,station_id=station_id,start_minute=0,end_minute=1440,
+                electricity_fee_cents=station['price_cents'],service_fee_cents=0,price_cents=station['price_cents'])
+
 def expire_reservations():
     with transaction() as db:
-        rows=db.execute("SELECT id,charger_id FROM orders WHERE status='reserved' AND expires_at<=?",(now(),)).fetchall()
+        sql = """
+            SELECT id, charger_id
+            FROM orders
+            WHERE status='reserved'
+            AND expires_at<=?
+        """
+
+        if current_app.config.get("DB_BACKEND") == "mysql":
+            sql += " FOR UPDATE"
+
+        rows = db.execute(
+            sql,
+            (now(),)
+        ).fetchall()
         for row in rows:
             db.execute("UPDATE orders SET status='expired',ended_at=? WHERE id=?",(now(),row['id']))
             db.execute("UPDATE chargers SET status='idle' WHERE id=? AND status='reserved'",(row['charger_id'],))
@@ -60,37 +107,96 @@ def quote(order, at=None):
         o.update(simulated_seconds=seconds,energy=round(float(energy),3),amount_cents=int((energy*o['price_cents']).quantize(Decimal('1'),rounding=ROUND_HALF_UP)))
     return o
 
-ORDER_SELECT='''SELECT o.*,s.name station_name,s.address,s.lat,s.lng,c.number charger_number,u.nickname,u.phone
+ORDER_SELECT='''SELECT o.*,s.name station_name,s.address,s.city,s.lat,s.lng,c.number charger_number,u.nickname,u.phone
  FROM orders o JOIN chargers c ON c.id=o.charger_id JOIN stations s ON s.id=c.station_id JOIN users u ON u.id=o.user_id'''
 
 def create_order(uid,cid,reserve):
     with transaction() as db:
-        user=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+        user = db.execute(
+            lock_sql(
+                "SELECT * FROM users WHERE id=?"
+            ),
+            (uid,)
+        ).fetchone()
         if not user['active']: raise BusinessError('账号已冻结，请联系管理员',403)
         existing=db.execute("SELECT id FROM orders WHERE user_id=? AND status IN ('reserved','charging')",(uid,)).fetchone()
         if existing: raise BusinessError('您有未完成的充电订单，请先处理',409,order_id=existing['id'])
         if db.execute('SELECT 1 FROM orders WHERE user_id=? AND debt_cents>0',(uid,)).fetchone():
             raise BusinessError('您有欠费订单，请先充值并补缴欠费',409)
         if user['balance_cents']<=0: raise BusinessError('请先充值后再预约或充电')
-        c=db.execute('SELECT c.*,s.price_cents FROM chargers c JOIN stations s ON s.id=c.station_id WHERE c.id=?',(cid,)).fetchone()
+        c = db.execute(
+            lock_sql(
+                """
+                SELECT
+                    c.*,
+                    s.price_cents,
+                    s.operating_status
+                FROM chargers c
+                JOIN stations s
+                    ON s.id = c.station_id
+                WHERE c.id=?
+                """
+            ),
+            (cid,)
+        ).fetchone()
         if c is None: raise BusinessError('充电桩不存在',404)
-        if c['status']!='idle': raise BusinessError('充电桩当前不可用（占用/故障/维修中/离线），请选择空闲桩',409)
+        if c['operating_status']!='operating': raise BusinessError('该充电站当前暂停运营，暂时不能充电',409)
+        if c['status']!='idle': raise BusinessError('充电桩已被占用、离线或处于故障/维修状态',409)
+        tariff=pricing_for_station(db,c['station_id'])
         status='reserved' if reserve else 'charging'; t=now()
-        cur=db.execute('''INSERT INTO orders(user_id,charger_id,status,created_at,expires_at,started_at,price_cents,power,time_scale)
-        VALUES(?,?,?,?,?,?,?,?,?)''',(uid,cid,status,t,(datetime.now()+timedelta(minutes=15)).isoformat(timespec='seconds') if reserve else None,None if reserve else t,c['price_cents'],c['power'],current_app.config['TIME_SCALE']))
+        cur=db.execute('''INSERT INTO orders(user_id,charger_id,status,created_at,expires_at,started_at,
+                          price_cents,electricity_fee_cents,service_fee_cents,power,time_scale)
+                          VALUES(?,?,?,?,?,?,?,?,?,?,?)''',
+                       (uid,cid,status,t,(datetime.now()+timedelta(minutes=15)).isoformat(timespec='seconds') if reserve else None,
+                        None if reserve else t,tariff['price_cents'],tariff['electricity_fee_cents'],tariff['service_fee_cents'],
+                        c['power'],current_app.config['TIME_SCALE']))
         db.execute('UPDATE chargers SET status=? WHERE id=?',(status,cid))
         return cur.lastrowid
 
 def act_order(uid,oid,action):
     with transaction() as db:
-        o=db.execute('SELECT * FROM orders WHERE id=? AND user_id=?',(oid,uid)).fetchone()
+        o = db.execute(
+            lock_sql(
+                """
+                SELECT *
+                FROM orders
+                WHERE id=? AND user_id=?
+                """
+            ),
+            (oid, uid)
+        ).fetchone()
         if not o: raise BusinessError('订单不存在',404)
-        c=db.execute('SELECT * FROM chargers WHERE id=?',(o['charger_id'],)).fetchone()
-        u=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+        c = db.execute(
+            lock_sql(
+                """
+                SELECT
+                    c.*,
+                    s.operating_status
+                FROM chargers c
+                JOIN stations s
+                    ON s.id = c.station_id
+                WHERE c.id=?
+                """
+            ),
+            (o["charger_id"],)
+        ).fetchone()
+        u = db.execute(
+            lock_sql(
+                """
+                SELECT *
+                FROM users
+                WHERE id=?
+                """
+            ),
+            (uid,)
+        ).fetchone()
         if action=='start':
             if o['status']!='reserved': raise BusinessError('订单不是有效预约',409)
-            if not u['active'] or c['status'] not in ('idle','reserved'): raise BusinessError('账号冻结或设备不可用，暂时无法开始')
-            db.execute("UPDATE orders SET status='charging',started_at=?,expires_at=NULL WHERE id=?",(now(),oid))
+            if not u['active'] or c['operating_status']!='operating': raise BusinessError('账号冻结或电站暂停运营，暂时无法开始')
+            tariff=pricing_for_station(db,c['station_id'])
+            db.execute('''UPDATE orders SET status='charging',started_at=?,expires_at=NULL,price_cents=?,
+                          electricity_fee_cents=?,service_fee_cents=? WHERE id=?''',
+                       (now(),tariff['price_cents'],tariff['electricity_fee_cents'],tariff['service_fee_cents'],oid))
             db.execute("UPDATE chargers SET status='charging' WHERE id=?",(c['id'],))
         elif action=='cancel':
             if o['status']!='reserved': raise BusinessError('只能取消预约订单',409)

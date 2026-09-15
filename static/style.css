@@ -6,3 +6,59 @@
 @media print{.sidebar,.topbar,.actions,.btn,.footer-note{display:none!important}.shell{display:block}.main{padding:0}.card{box-shadow:none}.page-grid{display:block}dialog{position:static;max-height:none;width:100%;box-shadow:none}body:has(dialog[open]) #app{display:none}body:has(dialog[open]) dialog{display:block}}
 @media(max-width:700px){.metric strong{font-size:18px;overflow-wrap:anywhere}.metric strong em{display:block;margin-left:0;margin-top:4px}.hero-text{width:72%}.hero h2{font-size:21px}.hero img{width:49%;right:-28px;top:84px}.side-user small{font-size:10px}}
 .hero-badge{min-width:120px;min-height:120px;border-radius:28px;display:grid;place-items:center;text-align:center;font-size:44px;font-weight:800;line-height:.9;background:rgba(255,255,255,.65);border:1px solid rgba(60,50,90,.08);padding:20px}.hero-badge small{font-size:12px;font-weight:600;line-height:1.2;margin-top:-16px}
+
+.badge.offline {
+    background: #eef0f4;
+    color: #7d8493;
+}
+
+.badge.maintenance,
+.badge.processing {
+    background: #fff0dd;
+    color: #b68b54;
+}
+
+.badge.pending {
+    background: #fbe6ec;
+    color: #c4778c;
+}
+
+.badge.resolved,
+.badge.operating {
+    background: #e9f5ef;
+    color: #72a58d;
+}
+
+.badge.paused {
+    background: #f0f0f5;
+    color: #9493a6;
+}
+
+.qr-box {
+    text-align: center;
+}
+
+.qr-box img {
+    width: min(300px, 80vw);
+    height: auto;
+    background: #fff;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+}
+
+.qr-box p {
+    color: var(--muted);
+    margin: 16px 0;
+    line-height: 1.8;
+}
+
+.qr-box code {
+    display: block;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    background: #f7f5fd;
+    padding: 12px;
+    border-radius: 9px;
+    color: #75689e;
+}

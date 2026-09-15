@@ -1,6 +1,10 @@
-"""SQLite schema and reproducible course-demo seed data. Money is integer cents."""
-import sqlite3
+"""SQLite schema, lightweight migrations, and reproducible course-demo seed data."""
 import random
+import sqlite3
+
+import pymysql
+from pymysql.cursors import DictCursor
+from .mysql_schema import MYSQL_SCHEMA
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import current_app, g
@@ -14,6 +18,9 @@ CREATE TABLE IF NOT EXISTS users(
  avatar TEXT NOT NULL DEFAULT 'lavender', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS stations(
  id INTEGER PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL,
+ city TEXT NOT NULL DEFAULT '北京市', business_hours TEXT NOT NULL DEFAULT '00:00-24:00',
+ contact_phone TEXT NOT NULL DEFAULT '010-00000000', operating_status TEXT NOT NULL DEFAULT 'operating',
+ parking_info TEXT NOT NULL DEFAULT '以现场停车规定为准',
  lng REAL NOT NULL, lat REAL NOT NULL, price_cents INTEGER NOT NULL CHECK(price_cents>0));
 CREATE TABLE IF NOT EXISTS chargers(
  id INTEGER PRIMARY KEY, station_id INTEGER NOT NULL REFERENCES stations(id),
@@ -23,89 +30,225 @@ CREATE TABLE IF NOT EXISTS orders(
  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
  charger_id INTEGER NOT NULL REFERENCES chargers(id), status TEXT NOT NULL,
  created_at TEXT NOT NULL, expires_at TEXT, started_at TEXT, ended_at TEXT,
- price_cents INTEGER NOT NULL, power REAL NOT NULL, time_scale INTEGER NOT NULL,
+ price_cents INTEGER NOT NULL, electricity_fee_cents INTEGER NOT NULL DEFAULT 0,
+ service_fee_cents INTEGER NOT NULL DEFAULT 0, power REAL NOT NULL, time_scale INTEGER NOT NULL,
  energy REAL NOT NULL DEFAULT 0, amount_cents INTEGER NOT NULL DEFAULT 0,
  paid_cents INTEGER NOT NULL DEFAULT 0, debt_cents INTEGER NOT NULL DEFAULT 0,
  balance_after INTEGER, simulated_seconds INTEGER NOT NULL DEFAULT 0);
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_user ON orders(user_id) WHERE status IN ('reserved','charging');
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_charger ON orders(charger_id) WHERE status IN ('reserved','charging');
+CREATE TABLE IF NOT EXISTS pricing_rules(
+ id INTEGER PRIMARY KEY, station_id INTEGER NOT NULL REFERENCES stations(id) ON DELETE CASCADE,
+ start_minute INTEGER NOT NULL CHECK(start_minute>=0 AND start_minute<1440),
+ end_minute INTEGER NOT NULL CHECK(end_minute>0 AND end_minute<=1440 AND end_minute>start_minute),
+ electricity_fee_cents INTEGER NOT NULL CHECK(electricity_fee_cents>=0),
+ service_fee_cents INTEGER NOT NULL CHECK(service_fee_cents>=0));
+CREATE INDEX IF NOT EXISTS pricing_station ON pricing_rules(station_id,start_minute);
+CREATE TABLE IF NOT EXISTS fault_records(
+ id INTEGER PRIMARY KEY, charger_id INTEGER NOT NULL REFERENCES chargers(id),
+ fault_type TEXT NOT NULL, description TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+ reported_at TEXT NOT NULL, handled_at TEXT, resolution TEXT,
+ reporter_id INTEGER REFERENCES users(id), handler_id INTEGER REFERENCES users(id));
+CREATE UNIQUE INDEX IF NOT EXISTS one_open_fault ON fault_records(charger_id) WHERE status IN ('pending','processing');
+CREATE INDEX IF NOT EXISTS fault_charger ON fault_records(charger_id,reported_at);
 CREATE TABLE IF NOT EXISTS wallet_log(
  id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),
  amount_cents INTEGER NOT NULL,kind TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS ops_log(
  id INTEGER PRIMARY KEY,actor_id INTEGER REFERENCES users(id),operation TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS order_user ON orders(user_id,created_at);
-CREATE INDEX IF NOT EXISTS order_status_created ON orders(status,created_at);
-CREATE INDEX IF NOT EXISTS order_charger_status ON orders(charger_id,status);
-CREATE INDEX IF NOT EXISTS charger_station_status ON chargers(station_id,status);
-CREATE INDEX IF NOT EXISTS user_role_active ON users(role,active);
 '''
-
-DEMO_STATIONS = [
-    ('海淀 · 智慧充电站','北京市海淀区中关村大街',116.2981,39.9593,160),
-    ('城市中心 · 绿能站','北京市东城区中心区域',116.4074,39.9042,150),
-    ('朝阳 · 阳光充电站','北京市朝阳区朝阳公园南路',116.4435,39.9219,155),
-    ('丰台 · 花园充电站','北京市丰台区丰台北路',116.2869,39.8584,145),
-    ('石景山 · 星光充电站','北京市石景山区石景山路',116.2229,39.9062,150),
-    ('西城 · 智慧绿能站','北京市西城区西直门外',116.3565,39.9418,152),
-    ('通州 · 运河充电站','北京市通州区运河商务区',116.6586,39.9097,148),
-    ('亦庄 · 新城充电站','北京市大兴区亦庄开发区',116.5067,39.7954,146),
-    ('昌平 · 北城充电站','北京市昌平区回龙观',116.3365,40.0708,149),
-    ('顺义 · 空港充电站','北京市顺义区空港工业区',116.5551,40.1260,151),
-]
-
 
 def now():
     return datetime.now().isoformat(timespec='seconds')
 
+class CompatRow(dict):
+    """
+    Behaves like sqlite3.Row:
+    row["id"] works
+    row[0] also works
+    """
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+
+        return super().__getitem__(key)
+
+
+class CompatCursor(DictCursor):
+    dict_type = CompatRow
+
+class MySQLDatabase:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def _convert_sql(self, sql):
+        sql = sql.strip()
+
+        upper = sql.upper()
+
+        if upper == "BEGIN IMMEDIATE":
+            return None
+
+        # SQLite placeholders -> PyMySQL placeholders
+        sql = sql.replace("?", "%s")
+
+        # Common SQLite syntax compatibility
+        sql = sql.replace(
+            "INSERT OR IGNORE",
+            "INSERT IGNORE"
+        )
+
+        return sql
+
+    def execute(self, sql, params=()):
+        converted = self._convert_sql(sql)
+
+        if converted is None:
+            self.connection.begin()
+            return None
+
+        cursor = self.connection.cursor()
+        cursor.execute(converted, params)
+
+        return cursor
+
+    def begin(self):
+        self.connection.begin()
+
+    def commit(self):
+        self.connection.commit()
+
+    def rollback(self):
+        self.connection.rollback()
+
+    def close(self):
+        self.connection.close()
 
 def get_db():
-    if 'db' not in g:
-        g.db = sqlite3.connect(current_app.config['DATABASE'], timeout=15, isolation_level=None)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute('PRAGMA foreign_keys=ON')
-        g.db.execute('PRAGMA busy_timeout=15000')
-    return g.db
+    if "db" not in g:
 
+        backend = current_app.config.get("DB_BACKEND", "mysql")
+
+        if backend == "mysql":
+            connection = pymysql.connect(
+                host=current_app.config["MYSQL_HOST"],
+                port=current_app.config["MYSQL_PORT"],
+                user=current_app.config["MYSQL_USER"],
+                password=current_app.config["MYSQL_PASSWORD"],
+                database=current_app.config["MYSQL_DATABASE"],
+                charset="utf8mb4",
+                cursorclass=CompatCursor,
+
+                # Important:
+                # Most existing routes expect individual INSERT/UPDATE
+                # statements to save automatically.
+                autocommit=True,
+
+                connect_timeout=10,
+                read_timeout=30,
+                write_timeout=30,
+            )
+
+            g.db = MySQLDatabase(connection)
+
+        else:
+            connection = sqlite3.connect(
+                current_app.config["DATABASE"],
+                timeout=15,
+                isolation_level=None,
+            )
+
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys=ON")
+
+            g.db = connection
+
+    return g.db
 
 def close_db(_=None):
     db = g.pop('db', None)
     if db is not None:
         db.close()
 
+def _columns(db, table):
+    return {r['name'] for r in db.execute(f'PRAGMA table_info({table})')}
 
-def _ensure_l1_scale(db):
-    """Bring the demo installation to the declared L1 footprint without
-    deleting or modifying user-generated records. This makes the L1 target
-    visible in the running dataset while keeping the initial seed small.
-    """
-    station_count = db.execute('SELECT COUNT(*) FROM stations').fetchone()[0]
-    if station_count < 10:
-        for item in DEMO_STATIONS[station_count:10]:
-            db.execute('INSERT INTO stations(name,address,lng,lat,price_cents) VALUES(?,?,?,?,?)', item)
+def _ensure_column(db, table, name, definition):
+    if name not in _columns(db, table):
+        db.execute(f'ALTER TABLE {table} ADD COLUMN {name} {definition}')
 
-    # Ensure each of the 10 demo stations has 10 chargers: 100 total.
-    for sid in range(1, 11):
-        existing = db.execute('SELECT COUNT(*) FROM chargers WHERE station_id=?', (sid,)).fetchone()[0]
-        for j in range(existing + 1, 11):
-            kind = 'fast' if j <= 7 else 'slow'
-            power = 60 if kind == 'fast' else 7
-            status = 'idle'
+def _add_default_pricing(db, station_id, base_price):
+    """Three demo time periods around the old station price; total fee stays easy to understand."""
+    service = 30
+    totals = (max(40, base_price - 20), base_price, base_price + 20)
+    periods = ((0, 480, totals[0]), (480, 1080, totals[1]), (1080, 1440, totals[2]))
+    for start, end, total in periods:
+        db.execute('''INSERT INTO pricing_rules(station_id,start_minute,end_minute,electricity_fee_cents,service_fee_cents)
+                      VALUES(?,?,?,?,?)''', (station_id, start, end, max(0, total-service), service))
 
-            if j == 10:
-                status = {
-                    2: 'maintenance',
-                    3: 'fault',
-                    4: 'offline',
-                }.get(sid, 'idle')
-            db.execute(
-                'INSERT OR IGNORE INTO chargers(station_id,number,kind,power,status) VALUES(?,?,?,?,?)',
-                (sid, f'NCS-{sid:02d}{j:02d}', kind, power, status),
-            )
+def migrate_db(db):
+    """Keep existing local ncs.db files usable after pulling newer source code."""
+    for name, definition in [
+        ('city', "TEXT NOT NULL DEFAULT '北京市'"),
+        ('business_hours', "TEXT NOT NULL DEFAULT '00:00-24:00'"),
+        ('contact_phone', "TEXT NOT NULL DEFAULT '010-00000000'"),
+        ('operating_status', "TEXT NOT NULL DEFAULT 'operating'"),
+        ('parking_info', "TEXT NOT NULL DEFAULT '以现场停车规定为准'")]:
+        _ensure_column(db, 'stations', name, definition)
+    _ensure_column(db, 'orders', 'electricity_fee_cents', 'INTEGER NOT NULL DEFAULT 0')
+    _ensure_column(db, 'orders', 'service_fee_cents', 'INTEGER NOT NULL DEFAULT 0')
+    db.execute('''UPDATE orders SET electricity_fee_cents=CASE WHEN price_cents>=30 THEN price_cents-30 ELSE price_cents END,
+                  service_fee_cents=CASE WHEN price_cents>=30 THEN 30 ELSE 0 END
+                  WHERE electricity_fee_cents=0 AND service_fee_cents=0''')
+    # Existing projects used a single station price. Convert it into three editable time periods once.
+    for s in db.execute('SELECT id,price_cents FROM stations').fetchall():
+        if not db.execute('SELECT 1 FROM pricing_rules WHERE station_id=? LIMIT 1', (s['id'],)).fetchone():
+            _add_default_pricing(db, s['id'], s['price_cents'])
+    # Existing chargers that were already marked fault should also appear in fault management.
+    for c in db.execute("SELECT id FROM chargers WHERE status='fault'").fetchall():
+        if not db.execute("SELECT 1 FROM fault_records WHERE charger_id=? AND status IN ('pending','processing')", (c['id'],)).fetchone():
+            db.execute('''INSERT INTO fault_records(charger_id,fault_type,description,status,reported_at)
+                          VALUES(?,?,'由旧版设备故障状态自动迁移','pending',?)''', (c['id'], '设备异常', now()))
 
+def init_db():
+    backend = current_app.config.get("DB_BACKEND", "mysql")
 
-def _seed_initial(db):
-    db.execute('BEGIN IMMEDIATE')
+    db = get_db()
+
+    if backend == "mysql":
+
+        for statement in MYSQL_SCHEMA:
+            db.execute(statement)
+
+    else:
+
+        Path(
+            current_app.config["DATABASE"]
+        ).parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        db.execute(
+            "PRAGMA journal_mode=WAL"
+        )
+
+        db.executescript(SCHEMA)
+
+        migrate_db(db)
+    count = db.execute(
+        "SELECT COUNT(*) AS count FROM users"
+    ).fetchone()
+
+    if count["count"] > 0:
+        return
+
+    if backend == "mysql":
+        db.begin()
+    else:
+        db.execute("BEGIN IMMEDIATE")
     try:
         for phone, name, role, balance, password in [
             ('13800138000','小林','user',28800,'User123456'),
@@ -113,24 +256,35 @@ def _seed_initial(db):
             ('13900139000','小明','user',16800,'User123456')]:
             db.execute('INSERT INTO users(phone,nickname,password_hash,role,balance_cents,created_at) VALUES(?,?,?,?,?,?)',
                        (phone,name,generate_password_hash(password),role,balance,now()))
-        for sid, item in enumerate(DEMO_STATIONS,1):
-            db.execute('INSERT INTO stations VALUES(?,?,?,?,?,?)',(sid,*item))
-            for j in range(1,11):
-                kind='fast' if j<=7 else 'slow'; power=60 if kind=='fast' else 7
+        stations = [
+            ('海淀 · 智慧充电站','北京市海淀区中关村大街','北京市海淀区','00:00-24:00','010-62500001','operating','停车前 30 分钟免费，之后按停车场标准收费',116.2981,39.9593,160),
+            ('城市中心 · 绿能站','北京市东城区中心区域','北京市东城区','06:00-23:00','010-65200002','operating','充电车辆前 2 小时免停车费',116.4074,39.9042,150),
+            ('朝阳 · 阳光充电站','北京市朝阳区朝阳公园南路','北京市朝阳区','00:00-24:00','010-65000003','operating','地下停车场 B2 层，按场内标准收费',116.4435,39.9219,155),
+            ('丰台 · 花园充电站','北京市丰台区丰台北路','北京市丰台区','07:00-22:00','010-63800004','operating','充电期间停车优惠以现场公告为准',116.2869,39.8584,145),
+            ('石景山 · 星光充电站','北京市石景山区石景山路','北京市石景山区','00:00-24:00','010-68800005','operating','地面停车位，充电车辆优先',116.2229,39.9062,150)]
+        for sid, item in enumerate(stations,1):
+            db.execute('''INSERT INTO stations(id,name,address,city,business_hours,contact_phone,operating_status,parking_info,lng,lat,price_cents)
+                          VALUES(?,?,?,?,?,?,?,?,?,?,?)''', (sid,*item))
+            _add_default_pricing(db, sid, item[-1])
+            for j in range(1,7):
                 status = 'idle'
 
-                if j == 10:
+                if j == 6:
                     status = {
                         2: 'maintenance',
                         3: 'fault',
                         4: 'offline',
                     }.get(sid, 'idle')
-                db.execute('INSERT INTO chargers(station_id,number,kind,power,status) VALUES(?,?,?,?,?)',
-                           (sid,f'NCS-{sid:02d}{j:02d}',kind,power,status))
+
+                cur=db.execute('INSERT INTO chargers(station_id,number,kind,power,status) VALUES(?,?,?,?,?)',
+                    (sid,f'NCS-{sid:02d}{j:02d}','fast' if j<5 else 'slow',60 if j<5 else 7,status))
+                if status=='fault':
+                    db.execute('''INSERT INTO fault_records(charger_id,fault_type,description,status,reported_at,reporter_id)
+                                  VALUES(?,?,'演示数据：设备通信异常','pending',?,2)''', (cur.lastrowid, '通信故障', now()))
         rng = random.Random(26)
         for days in range(28,0,-1):
             for k in range(rng.randint(3,7)):
-                cid=rng.randint(1,100)
+                cid=rng.randint(1,30)
                 c=db.execute('SELECT c.*,s.price_cents FROM chargers c JOIN stations s ON s.id=c.station_id WHERE c.id=?',(cid,)).fetchone()
                 start=(datetime.now()-timedelta(days=days)).replace(hour=rng.choice([8,9,12,15,18,19,20]),minute=rng.randint(0,59),second=0,microsecond=0)
                 minutes=rng.randint(18,70); energy=round(c['power']*minutes/60,3); amount=round(energy*c['price_cents'])
@@ -138,9 +292,14 @@ def _seed_initial(db):
 
                 paid = (
                     0
-                    if uid == 3 and days == 1 and k == 2
+                    if (
+                        uid == 3
+                        and days == 1
+                        and k == 2
+                    )
                     else amount
                 )
+                electricity=max(0,c['price_cents']-30); service=c['price_cents']-electricity
                 db.execute(
                     '''
                     INSERT INTO orders(
@@ -151,6 +310,8 @@ def _seed_initial(db):
                         started_at,
                         ended_at,
                         price_cents,
+                        electricity_fee_cents,
+                        service_fee_cents,
                         power,
                         time_scale,
                         energy,
@@ -162,7 +323,7 @@ def _seed_initial(db):
                     VALUES(
                         ?, ?,
                         'completed',
-                        ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?,
                         1,
                         ?, ?, ?, ?, ?
                     )
@@ -172,8 +333,13 @@ def _seed_initial(db):
                         cid,
                         start.isoformat(),
                         start.isoformat(),
-                        (start + timedelta(minutes=minutes)).isoformat(),
+                        (
+                            start
+                            + timedelta(minutes=minutes)
+                        ).isoformat(),
                         c['price_cents'],
+                        electricity,
+                        service,
                         c['power'],
                         energy,
                         amount,
@@ -186,15 +352,3 @@ def _seed_initial(db):
         db.commit()
     except Exception:
         db.rollback(); raise
-
-
-def init_db():
-    Path(current_app.config['DATABASE']).parent.mkdir(parents=True, exist_ok=True)
-    db = get_db()
-    db.execute('PRAGMA journal_mode=WAL')
-    db.executescript(SCHEMA)
-    if db.execute('SELECT COUNT(*) FROM users').fetchone()[0] == 0:
-        _seed_initial(db)
-    else:
-        _ensure_l1_scale(db)
-        db.commit()
