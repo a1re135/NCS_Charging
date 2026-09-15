@@ -12,6 +12,14 @@ CREATE TABLE IF NOT EXISTS users(
  password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user',
  balance_cents INTEGER NOT NULL DEFAULT 0 CHECK(balance_cents>=0),
  avatar TEXT NOT NULL DEFAULT 'lavender', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS roles(
+ key TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, level INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS permissions(
+ key TEXT PRIMARY KEY, name TEXT NOT NULL, module TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS role_permissions(
+ role_key TEXT NOT NULL REFERENCES roles(key) ON DELETE CASCADE,
+ permission_key TEXT NOT NULL REFERENCES permissions(key) ON DELETE CASCADE,
+ PRIMARY KEY(role_key,permission_key));
 CREATE TABLE IF NOT EXISTS stations(
  id INTEGER PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL,
  lng REAL NOT NULL, lat REAL NOT NULL, price_cents INTEGER NOT NULL CHECK(price_cents>0));
@@ -131,6 +139,58 @@ def _seed_initial(db):
         db.rollback(); raise
 
 
+ROLE_DEFINITIONS = [
+    ('user','普通用户','查询、充电、订单与个人账户',1),
+    ('operator','运营人员','电站、订单、价格与运营数据',20),
+    ('technician','运维人员','设备状态与故障处理',30),
+    ('admin','系统管理员','全局用户、角色与系统管理',99),
+]
+PERMISSION_DEFINITIONS = [
+    ('station.view','查看充电站','电站'),
+    ('station.manage','管理充电站','电站'),
+    ('charger.view','查看充电桩','设备'),
+    ('charger.manage','管理充电桩','设备'),
+    ('order.view_all','查看全部订单','订单'),
+    ('order.export','导出订单','订单'),
+    ('pricing.manage','管理价格','价格'),
+    ('fault.manage','处理设备故障','故障'),
+    ('analytics.view','查看运营数据','分析'),
+    ('prediction.view','查看负荷预测','分析'),
+    ('user.manage','管理用户','用户'),
+    ('role.manage','管理角色与权限','权限'),
+    ('log.view','查看操作日志','审计'),
+]
+# Permissions intentionally follow the four business roles in the project brief:
+# operator manages stations/orders/pricing/operations; technician manages equipment/faults.
+ROLE_PERMISSION_KEYS = {
+    'user': {'station.view'},
+    'operator': {'station.view','station.manage','charger.view','order.view_all','order.export','pricing.manage','analytics.view','prediction.view'},
+    'technician': {'station.view','charger.view','charger.manage','fault.manage'},
+    'admin': {k for k,_,_ in PERMISSION_DEFINITIONS},
+}
+
+def _ensure_rbac(db):
+    db.executemany('INSERT OR IGNORE INTO roles(key,name,description,level) VALUES(?,?,?,?)', ROLE_DEFINITIONS)
+    db.executemany('INSERT OR IGNORE INTO permissions(key,name,module) VALUES(?,?,?)', PERMISSION_DEFINITIONS)
+    # Reconcile mappings every startup so role definitions remain authoritative
+    # after an earlier version granted a broader permission set.
+    for role, keys in ROLE_PERMISSION_KEYS.items():
+        db.execute('DELETE FROM role_permissions WHERE role_key=?',(role,))
+        db.executemany('INSERT OR IGNORE INTO role_permissions(role_key,permission_key) VALUES(?,?)', [(role,k) for k in sorted(keys)])
+    demos=[
+        ('operator','运营演示','operator','Operator123456'),
+        ('tech','运维演示','technician','Tech123456'),
+    ]
+    for account,nickname,role,password in demos:
+        row=db.execute('SELECT id FROM users WHERE phone=?',(account,)).fetchone()
+        if row:
+            db.execute('UPDATE users SET role=? WHERE id=?',(role,row['id']))
+        else:
+            db.execute('INSERT INTO users(phone,nickname,password_hash,role,balance_cents,created_at) VALUES(?,?,?,?,?,?)',
+                       (account,nickname,generate_password_hash(password),role,0,now()))
+    # The course demo administrator is always a real system administrator.
+    db.execute("UPDATE users SET role='admin' WHERE phone='admin'")
+
 def init_db():
     Path(current_app.config['DATABASE']).parent.mkdir(parents=True, exist_ok=True)
     db = get_db()
@@ -140,4 +200,5 @@ def init_db():
         _seed_initial(db)
     else:
         _ensure_l1_scale(db)
-        db.commit()
+    _ensure_rbac(db)
+    db.commit()

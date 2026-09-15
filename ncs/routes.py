@@ -20,7 +20,37 @@ def body():
     return data
 
 def public_user(u):
-    return {k:u[k] for k in ('id','phone','nickname','role','balance_cents','avatar','active','created_at')}
+    if u is None: return None
+    row=dict(u); row['role_name']=get_role_meta(row['role'])['name']; row['permissions']=get_permissions(row['role'])
+    return {k:row[k] for k in ('id','phone','nickname','role','role_name','permissions','balance_cents','avatar','active','created_at')}
+
+def get_permissions(role):
+    return [r['key'] for r in get_db().execute('SELECT p.key FROM permissions p JOIN role_permissions rp ON rp.permission_key=p.key WHERE rp.role_key=? ORDER BY p.key',(role,)).fetchall()]
+
+def get_role_meta(role):
+    r=get_db().execute('SELECT key,name,description,level FROM roles WHERE key=?',(role,)).fetchone()
+    return dict(r) if r else {'key':role,'name':role,'description':'','level':0}
+
+def has_permission(role, key):
+    return bool(get_db().execute('SELECT 1 FROM role_permissions WHERE role_key=? AND permission_key=?',(role,key)).fetchone())
+
+def permission(key):
+    def deco(fn):
+        @wraps(fn)
+        def wrapped(*args,**kwargs):
+            # Permission can be placed outside @auth() on existing routes; load
+            # the session user here so authorization is deterministic regardless
+            # of decorator order.
+            if getattr(g,'user',None) is None:
+                uid=session.get('uid')
+                if uid is None: raise BusinessError('请先登录',401)
+                g.user=get_db().execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+            if g.user is None: raise BusinessError('请先登录',401)
+            if not g.user['active']: raise BusinessError('账号已冻结，暂时无法访问',403)
+            if not has_permission(g.user['role'],key): raise BusinessError(f'当前角色没有“{key}”权限',403)
+            return fn(*args,**kwargs)
+        return wrapped
+    return deco
 
 def auth(admin=False):
     def deco(fn):
@@ -28,9 +58,9 @@ def auth(admin=False):
         def wrapped(*args,**kwargs):
             g.user=get_db().execute('SELECT * FROM users WHERE id=?',(session.get('uid'),)).fetchone()
             if g.user is None: raise BusinessError('请先登录',401)
-            if admin and (g.user['role']!='admin' or not g.user['active']): raise BusinessError('需要管理员权限',403)
-            expire_reservations()
-            return fn(*args,**kwargs)
+            if not g.user['active']: raise BusinessError('账号已冻结，暂时无法访问',403)
+            if admin and g.user['role']!='admin': raise BusinessError('需要系统管理员权限',403)
+            expire_reservations(); return fn(*args,**kwargs)
         return wrapped
     return deco
 
@@ -98,14 +128,16 @@ def stations():
 @api.get('/stations/<int:sid>')
 @auth()
 def station(sid):
-    row=get_db().execute('SELECT * FROM stations WHERE id=?',(sid,)).fetchone()
+    db=get_db(); row=db.execute('SELECT * FROM stations WHERE id=?',(sid,)).fetchone()
     if not row: raise BusinessError('电站不存在',404)
-    return jsonify(station=dict(row),chargers=[dict(r) for r in get_db().execute('SELECT * FROM chargers WHERE station_id=? ORDER BY number',(sid,))])
+    chargers=[dict(r) for r in db.execute('SELECT * FROM chargers WHERE station_id=? ORDER BY number',(sid,))]
+    summary={r['status']:r['n'] for r in db.execute('SELECT status,COUNT(*) n FROM chargers WHERE station_id=? GROUP BY status',(sid,))}
+    return jsonify(station=dict(row),chargers=chargers,status_summary=summary)
 
 @api.get('/orders')
 @auth()
 def orders():
-    where='' if g.user['role']=='admin' else ' WHERE o.user_id=?'
+    where='' if has_permission(g.user['role'],'order.view_all') else ' WHERE o.user_id=?'
     args=() if not where else (g.user['id'],)
     return jsonify([quote(r) for r in get_db().execute(ORDER_SELECT+where+' ORDER BY o.id DESC',args)])
 
@@ -129,7 +161,7 @@ def order_action(oid,action):
 @auth()
 def receipt(oid):
     row=get_db().execute(ORDER_SELECT+' WHERE o.id=?',(oid,)).fetchone()
-    if not row or (g.user['role']!='admin' and row['user_id']!=g.user['id']): raise BusinessError('订单不存在',404)
+    if not row or (not has_permission(g.user['role'],'order.view_all') and row['user_id']!=g.user['id']): raise BusinessError('订单不存在',404)
     return jsonify(quote(row))
 
 @api.post('/profile')
@@ -169,7 +201,7 @@ def wallet():
 @api.get('/dashboard')
 @auth()
 def dashboard():
-    db=get_db(); admin=g.user['role']=='admin'; uid=g.user['id']
+    db=get_db(); admin=has_permission(g.user['role'],'analytics.view'); uid=g.user['id']
     filt='' if admin else ' AND user_id=?'; args=() if admin else (uid,)
     totals=dict(db.execute("SELECT COUNT(*) orders,COALESCE(SUM(energy),0) energy,COALESCE(SUM(paid_cents),0) paid_cents,COALESCE(SUM(debt_cents),0) debt_cents FROM orders WHERE status='completed'"+filt,args).fetchone())
     counts={r['status']:r['n'] for r in db.execute('SELECT status,COUNT(*) n FROM chargers GROUP BY status')}
@@ -179,15 +211,44 @@ def dashboard():
         row=db.execute("SELECT COALESCE(SUM(energy),0) energy,COALESCE(SUM(paid_cents),0) cents,COUNT(*) orders FROM orders WHERE status='completed' AND substr(ended_at,1,10)=?"+filt,(day,*args)).fetchone()
         days.append(dict(day=day,**dict(row)))
     active=[quote(r) for r in db.execute(ORDER_SELECT+" WHERE o.status IN ('reserved','charging')"+('' if admin else ' AND o.user_id=?')+' ORDER BY o.id DESC',args)]
-    return jsonify(totals=totals,counts=counts,days=days,active=active,stations=db.execute('SELECT COUNT(*) FROM stations').fetchone()[0])
+    user_stats={'total':db.execute("SELECT COUNT(*) FROM users WHERE role='user'").fetchone()[0],
+                'active':db.execute("SELECT COUNT(*) FROM users WHERE role='user' AND active=1").fetchone()[0],
+                'new_7d':db.execute("SELECT COUNT(*) FROM users WHERE role='user' AND created_at>=?",((datetime.now()-timedelta(days=7)).isoformat(),)).fetchone()[0]}
+    maintenance_stats={r['status']:r['n'] for r in db.execute('SELECT status,COUNT(*) n FROM chargers GROUP BY status')}
+    maintenance_stats['total']=db.execute('SELECT COUNT(*) FROM chargers').fetchone()[0]
+    return jsonify(totals=totals,counts=counts,days=days,active=active,stations=db.execute('SELECT COUNT(*) FROM stations').fetchone()[0],user_stats=user_stats,maintenance_stats=maintenance_stats)
 
 @api.get('/admin/users')
-@auth(True)
+@permission('user.manage')
+@auth()
 def users():
-    return jsonify([public_user(r) for r in get_db().execute("SELECT * FROM users WHERE role='user' ORDER BY id")])
+    return jsonify([public_user(r) for r in get_db().execute('SELECT * FROM users ORDER BY id')])
+
+@api.get('/admin/roles')
+@permission('role.manage')
+@auth()
+def roles():
+    db=get_db(); roles=[dict(r) for r in db.execute('SELECT * FROM roles ORDER BY level')]
+    for r in roles:
+        r['permissions']=get_permissions(r['key'])
+    return jsonify(roles=roles,permissions=[dict(r) for r in db.execute('SELECT * FROM permissions ORDER BY module,key')])
+
+@api.post('/admin/users/<int:uid>/role')
+@permission('role.manage')
+@auth()
+def user_role_update(uid):
+    role=body().get('role'); db=get_db()
+    if not db.execute('SELECT 1 FROM roles WHERE key=?',(role,)).fetchone(): raise BusinessError('角色不存在',404)
+    target=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+    if not target: raise BusinessError('用户不存在',404)
+    if uid==g.user['id'] and role!='admin': raise BusinessError('不能取消自己的系统管理员权限',409)
+    with transaction() as tx:
+        tx.execute('UPDATE users SET role=? WHERE id=?',(role,uid)); audit(g.user['id'],f'调整用户 #{uid} 角色为 {get_role_meta(role)["name"]}')
+    return jsonify(ok=True,role=role,role_name=get_role_meta(role)['name'])
 
 @api.post('/admin/users/<int:uid>')
-@auth(True)
+@permission('user.manage')
+@auth()
 def user_update(uid):
     active=body().get('active')
     if type(active) is not bool: raise BusinessError('用户状态无效')
@@ -199,7 +260,8 @@ def user_update(uid):
 
 @api.post('/admin/stations')
 @api.post('/admin/stations/<int:sid>')
-@auth(True)
+@permission('station.manage')
+@auth()
 def station_save(sid=None):
     d=body(); vals=(required(d.get('name'),'站名',60),required(d.get('address'),'地址',160),number(d.get('lng'),-180,180,'经度'),number(d.get('lat'),-90,90,'纬度'),money(d.get('price'),100))
     with transaction() as db:
@@ -210,7 +272,8 @@ def station_save(sid=None):
     return jsonify(id=sid)
 
 @api.delete('/admin/stations/<int:sid>')
-@auth(True)
+@permission('station.manage')
+@auth()
 def station_delete(sid):
     with transaction() as db:
         if db.execute('SELECT 1 FROM chargers WHERE station_id=?',(sid,)).fetchone(): raise BusinessError('请先处理该站充电桩；有历史订单的设备需保留')
@@ -219,13 +282,15 @@ def station_delete(sid):
     return jsonify(ok=True)
 
 @api.get('/admin/chargers')
-@auth(True)
+@permission('charger.view')
+@auth()
 def chargers():
     return jsonify([dict(r) for r in get_db().execute('SELECT c.*,s.name station_name FROM chargers c JOIN stations s ON s.id=c.station_id ORDER BY c.id')])
 
 @api.post('/admin/chargers')
 @api.post('/admin/chargers/<int:cid>')
-@auth(True)
+@permission('charger.manage')
+@auth()
 def charger_save(cid=None):
     d=body(); kind=d.get('kind')
     if kind not in ('fast','slow'): raise BusinessError('电桩类型无效')
@@ -244,7 +309,8 @@ def charger_save(cid=None):
     return jsonify(id=cid)
 
 @api.post('/admin/chargers/<int:cid>/action')
-@auth(True)
+@permission('charger.manage')
+@auth()
 def charger_action(cid):
     action=body().get('action')
     with transaction() as db:
@@ -259,11 +325,13 @@ def charger_action(cid):
     return jsonify(ok=True)
 
 @api.get('/admin/logs')
-@auth(True)
+@permission('log.view')
+@auth()
 def logs(): return jsonify([dict(r) for r in get_db().execute('SELECT * FROM ops_log ORDER BY id DESC LIMIT 100')])
 
 @api.get('/admin/prediction')
-@auth(True)
+@permission('prediction.view')
+@auth()
 def prediction():
     sid=request.args.get('station_id',1,type=int); db=get_db()
     if not db.execute('SELECT 1 FROM stations WHERE id=?',(sid,)).fetchone(): raise BusinessError('电站不存在',404)
@@ -280,7 +348,8 @@ def prediction():
     return jsonify(points=points,sample_count=len(rows),method='近 28 天同小时订单电量均值；按装机功率估算空闲数，仅供课程演示')
 
 @api.get('/admin/export')
-@auth(True)
+@permission('order.export')
+@auth()
 def export():
     out=io.StringIO(); writer=csv.writer(out)
     writer.writerow(['订单号','用户','电站','电桩','状态','电量(kWh)','金额(元)','已付(元)','欠费(元)','开始时间','结束时间'])

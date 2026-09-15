@@ -105,4 +105,35 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(p['points']),12);self.assertGreater(p['sample_count'],0)
         r=a.get('/api/admin/export');self.assertEqual(r.status_code,200);self.assertTrue(r.data.startswith(b'\xef\xbb\xbf'))
 
+    def test_rbac_has_four_roles_and_enforces_permissions(self):
+        with self.app.app_context():
+            roles=get_db().execute('SELECT key FROM roles ORDER BY level').fetchall()
+            self.assertEqual([r['key'] for r in roles],['user','operator','technician','admin'])
+        operator,token=self.login('operator','Operator123456')
+        self.assertEqual(operator.get('/api/session').json['user']['role_name'],'运营人员')
+        self.assertEqual(operator.get('/api/admin/users').status_code,403)
+        self.assertEqual(operator.get('/api/admin/chargers').status_code,200)
+        self.assertEqual(operator.post('/api/admin/chargers/1/action',json={'action':'restart'},headers={'X-CSRF-Token':token}).status_code,403)
+        tech,token=self.login('tech','Tech123456')
+        self.assertEqual(tech.get('/api/admin/logs').status_code,403)
+        self.assertEqual(tech.get('/api/admin/chargers').status_code,200)
+        self.assertEqual(tech.post('/api/admin/chargers/1/action',json={'action':'restart'},headers={'X-CSRF-Token':token}).status_code,200)
+        detail=tech.get('/api/stations/1').json
+        self.assertIn('status_summary',detail)
+
+    def test_rbac_role_change_and_self_protection(self):
+        admin,token=self.login('admin','Admin123456')
+        self.assertEqual(self.post('/admin/users/1/role',{'role':'operator'},admin,token).status_code,200)
+        self.assertEqual(self.sql('SELECT role FROM users WHERE id=1')[0][0],'operator')
+        self.assertEqual(self.post('/admin/users/2/role',{'role':'user'},admin,token).status_code,409)
+        # restore demo user for remaining tests
+        self.post('/admin/users/1/role',{'role':'user'},admin,token)
+
+    def test_payment_status_and_dashboard_user_stats(self):
+        oid=self.start();self.age(oid)
+        r=self.post(f'/orders/{oid}/finish');self.assertEqual(r.status_code,200)
+        self.assertEqual(r.json['order']['payment_status'],'已支付')
+        d=self.client.get('/api/dashboard').json
+        self.assertIn('user_stats',d);self.assertGreaterEqual(d['user_stats']['total'],1)
+
 if __name__=='__main__': unittest.main(verbosity=2)

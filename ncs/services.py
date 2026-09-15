@@ -58,6 +58,14 @@ def quote(order, at=None):
         seconds=max(0,int(((at or datetime.now())-datetime.fromisoformat(o['started_at'])).total_seconds()))*o['time_scale']
         energy=Decimal(str(o['power']))*Decimal(seconds)/Decimal(3600)
         o.update(simulated_seconds=seconds,energy=round(float(energy),3),amount_cents=int((energy*o['price_cents']).quantize(Decimal('1'),rounding=ROUND_HALF_UP)))
+    amount=int(o.get('amount_cents') or 0); paid=int(o.get('paid_cents') or 0); debt=int(o.get('debt_cents') or 0)
+    if o.get('status') in ('reserved','charging'): status='待结算'
+    elif debt>0: status='待补缴'
+    elif amount<=0: status='无需支付'
+    elif paid>=amount: status='已支付'
+    elif paid>0: status='部分支付'
+    else: status='支付失败'
+    o['payment_status']=status
     return o
 
 ORDER_SELECT='''SELECT o.*,s.name station_name,s.address,s.lat,s.lng,c.number charger_number,u.nickname,u.phone
