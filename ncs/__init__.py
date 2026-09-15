@@ -3,11 +3,13 @@
 import os
 import secrets
 import sqlite3
+from decimal import Decimal
 from pathlib import Path
 
 import pymysql
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, session, render_template
+from flask.json.provider import DefaultJSONProvider
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .db import close_db, init_db
@@ -25,6 +27,17 @@ def create_app(config=None):
         template_folder=str(root / "templates"),
         static_folder=str(root / "static"),
     )
+
+    # MySQL returns DECIMAL for SUM/AVG aggregates; serialize as numbers
+    # instead of strings so front-end arithmetic never concatenates.
+    class _NCSJSONProvider(DefaultJSONProvider):
+        def default(self, o):
+            if isinstance(o, Decimal):
+                return int(o) if o == o.to_integral_value() else float(o)
+            return super().default(o)
+
+    app.json_provider_class = _NCSJSONProvider
+    app.json = _NCSJSONProvider(app)
 
     data = root / "data"
     data.mkdir(exist_ok=True)

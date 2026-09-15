@@ -93,10 +93,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.post(f'/admin/chargers/{cid}/action',{'action':'fault'},a,t).status_code,200)
         self.assertEqual(self.post(f'/admin/chargers/{cid}/action',{'action':'restart'},a,t).status_code,200)
         self.assertGreater(len(a.get('/api/admin/logs').json),0)
-    def test_frozen_user_can_settle_but_not_recharge(self):
+    def test_frozen_user_can_recharge_repay_but_not_new_order(self):
         oid=self.start();a,t=self.login('admin','Admin123456');self.post('/admin/users/1',{'active':False},a,t)
-        self.assertEqual(self.post('/wallet/recharge',{'amount':100}).status_code,403)
+        self.assertEqual(self.post('/orders',{'charger_id':2,'mode':'start'}).status_code,403)
+        self.sql('UPDATE users SET balance_cents=1 WHERE id=1')
+        self.age(oid,10)
         self.assertEqual(self.post(f'/orders/{oid}/finish').status_code,200)
+        self.assertGreater(self.sql('SELECT debt_cents FROM orders WHERE id=?',(oid,))[0][0],0)
+        self.assertEqual(self.post('/wallet/recharge',{'amount':200}).status_code,200)
+        self.assertEqual(self.post(f'/orders/{oid}/pay').status_code,200)
+        self.assertEqual(self.sql('SELECT debt_cents FROM orders WHERE id=?',(oid,))[0][0],0)
         self.assertEqual(self.post('/orders',{'charger_id':2,'mode':'start'}).status_code,403)
     def test_registration_prediction_export_and_sort(self):
         c=self.app.test_client();t=c.get('/api/session').json['csrf']
@@ -207,5 +213,47 @@ class WorkflowTests(unittest.TestCase):
         qr=a.get(f'/api/chargers/{cid}/qr');self.assertEqual(qr.status_code,200);self.assertIn('image/svg+xml',qr.content_type)
         self.assertEqual(a.get('/api/chargers/by-number/QR-FAULT-01').json['id'],cid)
         self.assertEqual(a.get('/charge/QR-FAULT-01').status_code,200)
+
+
+
+    def test_station_kind_breakdown_fields(self):
+        for st in self.client.get('/api/stations?lat=39.9593&lng=116.2981').json:
+            for f in ('fast_free','slow_free','fast_fault','slow_fault','fast_maintenance','slow_maintenance','fast_offline','slow_offline'):
+                self.assertIn(f,st)
+                self.assertGreaterEqual(st[f],0)
+            self.assertLessEqual(st['fast_free'],st['fast'])
+            self.assertLessEqual(st['slow_free'],st['slow'])
+            self.assertEqual(st['fast_free']+st['slow_free'],st['free'])
+
+    def test_order_trend_endpoint(self):
+        oid=self.start();self.age(oid,600);self.assertEqual(self.post(f'/orders/{oid}/finish').status_code,200)
+        a,t=self.login('admin','Admin123456')
+        r=a.get('/api/admin/trend');self.assertEqual(r.status_code,200)
+        p=r.json['points'];self.assertGreaterEqual(len(p),7)
+        for x in p:
+            self.assertGreaterEqual(x['done'],0)
+            self.assertLessEqual(x['done'],x['total'])
+            self.assertGreaterEqual(x['cents'],0)
+        self.assertEqual(a.get('/api/admin/trend?granularity=week&range=30').status_code,200)
+        self.assertEqual(a.get('/api/admin/trend?granularity=month&range=year').status_code,200)
+        self.assertEqual(a.get('/api/admin/trend?granularity=day&range=7&station_id=1').status_code,200)
+        self.assertEqual(a.get('/api/admin/trend?granularity=bad').status_code,400)
+        self.assertEqual(a.get('/api/admin/trend?range=bad').status_code,400)
+        self.assertEqual(a.get('/api/admin/trend?station_id=999').status_code,404)
+        c2,t2=self.login('13900139000','User123456')
+        self.assertEqual(c2.get('/api/admin/trend').status_code,403)
+
+    def test_revenue_stations_endpoint(self):
+        oid=self.start();self.age(oid,600);self.assertEqual(self.post(f'/orders/{oid}/finish').status_code,200)
+        a,t=self.login('admin','Admin123456')
+        r=a.get('/api/admin/revenue_stations');self.assertEqual(r.status_code,200)
+        st=r.json['stations'];self.assertEqual(len(st),10)
+        rev=[x['revenue_cents'] for x in st]
+        self.assertEqual(rev,sorted(rev,reverse=True))
+        self.assertGreater(rev[0],0)
+        self.assertGreaterEqual(r.json['average_cents'],0)
+        self.assertIn('debt_cents',st[0])
+        c2,t2=self.login('13900139000','User123456')
+        self.assertEqual(c2.get('/api/admin/revenue_stations').status_code,403)
 
 if __name__=='__main__': unittest.main(verbosity=2)

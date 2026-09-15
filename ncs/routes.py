@@ -231,7 +231,7 @@ def stations():
     if kind not in ('', 'fast', 'slow'):
         raise BusinessError('充电类型筛选无效')
 
-    if sort not in ('distance', 'usage'):
+    if sort not in ('distance', 'usage', 'usage_asc'):
         raise BusinessError('排序方式无效')
 
     db = get_db()
@@ -272,7 +272,47 @@ def stations():
             SUM(
                 CASE WHEN c.status='offline'
                 THEN 1 ELSE 0 END
-            ) AS offline
+            ) AS offline,
+
+            SUM(
+                CASE WHEN c.kind='fast' AND c.status='idle'
+                THEN 1 ELSE 0 END
+            ) AS fast_free,
+
+            SUM(
+                CASE WHEN c.kind='slow' AND c.status='idle'
+                THEN 1 ELSE 0 END
+            ) AS slow_free,
+
+            SUM(
+                CASE WHEN c.kind='fast' AND c.status='fault'
+                THEN 1 ELSE 0 END
+            ) AS fast_fault,
+
+            SUM(
+                CASE WHEN c.kind='slow' AND c.status='fault'
+                THEN 1 ELSE 0 END
+            ) AS slow_fault,
+
+            SUM(
+                CASE WHEN c.kind='fast' AND c.status='maintenance'
+                THEN 1 ELSE 0 END
+            ) AS fast_maintenance,
+
+            SUM(
+                CASE WHEN c.kind='slow' AND c.status='maintenance'
+                THEN 1 ELSE 0 END
+            ) AS slow_maintenance,
+
+            SUM(
+                CASE WHEN c.kind='fast' AND c.status='offline'
+                THEN 1 ELSE 0 END
+            ) AS fast_offline,
+
+            SUM(
+                CASE WHEN c.kind='slow' AND c.status='offline'
+                THEN 1 ELSE 0 END
+            ) AS slow_offline
 
         FROM stations s
 
@@ -347,6 +387,13 @@ def stations():
         result.sort(
             key=lambda r: (
                 -r['usage'],
+                r['distance']
+            )
+        )
+    elif sort == 'usage_asc':
+        result.sort(
+            key=lambda r: (
+                r['usage'],
                 r['distance']
             )
         )
@@ -449,7 +496,7 @@ def new_order():
 @api.post('/orders/<int:oid>/<action>')
 @auth(allow_frozen=True)
 def order_action(oid,action):
-    if not g.user['active'] and action != 'finish':
+    if not g.user['active'] and action not in ('finish','pay'):
         raise BusinessError('账号已冻结，无法执行该操作',403)
 
     act_order(g.user['id'],oid,action)
@@ -490,9 +537,8 @@ def password():
     return jsonify(ok=True)
 
 @api.post('/wallet/recharge')
-@auth()
+@auth(allow_frozen=True)
 def recharge():
-    if not g.user['active']: raise BusinessError('账号已冻结，暂时无法充值',403)
     cents=money(body().get('amount'))
     with transaction() as db:
         db.execute('UPDATE users SET balance_cents=balance_cents+? WHERE id=?',(cents,g.user['id']))
@@ -560,6 +606,81 @@ def dashboard():
         user_stats=user_stats,
         maintenance_stats=maintenance_stats,
     )
+
+@api.get('/admin/trend')
+@permission('analytics.view')
+@auth()
+def trend():
+    granularity=request.args.get('granularity','day')
+    range_key=request.args.get('range','7')
+    station_id=request.args.get('station_id',type=int)
+    if granularity not in ('day','week','month'):
+        raise BusinessError('时间粒度无效')
+    if range_key not in ('7','30','year'):
+        raise BusinessError('时间范围无效')
+    today=datetime.now().date()
+    if range_key=='year':
+        date_from=datetime(today.year,1,1).date()
+    else:
+        date_from=today-timedelta(days=int(range_key)-1)
+    db=get_db()
+    if station_id is not None and not db.execute('SELECT 1 FROM stations WHERE id=?',(station_id,)).fetchone():
+        raise BusinessError('电站不存在',404)
+    if granularity=='day':
+        bucket="substr(o.created_at,1,10)"
+    elif granularity=='week':
+        if current_app.config.get('DB_BACKEND')=='mysql':
+            bucket="DATE(DATE_SUB(o.created_at, INTERVAL WEEKDAY(o.created_at) DAY))"
+        else:
+            bucket="date(o.created_at,'weekday 0','-6 days')"
+    else:
+        bucket="substr(o.created_at,1,7)"
+    conds=["substr(o.created_at,1,10)>=?"]
+    params=[date_from.isoformat()]
+    if station_id is not None:
+        conds.append('c.station_id=?')
+        params.append(station_id)
+    sql=("SELECT "+bucket+" bucket,COUNT(*) total,"
+         "SUM(CASE WHEN o.status='completed' THEN 1 ELSE 0 END) done,"
+         "COALESCE(SUM(CASE WHEN o.status='completed' THEN o.paid_cents ELSE 0 END),0) cents "
+         "FROM orders o JOIN chargers c ON c.id=o.charger_id WHERE "+" AND ".join(conds)+" GROUP BY bucket")
+    by={r['bucket']:r for r in db.execute(sql,params)}
+    def pick(key):
+        row=by.get(key)
+        return dict(label=key,total=int(row['total']) if row else 0,
+                    done=int(row['done']) if row else 0,cents=int(row['cents']) if row else 0)
+    points=[]
+    if granularity=='day':
+        for i in range((today-date_from).days+1):
+            points.append(pick((date_from+timedelta(days=i)).isoformat()))
+    elif granularity=='week':
+        cur=date_from-timedelta(days=date_from.weekday())
+        while cur<=today:
+            points.append(pick(cur.strftime('%Y-%W')))
+            cur+=timedelta(days=7)
+    else:
+        y,m=date_from.year,date_from.month
+        while (y,m)<=(today.year,today.month):
+            points.append(pick('%04d-%02d'%(y,m)))
+            m+=1
+            if m>12: m=1; y+=1
+    return jsonify(points=points,granularity=granularity,range_label='%s ~ %s'%(date_from,today))
+
+@api.get('/admin/revenue_stations')
+@permission('analytics.view')
+@auth()
+def revenue_stations():
+    rows=get_db().execute('''SELECT s.id station_id,s.name,
+        COUNT(o.id) orders,COALESCE(SUM(o.paid_cents),0) revenue_cents,
+        COALESCE(SUM(o.debt_cents),0) debt_cents
+        FROM stations s
+        LEFT JOIN chargers c ON c.station_id=s.id
+        LEFT JOIN orders o ON o.charger_id=c.id AND o.status='completed'
+        GROUP BY s.id''').fetchall()
+    result=[dict(r) for r in rows]
+    result.sort(key=lambda r:r['revenue_cents'],reverse=True)
+    average=round(sum(r['revenue_cents'] for r in result)/len(result)) if result else 0
+    return jsonify(stations=result,average_cents=average)
 
 @api.get('/admin/users')
 @permission('user.manage')
