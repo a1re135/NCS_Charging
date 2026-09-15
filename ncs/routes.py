@@ -26,9 +26,17 @@ def body():
     return data
 
 def public_user(u):
-    result = {k:u[k] for k in ('id','phone','nickname','role','balance_cents','avatar','active','created_at')}
-    result['preferences'] = get_preferences(u['id'])
-    result['avatar_url'] = avatar_url(u['id'])
+    if u is None:
+        return None
+    row = dict(u)
+    row['role_name'] = get_role_meta(row['role'])['name']
+    row['permissions'] = get_permissions(row['role'])
+    result = {k: row[k] for k in (
+        'id','phone','nickname','role','role_name','permissions',
+        'balance_cents','avatar','active','created_at'
+    )}
+    result['preferences'] = get_preferences(row['id'])
+    result['avatar_url'] = avatar_url(row['id'])
     return result
 
 def day(value, field):
@@ -42,15 +50,43 @@ def day(value, field):
             f"{field}格式不正确，应为 YYYY-MM-DD"
         )
 
-def auth(admin=False):
+def get_permissions(role):
+    return [r['key'] for r in get_db().execute('SELECT p.`key` AS `key` FROM permissions p JOIN role_permissions rp ON rp.permission_key=p.`key` WHERE rp.role_key=? ORDER BY p.`key`',(role,)).fetchall()]
+
+def get_role_meta(role):
+    r=get_db().execute('SELECT `key` AS `key`,name,description,level FROM roles WHERE `key`=?',(role,)).fetchone()
+    return dict(r) if r else {'key':role,'name':role,'description':'','level':0}
+
+def has_permission(role, key):
+    return bool(get_db().execute('SELECT 1 FROM role_permissions WHERE role_key=? AND permission_key=?',(role,key)).fetchone())
+
+def permission(key):
+    def deco(fn):
+        @wraps(fn)
+        def wrapped(*args,**kwargs):
+            # Permission can be placed outside @auth() on existing routes; load
+            # the session user here so authorization is deterministic regardless
+            # of decorator order.
+            if getattr(g,'user',None) is None:
+                uid=session.get('uid')
+                if uid is None: raise BusinessError('请先登录',401)
+                g.user=get_db().execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+            if g.user is None: raise BusinessError('请先登录',401)
+            if not g.user['active']: raise BusinessError('账号已冻结，暂时无法访问',403)
+            if not has_permission(g.user['role'],key): raise BusinessError(f'当前角色没有“{key}”权限',403)
+            return fn(*args,**kwargs)
+        return wrapped
+    return deco
+
+def auth(admin=False, allow_frozen=False):
     def deco(fn):
         @wraps(fn)
         def wrapped(*args,**kwargs):
             g.user=get_db().execute('SELECT * FROM users WHERE id=?',(session.get('uid'),)).fetchone()
             if g.user is None: raise BusinessError('请先登录',401)
-            if admin and (g.user['role']!='admin' or not g.user['active']): raise BusinessError('需要管理员权限',403)
-            expire_reservations()
-            return fn(*args,**kwargs)
+            if not g.user['active'] and not allow_frozen:raise BusinessError('账号已冻结，暂时无法访问',403)
+            if admin and g.user['role']!='admin': raise BusinessError('需要系统管理员权限',403)
+            expire_reservations(); return fn(*args,**kwargs)
         return wrapped
     return deco
 
@@ -324,14 +360,32 @@ def stations():
 @api.get('/stations/<int:sid>')
 @auth()
 def station(sid):
-    db=get_db(); row=db.execute('SELECT * FROM stations WHERE id=?',(sid,)).fetchone()
-    if not row: raise BusinessError('电站不存在',404)
-    station_data=dict(row); tariff=pricing_for_station(db,sid)
-    station_data.update(current_price_cents=tariff['price_cents'],electricity_fee_cents=tariff['electricity_fee_cents'],service_fee_cents=tariff['service_fee_cents'])
-    rules=[pricing_json(r) for r in db.execute('SELECT * FROM pricing_rules WHERE station_id=? ORDER BY start_minute',(sid,))]
-    return jsonify(station=station_data,
-                   chargers=[dict(r) for r in db.execute('SELECT * FROM chargers WHERE station_id=? ORDER BY number',(sid,))],
-                   pricing=rules)
+    db=get_db()
+    row=db.execute('SELECT * FROM stations WHERE id=?',(sid,)).fetchone()
+    if not row:
+        raise BusinessError('电站不存在',404)
+    station_data=dict(row)
+    tariff=pricing_for_station(db,sid)
+    station_data.update(
+        current_price_cents=tariff['price_cents'],
+        electricity_fee_cents=tariff['electricity_fee_cents'],
+        service_fee_cents=tariff['service_fee_cents'],
+    )
+    chargers=[dict(r) for r in db.execute(
+        'SELECT * FROM chargers WHERE station_id=? ORDER BY number',(sid,)
+    )]
+    rules=[pricing_json(r) for r in db.execute(
+        'SELECT * FROM pricing_rules WHERE station_id=? ORDER BY start_minute',(sid,)
+    )]
+    summary={r['status']:r['n'] for r in db.execute(
+        'SELECT status,COUNT(*) n FROM chargers WHERE station_id=? GROUP BY status',(sid,)
+    )}
+    return jsonify(
+        station=station_data,
+        chargers=chargers,
+        pricing=rules,
+        status_summary=summary,
+    )
 
 @api.get('/chargers/by-number/<string:number_value>')
 @auth()
@@ -354,80 +408,33 @@ def charger_qr(cid):
 @api.get('/orders')
 @auth()
 def orders():
-    if g.user['role'] == 'admin':
-        where = ''
-        params = []
+    if has_permission(g.user['role'],'order.view_all'):
+        where=''
+        params=[]
     else:
-        where = ' WHERE o.user_id=?'
-        params = [g.user['id']]
+        where=' WHERE o.user_id=?'
+        params=[g.user['id']]
 
-    conditions = []
-
-    date_from = request.args.get(
-        'date_from',
-        ''
-    )
-
-    date_to = request.args.get(
-        'date_to',
-        ''
-    )
+    conditions=[]
+    date_from=request.args.get('date_from','')
+    date_to=request.args.get('date_to','')
 
     if date_from:
-        day(
-            date_from,
-            '开始日期'
-        )
-
-        conditions.append(
-            'substr(o.created_at,1,10)>=?'
-        )
-
+        day(date_from,'开始日期')
+        conditions.append('substr(o.created_at,1,10)>=?')
         params.append(date_from)
-
     if date_to:
-        day(
-            date_to,
-            '结束日期'
-        )
-
-        conditions.append(
-            'substr(o.created_at,1,10)<=?'
-        )
-
+        day(date_to,'结束日期')
+        conditions.append('substr(o.created_at,1,10)<=?')
         params.append(date_to)
-
-    if (
-        date_from
-        and date_to
-        and date_from > date_to
-    ):
-        raise BusinessError(
-            '开始日期不能晚于结束日期'
-        )
+    if date_from and date_to and date_from > date_to:
+        raise BusinessError('开始日期不能晚于结束日期')
 
     if conditions:
-        where += (
-            ' AND '
-            if where
-            else ' WHERE '
-        )
+        where += (' AND ' if where else ' WHERE ') + ' AND '.join(conditions)
 
-        where += ' AND '.join(
-            conditions
-        )
-
-    rows = get_db().execute(
-        ORDER_SELECT
-        + where
-        + ' ORDER BY o.id DESC',
-        params,
-    )
-
-    return jsonify([
-        quote(r)
-        for r in rows
-    ])
+    rows=get_db().execute(ORDER_SELECT+where+' ORDER BY o.id DESC',params)
+    return jsonify([quote(r) for r in rows])
 
 @api.post('/orders')
 @auth()
@@ -440,16 +447,27 @@ def new_order():
     return jsonify(id=oid),201
 
 @api.post('/orders/<int:oid>/<action>')
-@auth()
+@auth(allow_frozen=True)
 def order_action(oid,action):
+    if not g.user['active'] and action != 'finish':
+        raise BusinessError('账号已冻结，无法执行该操作',403)
+
     act_order(g.user['id'],oid,action)
-    return jsonify(order=quote(get_db().execute(ORDER_SELECT+' WHERE o.id=?',(oid,)).fetchone()))
+
+    return jsonify(
+        order=quote(
+            get_db().execute(
+                ORDER_SELECT+' WHERE o.id=?',
+                (oid,)
+            ).fetchone()
+        )
+    )
 
 @api.get('/orders/<int:oid>/receipt')
 @auth()
 def receipt(oid):
     row=get_db().execute(ORDER_SELECT+' WHERE o.id=?',(oid,)).fetchone()
-    if not row or (g.user['role']!='admin' and row['user_id']!=g.user['id']): raise BusinessError('订单不存在',404)
+    if not row or (not has_permission(g.user['role'],'order.view_all') and row['user_id']!=g.user['id']): raise BusinessError('订单不存在',404)
     return jsonify(quote(row))
 
 @api.post('/profile')
@@ -489,162 +507,148 @@ def wallet():
 @api.get('/dashboard')
 @auth()
 def dashboard():
-    db=get_db(); admin=g.user['role']=='admin'; uid=g.user['id']
-    filt='' if admin else ' AND user_id=?'; args=() if admin else (uid,)
-    totals=dict(db.execute("SELECT COUNT(*) orders,COALESCE(SUM(energy),0) energy,COALESCE(SUM(paid_cents),0) paid_cents,COALESCE(SUM(debt_cents),0) debt_cents FROM orders WHERE status='completed'"+filt,args).fetchone())
-    counts={r['status']:r['n'] for r in db.execute('SELECT status,COUNT(*) n FROM chargers GROUP BY status')}
+    db=get_db()
+    admin=has_permission(g.user['role'],'analytics.view')
+    uid=g.user['id']
+    filt='' if admin else ' AND user_id=?'
+    args=() if admin else (uid,)
+    totals=dict(db.execute(
+        "SELECT COUNT(*) orders,COALESCE(SUM(energy),0) energy,"
+        "COALESCE(SUM(paid_cents),0) paid_cents,COALESCE(SUM(debt_cents),0) debt_cents "
+        "FROM orders WHERE status='completed'"+filt,args
+    ).fetchone())
+    counts={r['status']:r['n'] for r in db.execute(
+        'SELECT status,COUNT(*) n FROM chargers GROUP BY status'
+    )}
     days=[]
     for i in range(6,-1,-1):
-        day=(datetime.now()-timedelta(days=i)).strftime('%Y-%m-%d')
-        row=db.execute("SELECT COALESCE(SUM(energy),0) energy,COALESCE(SUM(paid_cents),0) cents,COUNT(*) orders FROM orders WHERE status='completed' AND substr(ended_at,1,10)=?"+filt,(day,*args)).fetchone()
-        days.append(dict(day=day,**dict(row)))
-    active=[quote(r) for r in db.execute(ORDER_SELECT+" WHERE o.status IN ('reserved','charging')"+('' if admin else ' AND o.user_id=?')+' ORDER BY o.id DESC',args)]
-    return jsonify(totals=totals,counts=counts,days=days,active=active,
-                   stations=db.execute('SELECT COUNT(*) FROM stations').fetchone()[0],
-                   users=db.execute("SELECT COUNT(*) FROM users WHERE role='user'").fetchone()[0],
-                   open_faults=db.execute("SELECT COUNT(*) FROM fault_records WHERE status IN ('pending','processing')").fetchone()[0])
-
-@api.get('/admin/users')
-@auth(True)
-def users():
-    status = request.args.get('status', '')
-    sort = request.args.get('sort', 'newest')
-
-    date_from = request.args.get('date_from', '')
-    date_to = request.args.get('date_to', '')
-
-    if status not in (
-        '',
-        'normal',
-        'debt',
-        'frozen'
-    ):
-        raise BusinessError(
-            '用户状态筛选无效'
-        )
-
-    if sort not in (
-        'newest',
-        'oldest'
-    ):
-        raise BusinessError(
-            '排序方式无效'
-        )
-
-    if date_from:
-        day(
-            date_from,
-            '开始日期'
-        )
-
-    if date_to:
-        day(
-            date_to,
-            '结束日期'
-        )
-
-    if (
-        date_from
-        and date_to
-        and date_from > date_to
-    ):
-        raise BusinessError(
-            '开始日期不能晚于结束日期'
-        )
-
-    sql = '''
-        SELECT
-            u.id,
-            u.phone,
-            u.nickname,
-            u.role,
-            u.balance_cents,
-            u.avatar,
-            u.active,
-            u.created_at,
-
-            COALESCE(
-                SUM(o.debt_cents),
-                0
-            ) AS debt_cents
-
-        FROM users u
-
-        LEFT JOIN orders o
-            ON o.user_id = u.id
-            AND o.debt_cents > 0
-
-        WHERE u.role='user'
-    '''
-
-    conditions = []
-    params = []
-
-    if date_from:
-        conditions.append(
-            'substr(u.created_at,1,10)>=?'
-        )
-        params.append(date_from)
-
-    if date_to:
-        conditions.append(
-            'substr(u.created_at,1,10)<=?'
-        )
-        params.append(date_to)
-
-    if conditions:
-        sql += (
-            ' AND '
-            + ' AND '.join(conditions)
-        )
-
-    sql += ' GROUP BY u.id'
-
-    rows = [
-        dict(r)
-        for r in get_db().execute(
-            sql,
-            params
-        )
-    ]
-
-    def state(row):
-        if row['debt_cents'] > 0:
-            return 'debt'
-
-        if not row['active']:
-            return 'frozen'
-
-        return 'normal'
-
-    if status:
-        rows = [
-            r
-            for r in rows
-            if state(r) == status
-        ]
-
-    rows.sort(
-        key=lambda r: r['created_at'],
-        reverse=(sort == 'newest')
+        day_value=(datetime.now()-timedelta(days=i)).strftime('%Y-%m-%d')
+        row=db.execute(
+            "SELECT COALESCE(SUM(energy),0) energy,COALESCE(SUM(paid_cents),0) cents,"
+            "COUNT(*) orders FROM orders WHERE status='completed' "
+            "AND substr(ended_at,1,10)=?"+filt,
+            (day_value,*args),
+        ).fetchone()
+        days.append(dict(day=day_value,**dict(row)))
+    active=[quote(r) for r in db.execute(
+        ORDER_SELECT+" WHERE o.status IN ('reserved','charging')"
+        +('' if admin else ' AND o.user_id=?')+' ORDER BY o.id DESC',args
+    )]
+    user_stats={
+        'total':db.execute("SELECT COUNT(*) FROM users WHERE role='user'").fetchone()[0],
+        'active':db.execute("SELECT COUNT(*) FROM users WHERE role='user' AND active=1").fetchone()[0],
+        'new_7d':db.execute(
+            "SELECT COUNT(*) FROM users WHERE role='user' AND created_at>=?",
+            ((datetime.now()-timedelta(days=7)).isoformat(),)
+        ).fetchone()[0],
+    }
+    maintenance_stats={r['status']:r['n'] for r in db.execute(
+        'SELECT status,COUNT(*) n FROM chargers GROUP BY status'
+    )}
+    maintenance_stats['total']=db.execute('SELECT COUNT(*) FROM chargers').fetchone()[0]
+    open_faults=db.execute(
+        "SELECT COUNT(*) FROM fault_records WHERE status IN ('pending','processing')"
+    ).fetchone()[0]
+    return jsonify(
+        totals=totals,
+        counts=counts,
+        days=days,
+        active=active,
+        stations=db.execute('SELECT COUNT(*) FROM stations').fetchone()[0],
+        users=user_stats['total'],
+        open_faults=open_faults,
+        user_stats=user_stats,
+        maintenance_stats=maintenance_stats,
     )
 
+@api.get('/admin/users')
+@permission('user.manage')
+@auth()
+def users():
+    status=request.args.get('status','')
+    sort=request.args.get('sort','newest')
+    date_from=request.args.get('date_from','')
+    date_to=request.args.get('date_to','')
+
+    if status not in ('','normal','debt','frozen'):
+        raise BusinessError('用户状态筛选无效')
+    if sort not in ('newest','oldest'):
+        raise BusinessError('排序方式无效')
+    if date_from:
+        day(date_from,'开始日期')
+    if date_to:
+        day(date_to,'结束日期')
+    if date_from and date_to and date_from>date_to:
+        raise BusinessError('开始日期不能晚于结束日期')
+
+    sql="""SELECT u.*, COALESCE(SUM(o.debt_cents),0) AS debt_cents
+           FROM users u
+           LEFT JOIN orders o ON o.user_id=u.id AND o.debt_cents>0"""
+    conditions=[]
+    params=[]
+    if date_from:
+        conditions.append('substr(u.created_at,1,10)>=?')
+        params.append(date_from)
+    if date_to:
+        conditions.append('substr(u.created_at,1,10)<=?')
+        params.append(date_to)
+    if conditions:
+        sql+=' WHERE '+' AND '.join(conditions)
+    sql+=' GROUP BY u.id ORDER BY u.created_at '+('DESC' if sort=='newest' else 'ASC')
+
+    rows=[]
+    for r in get_db().execute(sql,params):
+        row=dict(r)
+        row['role_name']=get_role_meta(row['role'])['name']
+        row['permissions']=get_permissions(row['role'])
+        row['state']='debt' if row['debt_cents']>0 else ('frozen' if not row['active'] else 'normal')
+        if not status or row['state']==status:
+            rows.append(row)
     return jsonify(rows)
 
+@api.get('/admin/roles')
+@permission('role.manage')
+@auth()
+def roles():
+    db=get_db(); roles=[dict(r) for r in db.execute('SELECT * FROM roles ORDER BY level')]
+    for r in roles:
+        r['permissions']=get_permissions(r['key'])
+    return jsonify(roles=roles,permissions=[dict(r) for r in db.execute('SELECT * FROM permissions ORDER BY module,`key`')])
+
+@api.post('/admin/users/<int:uid>/role')
+@permission('role.manage')
+@auth()
+def user_role_update(uid):
+    role=body().get('role'); db=get_db()
+    if not db.execute('SELECT 1 FROM roles WHERE `key`=?',(role,)).fetchone(): raise BusinessError('角色不存在',404)
+    target=db.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+    if not target: raise BusinessError('用户不存在',404)
+    if uid==g.user['id'] and role!='admin': raise BusinessError('不能取消自己的系统管理员权限',409)
+    with transaction() as tx:
+        tx.execute('UPDATE users SET role=? WHERE id=?',(role,uid)); audit(g.user['id'],f'调整用户 #{uid} 角色为 {get_role_meta(role)["name"]}')
+    return jsonify(ok=True)
+
 @api.post('/admin/users/<int:uid>')
-@auth(True)
+@permission('user.manage')
+@auth()
 def user_update(uid):
     active=body().get('active')
-    if type(active) is not bool: raise BusinessError('用户状态无效')
+    if type(active) is not bool:
+        raise BusinessError('用户状态无效')
+    if uid==g.user['id'] and not active:
+        raise BusinessError('不能冻结当前登录账号',409)
     with transaction() as db:
-        cur=db.execute("UPDATE users SET active=? WHERE id=? AND role='user'",(int(active),uid))
-        if not cur.rowcount: raise BusinessError('用户不存在',404)
+        target=db.execute('SELECT id FROM users WHERE id=?',(uid,)).fetchone()
+        if not target:
+            raise BusinessError('用户不存在',404)
+        db.execute('UPDATE users SET active=? WHERE id=?',(int(active),uid))
         audit(g.user['id'],f'{"启用" if active else "冻结"}用户 #{uid}')
     return jsonify(ok=True)
 
 @api.post('/admin/stations')
 @api.post('/admin/stations/<int:sid>')
-@auth(True)
+@permission('station.manage')
+@auth()
 def station_save(sid=None):
     d=body(); status=d.get('operating_status','operating')
     if status not in ('operating','paused','maintenance'): raise BusinessError('运营状态无效')
@@ -663,7 +667,8 @@ def station_save(sid=None):
     return jsonify(id=sid)
 
 @api.delete('/admin/stations/<int:sid>')
-@auth(True)
+@permission('station.manage')
+@auth()
 def station_delete(sid):
     with transaction() as db:
         if db.execute('SELECT 1 FROM chargers WHERE station_id=?',(sid,)).fetchone(): raise BusinessError('请先处理该站充电桩；有历史订单的设备需保留')
@@ -672,7 +677,8 @@ def station_delete(sid):
     return jsonify(ok=True)
 
 @api.get('/admin/pricing')
-@auth(True)
+@permission('pricing.manage')
+@auth()
 def pricing_list():
     sid=request.args.get('station_id',type=int); db=get_db()
     if sid and not db.execute('SELECT 1 FROM stations WHERE id=?',(sid,)).fetchone(): raise BusinessError('电站不存在',404)
@@ -684,7 +690,8 @@ def pricing_list():
 
 @api.post('/admin/pricing')
 @api.post('/admin/pricing/<int:pid>')
-@auth(True)
+@permission('pricing.manage')
+@auth()
 def pricing_save(pid=None):
     d=body(); sid=d.get('station_id')
     if not isinstance(sid,int): raise BusinessError('电站编号无效')
@@ -708,7 +715,8 @@ def pricing_save(pid=None):
     return jsonify(id=pid)
 
 @api.delete('/admin/pricing/<int:pid>')
-@auth(True)
+@permission('pricing.manage')
+@auth()
 def pricing_delete(pid):
     with transaction() as db:
         row=db.execute('SELECT * FROM pricing_rules WHERE id=?',(pid,)).fetchone()
@@ -720,13 +728,15 @@ def pricing_delete(pid):
     return jsonify(ok=True)
 
 @api.get('/admin/chargers')
-@auth(True)
+@permission('charger.view')
+@auth()
 def chargers():
     return jsonify([dict(r) for r in get_db().execute('SELECT c.*,s.name station_name FROM chargers c JOIN stations s ON s.id=c.station_id ORDER BY c.id')])
 
 @api.post('/admin/chargers')
 @api.post('/admin/chargers/<int:cid>')
-@auth(True)
+@permission('charger.manage')
+@auth()
 def charger_save(cid=None):
     d=body(); kind=d.get('kind')
     if kind not in ('fast','slow'): raise BusinessError('电桩类型无效')
@@ -745,7 +755,8 @@ def charger_save(cid=None):
     return jsonify(id=cid)
 
 @api.post('/admin/chargers/<int:cid>/action')
-@auth(True)
+@permission('charger.manage')
+@auth()
 def charger_action(cid):
     action=body().get('action')
     with transaction() as db:
@@ -770,14 +781,16 @@ def charger_action(cid):
     return jsonify(ok=True)
 
 @api.get('/admin/faults')
-@auth(True)
+@permission('fault.manage')
+@auth()
 def faults():
     return jsonify([dict(r) for r in get_db().execute('''SELECT f.*,c.number charger_number,s.name station_name
         FROM fault_records f JOIN chargers c ON c.id=f.charger_id JOIN stations s ON s.id=c.station_id
         ORDER BY CASE f.status WHEN 'pending' THEN 0 WHEN 'processing' THEN 1 ELSE 2 END,f.id DESC''')])
 
 @api.post('/admin/faults')
-@auth(True)
+@permission('fault.manage')
+@auth()
 def fault_create():
     d=body(); cid=d.get('charger_id')
     if not isinstance(cid,int): raise BusinessError('充电桩编号无效')
@@ -795,7 +808,8 @@ def fault_create():
     return jsonify(id=fid),201
 
 @api.post('/admin/faults/<int:fid>')
-@auth(True)
+@permission('fault.manage')
+@auth()
 def fault_update(fid):
     d=body(); status=d.get('status')
     if status not in ('pending','processing','resolved'): raise BusinessError('故障处理状态无效')
@@ -813,15 +827,19 @@ def fault_update(fid):
     return jsonify(ok=True)
 
 @api.get('/admin/logs')
-@auth(True)
+@permission('log.view')
+@auth()
 def logs():
-    rows = [dict(r) for r in get_db().execute('SELECT * FROM ops_log ORDER BY id DESC LIMIT 100')]
+    rows=[dict(r) for r in get_db().execute(
+        'SELECT * FROM ops_log ORDER BY id DESC LIMIT 100'
+    )]
     for row in rows:
-        row['operation_display'] = operation_display(row['operation'])
+        row['operation_display']=operation_display(row['operation'])
     return jsonify(rows)
 
 @api.get('/admin/prediction')
-@auth(True)
+@permission('prediction.view')
+@auth()
 def prediction():
     sid=request.args.get('station_id',1,type=int); db=get_db()
     if not db.execute('SELECT 1 FROM stations WHERE id=?',(sid,)).fetchone(): raise BusinessError('电站不存在',404)
@@ -837,16 +855,51 @@ def prediction():
     return jsonify(points=points,sample_count=len(rows),method='近 28 天同小时订单电量均值；按装机功率估算空闲数，仅供课程演示')
 
 @api.get('/admin/export')
-@auth(True)
+@permission('order.export')
+@auth()
 def export():
-    out=io.StringIO(); writer=csv.writer(out)
-    writer.writerow([translate(label) for label in ['订单号','用户编号','电站','电桩','状态','电量(kWh)','金额(元)','已付(元)','欠费(元)','开始时间','结束时间']])
+    date_from=request.args.get('date_from','')
+    date_to=request.args.get('date_to','')
+    if date_from:
+        day(date_from,'开始日期')
+    if date_to:
+        day(date_to,'结束日期')
+    if date_from and date_to and date_from>date_to:
+        raise BusinessError('开始日期不能晚于结束日期')
+
+    where=[]
+    params=[]
+    if date_from:
+        where.append('substr(o.created_at,1,10)>=?')
+        params.append(date_from)
+    if date_to:
+        where.append('substr(o.created_at,1,10)<=?')
+        params.append(date_to)
+    sql=ORDER_SELECT
+    if where:
+        sql+=' WHERE '+' AND '.join(where)
+    sql+=' ORDER BY o.id DESC'
+
+    out=io.StringIO()
+    writer=csv.writer(out)
+    writer.writerow([translate(label) for label in [
+        '订单号','用户编号','电站','电桩','状态','电量(kWh)','金额(元)',
+        '已付(元)','欠费(元)','开始时间','结束时间'
+    ]])
     def safe(v):
         s=str(v or '')
         return "'"+s if s[:1] in ('=','+','-','@','\t','\r') else s
-    for r in get_db().execute(ORDER_SELECT+' ORDER BY o.id DESC'):
-        writer.writerow([r['id'],r['user_id'],safe(r['station_name']),safe(r['charger_number']),r['status'],r['energy'],r['amount_cents']/100,r['paid_cents']/100,r['debt_cents']/100,r['started_at'],r['ended_at']])
-    return Response('\ufeff'+out.getvalue(),mimetype='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename=ncs-orders.csv'})
+    for r in get_db().execute(sql,params):
+        writer.writerow([
+            r['id'],r['user_id'],safe(r['station_name']),safe(r['charger_number']),
+            r['status'],r['energy'],r['amount_cents']/100,r['paid_cents']/100,
+            r['debt_cents']/100,r['started_at'],r['ended_at']
+        ])
+    return Response(
+        '\ufeff'+out.getvalue(),
+        mimetype='text/csv; charset=utf-8',
+        headers={'Content-Disposition':'attachment; filename=ncs-orders.csv'}
+    )
 
 
 @api.get('/profile/avatar')

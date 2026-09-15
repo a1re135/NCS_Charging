@@ -16,6 +16,14 @@ CREATE TABLE IF NOT EXISTS users(
  password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user',
  balance_cents INTEGER NOT NULL DEFAULT 0 CHECK(balance_cents>=0),
  avatar TEXT NOT NULL DEFAULT 'lavender', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS roles(
+ key TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, level INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS permissions(
+ key TEXT PRIMARY KEY, name TEXT NOT NULL, module TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS role_permissions(
+ role_key TEXT NOT NULL REFERENCES roles(key) ON DELETE CASCADE,
+ permission_key TEXT NOT NULL REFERENCES permissions(key) ON DELETE CASCADE,
+ PRIMARY KEY(role_key,permission_key));
 CREATE TABLE IF NOT EXISTS stations(
  id INTEGER PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL,
  city TEXT NOT NULL DEFAULT '北京市', business_hours TEXT NOT NULL DEFAULT '00:00-24:00',
@@ -212,6 +220,105 @@ def migrate_db(db):
             db.execute('''INSERT INTO fault_records(charger_id,fault_type,description,status,reported_at)
                           VALUES(?,?,'由旧版设备故障状态自动迁移','pending',?)''', (c['id'], '设备异常', now()))
 
+
+ROLE_DEFINITIONS = [
+    ('user','普通用户','查询、充电、订单与个人账户',1),
+    ('operator','运营人员','电站、订单、价格与运营数据',20),
+    ('technician','运维人员','设备状态与故障处理',30),
+    ('admin','系统管理员','全局用户、角色与系统管理',99),
+]
+
+PERMISSION_DEFINITIONS = [
+    ('station.view','查看充电站','电站'),
+    ('station.manage','管理充电站','电站'),
+    ('charger.view','查看充电桩','设备'),
+    ('charger.manage','管理充电桩','设备'),
+    ('order.view_all','查看全部订单','订单'),
+    ('order.export','导出订单','订单'),
+    ('pricing.manage','管理价格','价格'),
+    ('fault.manage','处理设备故障','故障'),
+    ('analytics.view','查看运营数据','分析'),
+    ('prediction.view','查看负荷预测','分析'),
+    ('user.manage','管理用户','用户'),
+    ('role.manage','管理角色与权限','权限'),
+    ('log.view','查看操作日志','审计'),
+]
+
+ROLE_PERMISSION_KEYS = {
+    'user': {'station.view'},
+    'operator': {
+        'station.view','station.manage','charger.view','order.view_all',
+        'order.export','pricing.manage','analytics.view','prediction.view'
+    },
+    'technician': {'station.view','charger.view','charger.manage','fault.manage'},
+    'admin': {k for k,_,_ in PERMISSION_DEFINITIONS},
+}
+
+def _ensure_rbac_schema(db, backend):
+    if backend == 'mysql':
+        statements = [
+            """CREATE TABLE IF NOT EXISTS roles(
+                `key` VARCHAR(64) NOT NULL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                description VARCHAR(255) NOT NULL,
+                level INT NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+            """CREATE TABLE IF NOT EXISTS permissions(
+                `key` VARCHAR(64) NOT NULL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                module VARCHAR(100) NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+            """CREATE TABLE IF NOT EXISTS role_permissions(
+                role_key VARCHAR(64) NOT NULL,
+                permission_key VARCHAR(64) NOT NULL,
+                PRIMARY KEY(role_key, permission_key),
+                CONSTRAINT fk_role_permission_role
+                    FOREIGN KEY(role_key) REFERENCES roles(`key`) ON DELETE CASCADE,
+                CONSTRAINT fk_role_permission_permission
+                    FOREIGN KEY(permission_key) REFERENCES permissions(`key`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"""
+        ]
+        for statement in statements:
+            db.execute(statement)
+    # SQLite tables are already part of SCHEMA.
+
+def _ensure_rbac(db):
+    for key,name,description,level in ROLE_DEFINITIONS:
+        db.execute(
+            'INSERT OR IGNORE INTO roles(`key`,name,description,level) VALUES(?,?,?,?)',
+            (key,name,description,level)
+        )
+    for key,name,module in PERMISSION_DEFINITIONS:
+        db.execute(
+            'INSERT OR IGNORE INTO permissions(`key`,name,module) VALUES(?,?,?)',
+            (key,name,module)
+        )
+    for role, keys in ROLE_PERMISSION_KEYS.items():
+        db.execute('DELETE FROM role_permissions WHERE role_key=?',(role,))
+        for key in sorted(keys):
+            db.execute(
+                'INSERT OR IGNORE INTO role_permissions(role_key,permission_key) VALUES(?,?)',
+                (role,key)
+            )
+
+    demos = [
+        ('operator','运营演示','operator','Operator123456'),
+        ('tech','运维演示','technician','Tech123456'),
+    ]
+    for account,nickname,role,password in demos:
+        row=db.execute('SELECT id FROM users WHERE phone=?',(account,)).fetchone()
+        if row:
+            db.execute('UPDATE users SET role=? WHERE id=?',(role,row['id']))
+        else:
+            db.execute(
+                'INSERT INTO users(phone,nickname,password_hash,role,balance_cents,created_at) '
+                'VALUES(?,?,?,?,?,?)',
+                (account,nickname,generate_password_hash(password),role,0,now())
+            )
+
+    db.execute("UPDATE users SET role='admin' WHERE phone='admin'")
+
+
 def init_db():
     backend = current_app.config.get("DB_BACKEND", "mysql")
 
@@ -240,6 +347,7 @@ def init_db():
         migrate_db(db)
     from .preferences import SQLITE_SCHEMA as PREF_SQLITE, MYSQL_SCHEMA as PREF_MYSQL
     db.execute(PREF_MYSQL if backend == 'mysql' else PREF_SQLITE)
+    _ensure_rbac_schema(db, backend)
 
     count = db.execute(
         "SELECT COUNT(*) AS count FROM users"
@@ -250,6 +358,7 @@ def init_db():
     init_avatars(db, backend)
     if count["count"] > 0:
         expand_network(db, backend)
+        _ensure_rbac(db)
         return
 
     if backend == "mysql":
@@ -361,3 +470,4 @@ def init_db():
         db.rollback(); raise
 
     expand_network(db, backend)
+    _ensure_rbac(db)

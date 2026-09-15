@@ -78,6 +78,33 @@ const names = new Proxy(
   },
 );
 
+
+const paymentNames = {
+  "待结算": "待结算",
+  "已支付": "已支付",
+  "待补缴": "待补缴",
+  "部分支付": "部分支付",
+  "支付失败": "支付失败",
+  "无需支付": "无需支付",
+};
+
+const roleNames = {
+  user: "普通用户",
+  operator: "运营人员",
+  technician: "运维人员",
+  admin: "系统管理员",
+};
+
+const can = (permission) =>
+  S.user?.role === "admin" ||
+  (S.user?.permissions || []).includes(permission);
+
+const paymentBadge = (status) =>
+  `<span class="pay-badge ${esc(String(status || "").replaceAll(" ", "-"))}">
+    <i class="dot"></i>
+    ${esc(paymentNames[status] || status || "—")}
+  </span>`;
+
 const paths = {
   home: "M3 10 12 3l9 7v10H3z M9 20v-7h6v7",
   pin: "M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z M15 10a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
@@ -569,6 +596,26 @@ function loginView(
               admin /
               Admin123456
             </button>
+
+            <br>
+
+            <button
+              data-action="demo-operator"
+            >
+              运营：
+              operator /
+              Operator123456
+            </button>
+
+            <br>
+
+            <button
+              data-action="demo-tech"
+            >
+              运维：
+              tech /
+              Tech123456
+            </button>
           </div>
 
           <p class="footer-note">
@@ -615,69 +662,50 @@ const userNav = [
   ],
 ];
 
-const adminNav = [
-  [
-    "dashboard",
-    "home",
-    "运营总览",
-  ],
-  [
-    "stations",
-    "pin",
-    "电站管理",
-  ],
-  [
-    "chargers",
-    "bolt",
-    "电桩管理",
-  ],
-  [
-    "pricing",
-    "wallet",
-    "价格管理",
-  ],
-  [
-    "faults",
-    "help",
-    "故障管理",
-  ],
-  [
-    "users",
-    "user",
-    "用户管理",
-  ],
-  [
-    "orders",
-    "orders",
-    "订单管理",
-  ],
-  [
-    "revenue",
-    "chart",
-    "营收统计",
-  ],
-  [
-    "prediction",
-    "chart",
-    "负荷预测",
-  ],
-  [
-    "logs",
-    "orders",
-    "操作日志",
-  ],
-  [
-    "settings",
-    "grid",
-    "偏好设置",
-  ],
+const roleNav = [
+  ["dashboard", "home", "运营总览", null],
+  ["stations", "pin", "电站管理", "station.view"],
+  ["chargers", "bolt", "电桩管理", "charger.view"],
+  ["pricing", "wallet", "价格管理", "pricing.manage"],
+  ["faults", "help", "故障管理", "fault.manage"],
+  ["users", "user", "用户管理", "user.manage"],
+  ["orders", "orders", "订单管理", "order.view_all"],
+  ["revenue", "chart", "营收统计", "analytics.view"],
+  ["prediction", "chart", "负荷预测", "prediction.view"],
+  ["roles", "grid", "角色与权限", "role.manage"],
+  ["logs", "orders", "操作日志", "log.view"],
+  ["settings", "grid", "偏好设置", null],
 ];
 
+function currentNav() {
+  if (S.user.role === "user") {
+    return userNav;
+  }
+
+  return roleNav
+    .filter(([, , , permission]) =>
+      !permission || can(permission),
+    )
+    .map((item) => {
+      const copy = [...item];
+
+      if (S.user.role === "technician" && copy[0] === "dashboard") {
+        copy[2] = "运维总览";
+      }
+      if (S.user.role === "technician" && copy[0] === "stations") {
+        copy[2] = "电站运维";
+      }
+      if (S.user.role === "technician" && copy[0] === "chargers") {
+        copy[2] = "设备运维";
+      }
+
+      return copy;
+    });
+}
+
 function shell() {
-  const nav =
-    S.user.role === "admin"
-      ? adminNav
-      : userNav;
+  const nav = currentNav();
+  const ops = S.user.role !== "user";
 
   $("#app").innerHTML =
     trHtml`
@@ -757,16 +785,11 @@ function shell() {
                     margin-top:4px
                   "
                 >
-                  ${
-                    S.user.role ===
-                    "admin"
-                      ? tr(
-                          "运营管理员",
-                        )
-                      : tr(
-                          "NCS 绿色出行伙伴",
-                        )
-                  }
+                  ${esc(
+                    S.user.role_name ||
+                      roleNames[S.user.role] ||
+                      S.user.role,
+                  )}
                 </small>
               </span>
 
@@ -821,8 +844,7 @@ function shell() {
 
               <p class="sub">
                 ${
-                  S.user.role ===
-                  "admin"
+                  ops
                     ? tr(
                         "从每一度电，看见城市的绿色未来。",
                       )
@@ -836,6 +858,19 @@ function shell() {
             <div class="top-right">
 
               ${preferenceControls()}
+
+              ${
+                ops
+                  ? `<span class="role-chip">
+                       ${ic("grid")}
+                       ${esc(
+                         S.user.role_name ||
+                           roleNames[S.user.role] ||
+                           S.user.role,
+                       )}
+                     </span>`
+                  : ""
+              }
 
               <span class="date-pill">
                 ${new Date()
@@ -1137,14 +1172,11 @@ function stationCard(s) {
         </div>
 
         ${btn(
-          S.user.role ===
-          "admin"
-            ? tr(
-                "管理电站",
-              )
-            : tr(
-                "查看电站",
-              ),
+          can("station.manage")
+            ? tr("管理电站")
+            : S.user.role === "technician"
+              ? tr("进入运维")
+              : tr("查看电站"),
 
           "station",
 
@@ -1177,9 +1209,60 @@ async function dashboard() {
   S.stations = s;
   S.orders = o;
 
+  if (S.user.role === "technician") {
+    const m = d.maintenance_stats || d.counts || {};
+
+    return trHtml`
+      <div class="stack">
+        <section class="hero">
+          <div class="hero-text">
+            <div class="eyebrow">MAINTENANCE CONTROL</div>
+            <h2>让每一台设备，<br>都保持在最佳状态。</h2>
+            <p>
+              统一查看电站健康度、设备状态与异常情况，<br>
+              直接从电站进入设备运维。
+            </p>
+            ${pageBtn(
+              "stations",
+              tr("进入电站运维") + " " + ic("arrow"),
+              "",
+            )}
+          </div>
+          <div class="hero-badge">
+            ${m.total || 0}
+            <br>
+            <small>设备</small>
+          </div>
+        </section>
+
+        <div class="metric-grid">
+          ${metric("pin", tr("管理电站"), d.stations, tr("座"))}
+          ${metric("bolt", tr("设备总数"), m.total || 0, tr("台"))}
+          ${metric("grid", tr("故障设备"), m.fault || 0, tr("台"))}
+          ${metric(
+            "bolt",
+            tr("运行中"),
+            (m.charging || 0) + (m.reserved || 0),
+            tr("台"),
+          )}
+        </div>
+
+        <section class="card">
+          <div class="section-head">
+            <h2>运维工作台</h2>
+            <small>授权操作</small>
+          </div>
+          <div class="actions" style="margin-top:18px">
+            ${pageBtn("stations", tr("查看全部电站"), "secondary")}
+            ${pageBtn("chargers", tr("查看全部设备"), "secondary")}
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
   const a =
-      S.user.role ===
-      "admin",
+      can("analytics.view"),
 
     total =
       Object.values(
@@ -1817,8 +1900,7 @@ async function stationsPage() {
       )}
 
       ${
-        S.user.role ===
-        "admin"
+        can("station.manage")
           ? btn(
               tr(
                 "＋ 添加电站",
@@ -1932,9 +2014,8 @@ async function loadStations() {
 function stationChargersTable(
   chargers,
 ) {
-  const admin =
-    S.user.role ===
-    "admin";
+  const canEdit =
+    can("charger.manage");
 
   return table(
     [
@@ -1946,92 +2027,75 @@ function stationChargersTable(
     ],
 
     chargers.map(
-      (c) =>
-        `<tr>
+      (c) => {
+        let actions;
 
+        if (
+          canEdit &&
+          ![
+            "charging",
+            "reserved",
+          ].includes(c.status)
+        ) {
+          actions =
+            btn(
+              tr("二维码"),
+              "qr",
+              "secondary small",
+              `data-id="${c.id}"`,
+            ) +
+            btn(
+              c.status === "idle"
+                ? tr("故障")
+                : tr("恢复"),
+              "charger-action",
+              "secondary small",
+              `data-id="${c.id}" data-op="${
+                c.status === "idle"
+                  ? "fault"
+                  : "restore"
+              }"`,
+            ) +
+            btn(
+              tr("重启"),
+              "charger-action",
+              "secondary small",
+              `data-id="${c.id}" data-op="restart"`,
+            );
+        } else if (
+          S.user.role === "user" &&
+          c.status === "idle" &&
+          S.detail?.operating_status === "operating"
+        ) {
+          actions =
+            btn(
+              tr("预约"),
+              "reserve",
+              "secondary small",
+              `data-id="${c.id}"`,
+            ) +
+            btn(
+              tr("开始充电"),
+              "start-charge",
+              "small",
+              `data-id="${c.id}"`,
+            );
+        } else {
+          actions =
+            `<small>${tr("仅查看")}</small>`;
+        }
+
+        return `<tr>
+          <td><b>${esc(c.number)}</b></td>
           <td>
-            <b>
-              ${esc(
-                c.number,
-              )}
-            </b>
+            ${c.kind === "fast" ? tr("快充") : tr("慢充")}
+            / ${c.power} kW
           </td>
-
-          <td>
-            ${
-              c.kind ===
-              "fast"
-                ? tr(
-                    "快充",
-                  )
-                : tr(
-                    "慢充",
-                  )
-            }
-
-            /
-            ${c.power}
-            kW
-          </td>
-
-          <td>
-            ${badge(
-              c.status,
-            )}
-          </td>
-
-          <td>
-            ${c.total_count}
-            ${tr("次")}
-          </td>
-
-          <td>
-            ${
-              admin
-                ? btn(
-                    tr(
-                      "二维码",
-                    ),
-                    "qr",
-                    "secondary small",
-                    `data-id="${c.id}"`,
-                  ) +
-                  pageBtn(
-                    "chargers",
-                    tr(
-                      "设备管理",
-                    ),
-                    "secondary small",
-                  )
-                : c.status ===
-                      "idle" &&
-                    S.detail
-                      ?.operating_status ===
-                      "operating"
-                  ? btn(
-                      tr(
-                        "预约",
-                      ),
-                      "reserve",
-                      "secondary small",
-                      `data-id="${c.id}"`,
-                    ) +
-                    btn(
-                      tr(
-                        "开始充电",
-                      ),
-                      "start-charge",
-                      "small",
-                      `data-id="${c.id}"`,
-                    )
-                  : `<small>
-                       ${tr(
-                         "暂不可选",
-                       )}
-                     </small>`
-            }
-          </td>
-        </tr>`,
+          <td>${badge(c.status)}</td>
+          <td>${c.total_count} ${tr("次")}</td>
+          <td>${actions}</td>
+        </tr>`;
+      },
     ),
   );
 }
@@ -2120,8 +2184,7 @@ async function stationDetail(
   };
 
   const a =
-    S.user.role ===
-    "admin";
+    can("station.manage");
 
   const info =
     `<div class="info-grid">
@@ -2582,8 +2645,7 @@ function ordersTable(os) {
       tr("订单号"),
 
       ...(
-        S.user.role ===
-        "admin"
+        can("order.view_all")
           ? [
               tr("用户"),
             ]
@@ -2592,6 +2654,7 @@ function ordersTable(os) {
 
       tr("电站 / 电桩"),
       tr("状态"),
+      tr("支付状态"),
       tr("电量"),
       tr("金额"),
       tr("创建时间"),
@@ -2615,8 +2678,7 @@ function ordersTable(os) {
           </td>
 
           ${
-            S.user.role ===
-            "admin"
+            can("order.view_all")
               ? `<td>
                    ${esc(
                      o.nickname,
@@ -2639,6 +2701,12 @@ function ordersTable(os) {
 
           <td>
             ${badge(o.status)}
+          </td>
+
+          <td>
+            ${paymentBadge(
+              o.payment_status,
+            )}
           </td>
 
           <td>
@@ -2788,8 +2856,7 @@ async function ordersPage() {
       )}
 
       ${
-        S.user.role ===
-        "admin"
+        can("order.export")
           ? trHtml`
               <a
                 class="btn secondary"
@@ -3224,6 +3291,24 @@ async function receipt(id) {
 
     trHtml`
       ${badge(o.status)}
+
+      <div class="payment-highlight">
+        ${paymentBadge(
+          o.payment_status,
+        )}
+
+        <span>
+          ${
+            o.payment_status ===
+            "已支付"
+              ? tr("余额自动扣款成功")
+              : o.payment_status ===
+                  "待补缴"
+                ? tr("余额不足，待充值补缴")
+                : tr("结算状态已记录")
+          }
+        </span>
+      </div>
 
       <div class="receipt-grid">
 
@@ -3662,6 +3747,9 @@ function profilePage() {
 }
 
 function chargersTable(cs) {
+  const canEdit =
+    can("charger.manage");
+
   return table(
     [
       tr("编号"),
@@ -3673,130 +3761,88 @@ function chargersTable(cs) {
     ],
 
     cs.map(
-      (c) =>
-        `<tr>
+      (c) => {
+        let actions =
+          `<small>${tr("仅查看")}</small>`;
 
+        if (
+          canEdit &&
+          ![
+            "charging",
+            "reserved",
+          ].includes(c.status)
+        ) {
+          actions =
+            btn(
+              tr("二维码"),
+              "qr",
+              "secondary small",
+              `data-id="${c.id}"`,
+            ) +
+            btn(
+              tr("编辑"),
+              "edit-charger",
+              "secondary small",
+              `data-id="${c.id}"`,
+            ) +
+            btn(
+              c.status === "idle"
+                ? tr("故障")
+                : tr("恢复"),
+              "charger-action",
+              "secondary small",
+              `data-id="${c.id}" data-op="${
+                c.status === "idle"
+                  ? "fault"
+                  : "restore"
+              }"`,
+            ) +
+            btn(
+              tr("离线"),
+              "charger-action",
+              "secondary small",
+              `data-id="${c.id}" data-op="offline"`,
+            ) +
+            btn(
+              tr("维修"),
+              "charger-action",
+              "secondary small",
+              `data-id="${c.id}" data-op="maintenance"`,
+            ) +
+            btn(
+              tr("重启"),
+              "charger-action",
+              "secondary small",
+              `data-id="${c.id}" data-op="restart"`,
+            ) +
+            btn(
+              tr("删除"),
+              "charger-action",
+              "danger small",
+              `data-id="${c.id}" data-op="delete"`,
+            );
+        } else if (
+          [
+            "charging",
+            "reserved",
+          ].includes(c.status)
+        ) {
+          actions =
+            `<small>${tr("订单处理中")}</small>`;
+        }
+
+        return `<tr>
+          <td><b>${esc(c.number)}</b></td>
+          <td>${esc(c.station_name)}</td>
           <td>
-            <b>
-              ${esc(
-                c.number,
-              )}
-            </b>
+            ${c.kind === "fast" ? tr("快充") : tr("慢充")}
+            / ${c.power} kW
           </td>
-
-          <td>
-            ${esc(
-              c.station_name,
-            )}
-          </td>
-
-          <td>
-            ${
-              c.kind ===
-              "fast"
-                ? tr(
-                    "快充",
-                  )
-                : tr(
-                    "慢充",
-                  )
-            }
-            /
-            ${c.power}
-            kW
-          </td>
-
-          <td>
-            ${badge(
-              c.status,
-            )}
-          </td>
-
-          <td>
-            ${c.total_count}
-          </td>
-
-          <td>
-            ${
-              ![
-                "charging",
-                "reserved",
-              ].includes(
-                c.status,
-              )
-                ? btn(
-                    tr(
-                      "二维码",
-                    ),
-                    "qr",
-                    "secondary small",
-                    `data-id="${c.id}"`,
-                  ) +
-                  btn(
-                    tr(
-                      "编辑",
-                    ),
-                    "edit-charger",
-                    "secondary small",
-                    `data-id="${c.id}"`,
-                  ) +
-                  btn(
-                    c.status ===
-                    "fault"
-                      ? tr(
-                          "恢复",
-                        )
-                      : tr(
-                          "故障",
-                        ),
-                    "charger-action",
-                    "secondary small",
-                    `data-id="${c.id}" data-op="${
-                      c.status ===
-                      "fault"
-                        ? "restore"
-                        : "fault"
-                    }"`,
-                  ) +
-                  btn(
-                    tr(
-                      "离线",
-                    ),
-                    "charger-action",
-                    "secondary small",
-                    `data-id="${c.id}" data-op="offline"`,
-                  ) +
-                  btn(
-                    tr(
-                      "维修",
-                    ),
-                    "charger-action",
-                    "secondary small",
-                    `data-id="${c.id}" data-op="maintenance"`,
-                  ) +
-                  btn(
-                    tr(
-                      "重启",
-                    ),
-                    "charger-action",
-                    "secondary small",
-                    `data-id="${c.id}" data-op="restart"`,
-                  ) +
-                  btn(
-                    tr(
-                      "删除",
-                    ),
-                    "charger-action",
-                    "danger small",
-                    `data-id="${c.id}" data-op="delete"`,
-                  )
-                : tr(
-                    "<small>订单处理中</small>",
-                  )
-            }
-          </td>
-
-        </tr>`,
+          <td>${badge(c.status)}</td>
+          <td>${c.total_count}</td>
+          <td>${actions}</td>
+        </tr>`;
+      },
     ),
   );
 }
@@ -3915,13 +3961,17 @@ async function chargersPage() {
         </option>
       </select>
 
-      ${btn(
-        tr(
-          "＋ 添加电桩",
-        ),
-        "edit-charger",
-        "",
-      )}
+      ${
+        can("charger.manage")
+          ? btn(
+              tr(
+                "＋ 添加电桩",
+              ),
+              "edit-charger",
+              "",
+            )
+          : ""
+      }
 
     </div>
 
@@ -4282,6 +4332,7 @@ function usersTable(users) {
     [
       tr("用户"),
       tr("手机号"),
+      tr("角色"),
       tr("余额"),
       tr("欠费"),
       tr("状态"),
@@ -4292,69 +4343,50 @@ function usersTable(users) {
     users.map(
       (u) =>
         `<tr>
-
-          <td>
-            ${esc(
-              u.nickname,
-            )}
-          </td>
-
-          <td>
-            ${esc(
-              u.phone,
-            )}
-          </td>
-
-          <td>
-            ¥
-            ${yuan(
-              u.balance_cents,
-            )}
-          </td>
-
+          <td>${esc(u.nickname)}</td>
+          <td>${esc(u.phone)}</td>
           <td>
             ${
-              Number(
-                u.debt_cents,
-              ) > 0
-                ? "¥ " +
-                  yuan(
-                    u.debt_cents,
-                  )
+              can("role.manage")
+                ? `<select class="role-select" data-user-id="${u.id}">
+                     ${opt("user", tr("普通用户"), u.role)}
+                     ${opt("operator", tr("运营人员"), u.role)}
+                     ${opt("technician", tr("运维人员"), u.role)}
+                     ${opt("admin", tr("系统管理员"), u.role)}
+                   </select>`
+                : `<span class="role-chip compact">
+                     ${esc(
+                       u.role_name ||
+                         roleNames[u.role] ||
+                         u.role,
+                     )}
+                   </span>`
+            }
+          </td>
+          <td>¥ ${yuan(u.balance_cents)}</td>
+          <td>
+            ${
+              Number(u.debt_cents) > 0
+                ? "¥ " + yuan(u.debt_cents)
                 : "—"
             }
           </td>
-
+          <td>${userBadge(u)}</td>
+          <td>${time(u.created_at)}</td>
           <td>
-            ${userBadge(u)}
-          </td>
-
-          <td>
-            ${time(
-              u.created_at,
-            )}
-          </td>
-
-          <td>
-            ${btn(
-              u.active
-                ? tr(
-                    "冻结",
+            ${
+              can("user.manage")
+                ? btn(
+                    u.active ? tr("冻结") : tr("启用"),
+                    "user-toggle",
+                    u.active
+                      ? "danger small"
+                      : "secondary small",
+                    `data-id="${u.id}" data-active="${!u.active}"`,
                   )
-                : tr(
-                    "启用",
-                  ),
-
-              "user-toggle",
-
-              u.active
-                ? "danger small"
-                : "secondary small",
-
-              `data-id="${u.id}" data-active="${!u.active}"`,
-            )}
+                : `<small>${tr("仅查看")}</small>`
+            }
           </td>
-
         </tr>`,
     ),
   );
@@ -4371,133 +4403,89 @@ async function usersPage() {
   await loadUsers();
 
   return trHtml`
-    <div class="toolbar">
+    <div class="stack">
+      <section class="card role-banner">
+        <div>
+          <div class="eyebrow">RBAC · ACCESS CONTROL</div>
+          <h2>四种角色统一管理</h2>
+          <p class="sub">
+            权限在服务端强制校验，页面只展示当前角色可用的功能。
+          </p>
+        </div>
 
-      <select id="user-status">
-        <option value="">
-          ${tr(
-            "全部状态",
-          )}
-        </option>
+        ${
+          can("role.manage")
+            ? pageBtn(
+                "roles",
+                tr("查看权限矩阵"),
+                "secondary",
+              )
+            : ""
+        }
+      </section>
 
-        ${opt(
-          "normal",
-          tr("正常"),
-        )}
+      <div class="toolbar">
+        <select id="user-status">
+          <option value="">${tr("全部状态")}</option>
+          ${opt("normal", tr("正常"))}
+          ${opt("debt", tr("欠费"))}
+          ${opt("frozen", tr("冻结"))}
+        </select>
 
-        ${opt(
-          "debt",
-          tr("欠费"),
-        )}
-
-        ${opt(
-          "frozen",
-          tr("冻结"),
-        )}
-      </select>
-
-      <input
-        type="date"
-        id="user-from"
-        title="${tr(
-          "开始日期",
-        )}"
-      >
-
-      <span class="muted">
-        ${tr("至")}
-      </span>
-
-      <input
-        type="date"
-        id="user-to"
-        title="${tr(
-          "结束日期",
-        )}"
-      >
-
-      ${btn(
-        tr(
-          "近 30 天",
-        ),
-        "user-range",
-        "secondary small",
-        'data-days="30"',
-      )}
-
-      ${btn(
-        tr("全部"),
-        "user-range",
-        "secondary small",
-        'data-days="0"',
-      )}
-
-      <select id="user-sort">
-
-        <option value="newest">
-          ${tr(
-            "最新注册",
-          )}
-        </option>
-
-        <option value="oldest">
-          ${tr(
-            "最早注册",
-          )}
-        </option>
-
-      </select>
-    </div>
-
-    <p
-      class="sub"
-      id="user-filter-info"
-      style="
-        margin:
-          -8px
-          0
-          20px
-      "
-    >
-      ${tr(
-        "按用户状态和注册日期筛选",
-      )}
-    </p>
-
-    <div class="card">
-
-      <div class="section-head">
-
-        <h2>
-          ${tr(
-            "注册用户",
-          )}
-        </h2>
-
-        <small
-          id="users-count"
+        <input
+          type="date"
+          id="user-from"
+          title="${tr("开始日期")}"
         >
-          ${
-            (
-              S.users ||
-              []
-            ).length
-          }
 
-          ${tr(
-            "位用户",
-          )}
-        </small>
+        <span class="muted">${tr("至")}</span>
 
-      </div>
+        <input
+          type="date"
+          id="user-to"
+          title="${tr("结束日期")}"
+        >
 
-      <div id="users-table">
-        ${usersTable(
-          S.users ||
-            [],
+        ${btn(
+          tr("近 30 天"),
+          "user-range",
+          "secondary small",
+          'data-days="30"',
         )}
+
+        ${btn(
+          tr("全部"),
+          "user-range",
+          "secondary small",
+          'data-days="0"',
+        )}
+
+        <select id="user-sort">
+          <option value="newest">${tr("最新注册")}</option>
+          <option value="oldest">${tr("最早注册")}</option>
+        </select>
       </div>
 
+      <p
+        class="sub"
+        id="user-filter-info"
+        style="margin:-8px 0 20px"
+      >
+        ${tr("按用户状态和注册日期筛选")}
+      </p>
+
+      <div class="card">
+        <div class="section-head">
+          <h2>${tr("账号与角色")}</h2>
+          <small id="users-count">
+            ${(S.users || []).length} ${tr("个账号")}
+          </small>
+        </div>
+
+        <div id="users-table">
+          ${usersTable(S.users || [])}
+        </div>
+      </div>
     </div>
   `;
 }
@@ -4570,7 +4558,7 @@ async function loadUsers() {
   if (count) {
     count.textContent =
       `${users.length} ${tr(
-        "位用户",
+        "个账号",
       )}`;
   }
 
@@ -4582,9 +4570,77 @@ async function loadUsers() {
       `${tr(
         "筛选结果",
       )}：${users.length} ${tr(
-        "位用户",
+        "个账号",
       )}`;
   }
+}
+
+async function rolesPage() {
+  const data =
+    await api(
+      "/admin/roles",
+    );
+
+  const permissionMap =
+    Object.fromEntries(
+      data.permissions.map(
+        (p) => [
+          p.key,
+          p,
+        ],
+      ),
+    );
+
+  return trHtml`
+    <div class="stack">
+      <section class="card role-banner">
+        <div>
+          <div class="eyebrow">RBAC · PERMISSIONS</div>
+          <h2>${tr("角色与权限")}</h2>
+          <p class="sub">
+            后端按权限强制校验；这里显示四种业务角色的权限矩阵。
+          </p>
+        </div>
+      </section>
+
+      ${data.roles
+        .map(
+          (role) =>
+            `<section class="card">
+              <div class="section-head">
+                <div>
+                  <h3>${esc(role.name)}</h3>
+                  <p class="sub">
+                    ${esc(role.description)}
+                  </p>
+                </div>
+
+                <span class="role-chip">
+                  ${esc(role.key)}
+                </span>
+              </div>
+
+              <div class="permission-cloud">
+                ${(role.permissions || [])
+                  .map(
+                    (key) =>
+                      `<span class="permission-pill">
+                        ${esc(
+                          permissionMap[key]?.name ||
+                            key,
+                        )}
+                        <small class="role-code">
+                          ${esc(key)}
+                        </small>
+                      </span>`,
+                  )
+                  .join("")}
+              </div>
+            </section>`,
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 async function revenuePage() {
@@ -4968,6 +5024,8 @@ const renderers = {
     faultsPage,
   users:
     usersPage,
+  roles:
+    rolesPage,
   revenue:
     revenuePage,
   prediction:
@@ -6110,6 +6168,26 @@ async function act(
           "Admin123456";
       break;
 
+    case "demo-operator":
+      $("#f-phone")
+        .value =
+          "operator";
+
+      $("#f-password")
+        .value =
+          "Operator123456";
+      break;
+
+    case "demo-tech":
+      $("#f-phone")
+        .value =
+          "tech";
+
+      $("#f-password")
+        .value =
+          "Tech123456";
+      break;
+
     case "logout":
       await api(
         "/logout",
@@ -6449,7 +6527,12 @@ async function act(
         );
 
         await go(
-          "chargers",
+          S.page === "station"
+            ? "station"
+            : "chargers",
+          S.page === "station"
+            ? S.pageId
+            : undefined,
         );
 
         toast(
@@ -7690,6 +7773,37 @@ document.addEventListener(
           e.target.value;
 
         await loadUsers();
+      }
+
+      if (
+        e.target.classList
+          .contains(
+            "role-select",
+          )
+      ) {
+        await api(
+          "/admin/users/" +
+            e.target.dataset
+              .userId +
+            "/role",
+          "POST",
+          {
+            role:
+              e.target.value,
+          },
+        );
+
+        await refresh();
+
+        await go(
+          "users",
+        );
+
+        toast(
+          tr(
+            "角色已更新，新的权限立即生效",
+          ),
+        );
       }
 
       if (
