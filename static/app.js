@@ -42,6 +42,9 @@ const S = {
   pricing: [],
   faults: [],
 
+  agentMessages: [],
+  agentBusy: false,
+
   lat: 39.9593,
   lng: 116.2981,
   location: "海淀区",
@@ -657,6 +660,11 @@ const userNav = [
     "我的钱包",
   ],
   [
+    "agent",
+    "help",
+    "AI 智能助手",
+  ],
+  [
     "profile",
     "user",
     "个人中心",
@@ -668,6 +676,7 @@ const roleNav = [
   ["stations", "pin", "电站管理", "station.view"],
   ["chargers", "bolt", "电桩管理", "charger.view"],
   ["realtime", "chart", "实时监控", "charger.view"],
+  ["agent", "help", "AI 智能助手", null],
   ["pricing", "wallet", "价格管理", "pricing.manage"],
   ["faults", "help", "故障管理", "fault.manage"],
   ["users", "user", "用户管理", "user.manage"],
@@ -1905,6 +1914,454 @@ function stationCard(s) {
       </div>
 
     </article>
+  `;
+}
+
+function agentSuggestions() {
+  if (
+    S.user.role ===
+    "user"
+  ) {
+    return [
+      "附近哪里有空闲快充？",
+      "我现在有充电订单吗？",
+      "我的余额是多少？",
+      "我有欠费吗？",
+      "我最近一次充电花了多少钱？",
+      "为什么我的充电桩无法启动？",
+    ];
+  }
+
+  if (
+    S.user.role ===
+    "technician"
+  ) {
+    return [
+      "现在有多少故障设备？",
+      "现在设备情况怎么样？",
+      "哪些设备故障次数最多？",
+    ];
+  }
+
+  return [
+    "今天哪个充电站订单最多？",
+    "最近7天收入怎么样？",
+    "现在有多少故障设备？",
+    "现在设备情况怎么样？",
+    "哪些设备故障次数最多？",
+    "生成最近7天运营报告",
+  ];
+}
+
+function agentWelcome() {
+  if (
+    S.user.role ===
+    "user"
+  ) {
+    return (
+      "你好，我是 NCS 智能充电助手。" +
+      "我可以结合平台实时数据，帮你查询附近充电站、" +
+      "订单、余额、欠费和充电问题。"
+    );
+  }
+
+  if (
+    S.user.role ===
+    "technician"
+  ) {
+    return (
+      "你好，我是 NCS 智能运维助手。" +
+      "我可以查询实时设备状态、故障情况和故障历史，" +
+      "帮助你快速了解设备运行情况。"
+    );
+  }
+
+  return (
+    "你好，我是 NCS AI 运营助手。" +
+    "我可以结合订单、营收、设备和故障数据，" +
+    "回答运营问题并生成简单运营报告。"
+  );
+}
+
+function agentMessageHtml(
+  message,
+) {
+  const role =
+    message.role ===
+    "user"
+      ? "user"
+      : "assistant";
+
+  return `
+    <div
+      class="
+        agent-message
+        ${role}
+      "
+    >
+
+      ${
+        role ===
+        "assistant"
+          ? `
+              <div class="agent-avatar">
+                AI
+              </div>
+            `
+          : ""
+      }
+
+      <div class="agent-bubble">
+
+        <div class="agent-message-role">
+          ${
+            role ===
+            "user"
+              ? esc(
+                  S.user.nickname,
+                )
+              : "NCS AI"
+          }
+        </div>
+
+        <div class="agent-message-text">
+          ${esc(
+            message.text,
+          ).replace(
+            /\n/g,
+            "<br>",
+          )}
+        </div>
+
+        ${
+          message.intent
+            ? `
+                <small
+                  class="agent-intent"
+                >
+                  ${
+                    esc(
+                      message.intent,
+                    )
+                  }
+                </small>
+              `
+            : ""
+        }
+
+      </div>
+
+      ${
+        role ===
+        "user"
+          ? `
+              <div class="agent-user-avatar">
+                ${esc(
+                  S.user.nickname
+                    .slice(
+                      0,
+                      1,
+                    ),
+                )}
+              </div>
+            `
+          : ""
+      }
+
+    </div>
+  `;
+}
+
+function renderAgentMessages() {
+  const target =
+    $("#agent-messages");
+
+  if (!target) {
+    return;
+  }
+
+  const welcome = {
+    role: "assistant",
+    text: agentWelcome(),
+  };
+
+  const messages = [
+    welcome,
+    ...S.agentMessages,
+  ];
+
+  target.innerHTML =
+    messages
+      .map(
+        agentMessageHtml,
+      )
+      .join("");
+
+  target.scrollTop =
+    target.scrollHeight;
+}
+
+function showAgentThinking() {
+  const target =
+    $("#agent-messages");
+
+  if (!target) {
+    return;
+  }
+
+  const thinking =
+    document.createElement(
+      "div",
+    );
+
+  thinking.id =
+    "agent-thinking";
+
+  thinking.className =
+    "agent-message assistant";
+
+  thinking.innerHTML = `
+    <div class="agent-avatar">
+      AI
+    </div>
+
+    <div
+      class="
+        agent-bubble
+        agent-thinking
+      "
+    >
+
+      <div class="agent-message-role">
+        NCS AI
+      </div>
+
+      <div class="thinking-dots">
+        <i></i>
+        <i></i>
+        <i></i>
+      </div>
+
+    </div>
+  `;
+
+  target.appendChild(
+    thinking,
+  );
+
+  target.scrollTop =
+    target.scrollHeight;
+}
+
+
+function hideAgentThinking() {
+  $("#agent-thinking")
+    ?.remove();
+}
+
+async function agentPage() {
+  const suggestions =
+    agentSuggestions();
+
+  return trHtml`
+    <div class="agent-layout">
+
+      <section
+        class="
+          card
+          agent-main
+        "
+      >
+
+        <div class="agent-header">
+
+          <div>
+
+            <div class="eyebrow">
+              NCS AI AGENT
+            </div>
+
+            <h2>
+              AI 智能助手
+            </h2>
+
+            <p class="sub">
+              基于实时业务数据进行查询与分析
+            </p>
+
+          </div>
+
+          <span
+            class="
+              agent-online
+            "
+          >
+            <i></i>
+            在线
+          </span>
+
+        </div>
+
+
+        <div
+          id="agent-messages"
+          class="agent-messages"
+        >
+        </div>
+
+
+        <form
+          id="agent-form"
+          class="agent-input-area"
+        >
+
+          <textarea
+            id="agent-input"
+            name="message"
+            placeholder="请输入你想咨询的问题…"
+            maxlength="500"
+            required
+          ></textarea>
+
+          <button
+            class="btn"
+            type="submit"
+          >
+            发送
+            ${ic("arrow")}
+          </button>
+
+        </form>
+
+      </section>
+
+
+      <aside class="stack">
+
+        <section class="card">
+
+          <div class="section-head">
+
+            <div>
+
+              <h3>
+                推荐问题
+              </h3>
+
+              <p class="sub">
+                点击即可向 Agent 提问
+              </p>
+
+            </div>
+
+            ${ic("help")}
+
+          </div>
+
+          <div class="agent-suggestions">
+
+            ${suggestions
+              .map(
+                (question) =>
+                  `
+                    <button
+                      class="
+                        agent-suggestion
+                      "
+                      data-action=
+                        "agent-suggest"
+                      data-question=
+                        "${esc(
+                          question,
+                        )}"
+                    >
+                      ${esc(
+                        question,
+                      )}
+                    </button>
+                  `,
+              )
+              .join("")}
+
+          </div>
+
+        </section>
+
+
+        <section
+          class="
+            card
+            agent-capability
+          "
+        >
+
+          <h3>
+            当前能力
+          </h3>
+
+          <div
+            class="
+              agent-capability-list
+            "
+          >
+
+            <div>
+              ${ic("pin")}
+              <span>
+                电站与空闲设备查询
+              </span>
+            </div>
+
+            <div>
+              ${ic("orders")}
+              <span>
+                订单与充电记录查询
+              </span>
+            </div>
+
+            <div>
+              ${ic("wallet")}
+              <span>
+                余额、欠费与价格信息
+              </span>
+            </div>
+
+            <div>
+              ${ic("bolt")}
+              <span>
+                设备状态与故障分析
+              </span>
+            </div>
+
+            ${
+              S.user.role !==
+              "user"
+                ? `
+                    <div>
+                      ${ic(
+                        "chart",
+                      )}
+                      <span>
+                        运营数据分析与报告
+                      </span>
+                    </div>
+                  `
+                : ""
+            }
+
+          </div>
+
+        </section>
+
+
+        <section class="note">
+          Agent 会根据当前登录角色访问允许的数据。
+          AI 助手不会绕过系统 RBAC 权限。
+        </section>
+
+      </aside>
+
+    </div>
   `;
 }
 
@@ -5738,6 +6195,8 @@ const renderers = {
     chargersPage,
   realtime:
     realtimePage,
+  agent:
+    agentPage,
   pricing:
     pricingPage,
   faults:
@@ -5818,6 +6277,12 @@ async function go(
     $("#content")
       .innerHTML =
         html;
+    if (
+      page ===
+      "agent"
+    ) {
+      renderAgentMessages();
+    }
 
     if (
       page ===
@@ -6886,6 +7351,97 @@ function confirmModal(
   );
 }
 
+async function sendAgentMessage(
+  question,
+) {
+  question =
+    String(
+      question || "",
+    ).trim();
+
+  if (
+    !question ||
+    S.agentBusy
+  ) {
+    return;
+  }
+
+  S.agentBusy = true;
+
+  S.agentMessages.push({
+    role: "user",
+    text: question,
+  });
+
+  renderAgentMessages();
+
+  const input =
+    $("#agent-input");
+
+  if (input) {
+    input.value = "";
+  }
+
+  showAgentThinking();
+
+  try {
+    const result =
+      await api(
+        "/agent/chat",
+        "POST",
+        {
+          message:
+            question,
+
+          lat:
+            S.lat,
+
+          lng:
+            S.lng,
+        },
+      );
+
+    hideAgentThinking();
+
+    S.agentMessages.push({
+      role:
+        "assistant",
+
+      text:
+        result.answer ||
+        tr(
+          "暂时无法生成回答。",
+        ),
+
+      intent:
+        result.intent,
+    });
+
+    renderAgentMessages();
+
+  } catch (e) {
+    hideAgentThinking();
+
+    S.agentMessages.push({
+      role:
+        "assistant",
+
+      text:
+        "请求失败：" +
+        e.message,
+    });
+
+    renderAgentMessages();
+
+  } finally {
+    S.agentBusy =
+      false;
+
+    $("#agent-input")
+      ?.focus();
+  }
+}
+
 async function act(
   name,
   b,
@@ -6908,6 +7464,12 @@ async function act(
       $(".sidebar")
         .classList
         .toggle("open");
+      break;
+    
+    case "agent-suggest":
+      await sendAgentMessage(
+        b.dataset.question,
+      );
       break;
 
     case "login-tab":
@@ -6964,6 +7526,9 @@ async function act(
         "POST",
         {},
       );
+
+      S.agentMessages = [];
+      S.agentBusy = false;
 
       await boot();
       break;
@@ -7875,6 +8440,12 @@ document.addEventListener(
 
     try {
       switch (f.id) {
+        case "agent-form":
+          await sendAgentMessage(
+            d.message,
+          );
+          break;
+        
         case "auth-form": {
           const r =
             await api(
@@ -8606,6 +9177,34 @@ document.addEventListener(
     } catch (err) {
       error(err);
     }
+  },
+);
+
+document.addEventListener(
+  "keydown",
+
+  async (e) => {
+    if (
+      e.target.id !==
+      "agent-input"
+    ) {
+      return;
+    }
+
+    if (
+      e.key !==
+      "Enter"
+      ||
+      e.shiftKey
+    ) {
+      return;
+    }
+
+    e.preventDefault();
+
+    await sendAgentMessage(
+      e.target.value,
+    );
   },
 );
 

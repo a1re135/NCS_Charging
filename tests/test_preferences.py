@@ -1,5 +1,7 @@
 """Preference persistence, data preservation and localized responses."""
+import gc
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from ncs import create_app
@@ -11,7 +13,25 @@ class PreferenceTests(unittest.TestCase):
         self.config={'TESTING':True,'SECRET_KEY':'preference-tests','DATABASE':str(Path(self.tmp.name)/'prefs.db')}
         self.app=create_app(self.config)
         self.c,self.csrf=self.login()
-    def tearDown(self): self.tmp.cleanup()
+    def tearDown(self):
+        # Windows can briefly keep SQLite/WAL files open
+        # after the Flask test request has finished.
+        gc.collect()
+
+        for attempt in range(5):
+            try:
+                self.tmp.cleanup()
+                return
+            except OSError as exc:
+                if getattr(exc, "winerror", None) != 145:
+                    raise
+
+                time.sleep(
+                    0.1 * (attempt + 1)
+                )
+
+        # Show the real error if Windows still cannot release it.
+        self.tmp.cleanup()
     def login(self,phone='13800138000',password='User123456',app=None):
         c=(app or self.app).test_client();token=c.get('/api/session').json['csrf']
         r=c.post('/api/login',json={'phone':phone,'password':password},headers={'X-CSRF-Token':token})

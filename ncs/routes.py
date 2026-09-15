@@ -11,6 +11,7 @@ from werkzeug.security import check_password_hash,generate_password_hash
 import qrcode
 import qrcode.image.svg
 from .db import get_db,now
+from .agent import chat as agent_chat
 from .services import (BusinessError,transaction,money,number,required,distance,
     expire_reservations,quote,ORDER_SELECT,create_order,act_order,audit,pricing_for_station)
 from .capacity import CAPACITY_LEVEL, get_capacity
@@ -112,6 +113,46 @@ def add_default_pricing(db,sid,base):
     for start,end,total in ((0,480,totals[0]),(480,1080,totals[1]),(1080,1440,totals[2])):
         db.execute('''INSERT INTO pricing_rules(station_id,start_minute,end_minute,electricity_fee_cents,service_fee_cents)
                       VALUES(?,?,?,?,?)''',(sid,start,end,max(0,total-service),service))
+
+@api.post('/agent/chat')
+@auth()
+def agent():
+    data = body()
+
+    message = required(
+        data.get('message'),
+        '问题',
+        500,
+    )
+
+    lat = number(
+        data.get(
+            'lat',
+            39.9593,
+        ),
+        -90,
+        90,
+        '纬度',
+    )
+
+    lng = number(
+        data.get(
+            'lng',
+            116.2981,
+        ),
+        -180,
+        180,
+        '经度',
+    )
+
+    result = agent_chat(
+        g.user,
+        message,
+        lat,
+        lng,
+    )
+
+    return jsonify(result)
 
 @api.get('/session')
 def get_session():

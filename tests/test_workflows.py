@@ -228,4 +228,83 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(a.get('/api/chargers/by-number/QR-FAULT-01').json['id'],cid)
         self.assertEqual(a.get('/charge/QR-FAULT-01').status_code,200)
 
+    def test_agent_user_queries_real_business_data(self):
+        r = self.post(
+            '/agent/chat',
+            {
+                'message':
+                    '附近哪里有空闲快充？',
+                'lat': 39.9593,
+                'lng': 116.2981,
+            },
+        )
+
+        self.assertEqual(
+            r.status_code,
+            200,
+            r.json,
+        )
+
+        self.assertEqual(
+            r.json['intent'],
+            'station_recommendation',
+        )
+
+        self.assertTrue(
+            r.json['data'],
+        )
+
+
+    def test_agent_wallet_and_latest_order(self):
+        r = self.post(
+            '/agent/chat',
+            {
+                'message':
+                    '我的余额是多少？',
+            },
+        )
+
+        self.assertEqual(
+            r.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            r.json['intent'],
+            'wallet',
+        )
+
+        self.assertIn(
+            'balance_cents',
+            r.json['data'],
+        )
+
+
+    def test_agent_operator_can_query_operations(self):
+        operator, token = self.login(
+            'operator',
+            'Operator123456',
+        )
+
+        r = self.post(
+            '/agent/chat',
+            {
+                'message':
+                    '最近7天收入怎么样？',
+            },
+            operator,
+            token,
+        )
+
+        self.assertEqual(
+            r.status_code,
+            200,
+            r.json,
+        )
+
+        self.assertEqual(
+            r.json['intent'],
+            'revenue_summary',
+        )
+
 if __name__=='__main__': unittest.main(verbosity=2)
