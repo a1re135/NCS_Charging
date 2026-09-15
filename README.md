@@ -1,3 +1,5 @@
+> **新增中英文切换与深色模式**：升级、设置入口和本次验证范围请先阅读 [UPGRADE_I18N_DARK.md](UPGRADE_I18N_DARK.md)。保留现有 `.env` 和数据库，打开包含 `app.py` / `requirements.txt` 的项目文件夹启动。
+
 ## 1. Windows + VS Code 启动（先看这里）
 
 1. 安装 Python 3.11 或更新版本（建议使用 3.12），安装时勾选 **Add python.exe to PATH**。

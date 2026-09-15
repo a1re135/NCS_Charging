@@ -14,6 +14,8 @@ from .db import get_db,now
 from .services import (BusinessError,transaction,money,number,required,distance,
     expire_reservations,quote,ORDER_SELECT,create_order,act_order,audit,pricing_for_station)
 from .capacity import CAPACITY_LEVEL, get_capacity
+from .preferences import get_preferences, save_preferences
+from .i18n import translate, current_language, operation_display
 
 api=Blueprint('api',__name__)
 
@@ -23,7 +25,9 @@ def body():
     return data
 
 def public_user(u):
-    return {k:u[k] for k in ('id','phone','nickname','role','balance_cents','avatar','active','created_at')}
+    result = {k:u[k] for k in ('id','phone','nickname','role','balance_cents','avatar','active','created_at')}
+    result['preferences'] = get_preferences(u['id'])
+    return result
 
 def day(value, field):
     try:
@@ -76,6 +80,25 @@ def get_session():
     session.setdefault('csrf',secrets.token_hex(24))
     u=get_db().execute('SELECT * FROM users WHERE id=?',(session.get('uid'),)).fetchone()
     return jsonify(csrf=session['csrf'],user=public_user(u) if u else None,time_scale=current_app.config['TIME_SCALE'])
+
+@api.get('/preferences')
+@auth()
+def read_preferences():
+    return jsonify(preferences=get_preferences(g.user['id']))
+
+@api.post('/preferences')
+@auth()
+def update_preferences():
+    data = body()
+    language = data.get('language')
+    theme = data.get('theme')
+    if not isinstance(language, str) or language not in ('zh', 'en'):
+        raise BusinessError('语言设置无效')
+    if not isinstance(theme, str) or theme not in ('light', 'dark', 'system'):
+        raise BusinessError('外观设置无效')
+    # The target user is always the authenticated user, never a client-supplied ID.
+    preferences = save_preferences(g.user['id'], language, theme, current_app.config['DB_BACKEND'])
+    return jsonify(preferences=preferences)
 
 @api.get("/health")
 def health():
@@ -789,7 +812,11 @@ def fault_update(fid):
 
 @api.get('/admin/logs')
 @auth(True)
-def logs(): return jsonify([dict(r) for r in get_db().execute('SELECT * FROM ops_log ORDER BY id DESC LIMIT 100')])
+def logs():
+    rows = [dict(r) for r in get_db().execute('SELECT * FROM ops_log ORDER BY id DESC LIMIT 100')]
+    for row in rows:
+        row['operation_display'] = operation_display(row['operation'])
+    return jsonify(rows)
 
 @api.get('/admin/prediction')
 @auth(True)
@@ -811,7 +838,7 @@ def prediction():
 @auth(True)
 def export():
     out=io.StringIO(); writer=csv.writer(out)
-    writer.writerow(['订单号','用户','电站','电桩','状态','电量(kWh)','金额(元)','已付(元)','欠费(元)','开始时间','结束时间'])
+    writer.writerow([translate(label) for label in ['订单号','用户','电站','电桩','状态','电量(kWh)','金额(元)','已付(元)','欠费(元)','开始时间','结束时间']])
     def safe(v):
         s=str(v or '')
         return "'"+s if s[:1] in ('=','+','-','@','\t','\r') else s

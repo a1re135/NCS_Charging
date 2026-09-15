@@ -12,6 +12,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .db import close_db, init_db
 from .services import BusinessError
+from .i18n import translate, current_language
 
 
 def create_app(config=None):
@@ -137,13 +138,14 @@ def create_app(config=None):
 
         if request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
+            response.headers["Content-Language"] = current_language()
 
         return response
 
     @app.errorhandler(BusinessError)
     def business_error(e):
         return jsonify(
-            error=e.message,
+            error=translate(e.message),
             **e.extra,
         ), e.status
 
@@ -151,16 +153,16 @@ def create_app(config=None):
     @app.errorhandler(pymysql.err.IntegrityError)
     def integrity_error(e):
         return jsonify(
-            error="数据冲突：编号已存在、资源正在使用，或记录仍被其他数据引用"
+            error=translate("数据冲突：编号已存在、资源正在使用，或记录仍被其他数据引用")
         ), 409
 
     @app.errorhandler(400)
     def bad_request(e):
-        return jsonify(error="请求格式不正确"), 400
+        return jsonify(error=translate("请求格式不正确")), 400
 
     @app.errorhandler(413)
     def too_large(e):
-        return jsonify(error="文件或请求过大，最多 2 MB"), 413
+        return jsonify(error=translate("文件或请求过大，最多 2 MB")), 413
 
     @app.get("/")
     def index():
