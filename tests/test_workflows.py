@@ -113,10 +113,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.post(f'/admin/chargers/{cid}/action',{'action':'fault'},a,t).status_code,200)
         self.assertEqual(self.post(f'/admin/chargers/{cid}/action',{'action':'restart'},a,t).status_code,200)
         self.assertGreater(len(a.get('/api/admin/logs').json),0)
-    def test_frozen_user_can_settle_but_not_recharge(self):
+    def test_frozen_user_can_recharge_repay_but_not_new_order(self):
         oid=self.start();a,t=self.login('admin','Admin123456');self.post('/admin/users/1',{'active':False},a,t)
-        self.assertEqual(self.post('/wallet/recharge',{'amount':100}).status_code,403)
+        self.assertEqual(self.post('/orders',{'charger_id':2,'mode':'start'}).status_code,403)
+        self.sql('UPDATE users SET balance_cents=1 WHERE id=1')
+        self.age(oid,10)
         self.assertEqual(self.post(f'/orders/{oid}/finish').status_code,200)
+        self.assertGreater(self.sql('SELECT debt_cents FROM orders WHERE id=?',(oid,))[0][0],0)
+        self.assertEqual(self.post('/wallet/recharge',{'amount':200}).status_code,200)
+        self.assertEqual(self.post(f'/orders/{oid}/pay').status_code,200)
+        self.assertEqual(self.sql('SELECT debt_cents FROM orders WHERE id=?',(oid,))[0][0],0)
         self.assertEqual(self.post('/orders',{'charger_id':2,'mode':'start'}).status_code,403)
     def test_registration_prediction_export_and_sort(self):
         c=self.app.test_client();t=c.get('/api/session').json['csrf']
@@ -232,8 +238,7 @@ class WorkflowTests(unittest.TestCase):
         r = self.post(
             '/agent/chat',
             {
-                'message':
-                    '附近哪里有空闲快充？',
+                'message': '附近哪里有空闲快充？',
                 'lat': 39.9593,
                 'lng': 116.2981,
             },
@@ -254,19 +259,18 @@ class WorkflowTests(unittest.TestCase):
             r.json['data'],
         )
 
-
     def test_agent_wallet_and_latest_order(self):
         r = self.post(
             '/agent/chat',
             {
-                'message':
-                    '我的余额是多少？',
+                'message': '我的余额是多少？',
             },
         )
 
         self.assertEqual(
             r.status_code,
             200,
+            r.json,
         )
 
         self.assertEqual(
@@ -279,7 +283,6 @@ class WorkflowTests(unittest.TestCase):
             r.json['data'],
         )
 
-
     def test_agent_operator_can_query_operations(self):
         operator, token = self.login(
             'operator',
@@ -289,8 +292,7 @@ class WorkflowTests(unittest.TestCase):
         r = self.post(
             '/agent/chat',
             {
-                'message':
-                    '最近7天收入怎么样？',
+                'message': '最近7天收入怎么样？',
             },
             operator,
             token,
@@ -305,6 +307,244 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(
             r.json['intent'],
             'revenue_summary',
+        )
+
+    def test_station_kind_breakdown_fields(self):
+        r = self.client.get(
+            '/api/stations?lat=39.9593&lng=116.2981'
+        )
+
+        self.assertEqual(
+            r.status_code,
+            200,
+            r.json,
+        )
+
+        for st in r.json:
+            for field in (
+                'fast_free',
+                'slow_free',
+                'fast_fault',
+                'slow_fault',
+                'fast_maintenance',
+                'slow_maintenance',
+                'fast_offline',
+                'slow_offline',
+            ):
+                self.assertIn(
+                    field,
+                    st,
+                )
+
+                self.assertGreaterEqual(
+                    st[field],
+                    0,
+                )
+
+            self.assertLessEqual(
+                st['fast_free'],
+                st['fast'],
+            )
+
+            self.assertLessEqual(
+                st['slow_free'],
+                st['slow'],
+            )
+
+            self.assertEqual(
+                st['fast_free']
+                + st['slow_free'],
+                st['free'],
+            )
+
+    def test_order_trend_endpoint(self):
+        oid = self.start()
+
+        self.age(
+            oid,
+            600,
+        )
+
+        self.assertEqual(
+            self.post(
+                f'/orders/{oid}/finish'
+            ).status_code,
+            200,
+        )
+
+        admin, token = self.login(
+            'admin',
+            'Admin123456',
+        )
+
+        r = admin.get(
+            '/api/admin/trend'
+        )
+
+        self.assertEqual(
+            r.status_code,
+            200,
+            r.json,
+        )
+
+        points = r.json[
+            'points'
+        ]
+
+        self.assertGreaterEqual(
+            len(points),
+            7,
+        )
+
+        for point in points:
+            self.assertGreaterEqual(
+                point['done'],
+                0,
+            )
+
+            self.assertLessEqual(
+                point['done'],
+                point['total'],
+            )
+
+            self.assertGreaterEqual(
+                point['cents'],
+                0,
+            )
+
+        self.assertEqual(
+            admin.get(
+                '/api/admin/trend?granularity=week&range=30'
+            ).status_code,
+            200,
+        )
+
+        self.assertEqual(
+            admin.get(
+                '/api/admin/trend?granularity=month&range=year'
+            ).status_code,
+            200,
+        )
+
+        self.assertEqual(
+            admin.get(
+                '/api/admin/trend?granularity=day&range=7&station_id=1'
+            ).status_code,
+            200,
+        )
+
+        self.assertEqual(
+            admin.get(
+                '/api/admin/trend?granularity=bad'
+            ).status_code,
+            400,
+        )
+
+        self.assertEqual(
+            admin.get(
+                '/api/admin/trend?range=bad'
+            ).status_code,
+            400,
+        )
+
+        self.assertEqual(
+            admin.get(
+                '/api/admin/trend?station_id=999'
+            ).status_code,
+            404,
+        )
+
+        client2, token2 = self.login(
+            '13900139000',
+            'User123456',
+        )
+
+        self.assertEqual(
+            client2.get(
+                '/api/admin/trend'
+            ).status_code,
+            403,
+        )
+
+    def test_revenue_stations_endpoint(self):
+        oid = self.start()
+
+        self.age(
+            oid,
+            600,
+        )
+
+        self.assertEqual(
+            self.post(
+                f'/orders/{oid}/finish'
+            ).status_code,
+            200,
+        )
+
+        admin, token = self.login(
+            'admin',
+            'Admin123456',
+        )
+
+        r = admin.get(
+            '/api/admin/revenue_stations'
+        )
+
+        self.assertEqual(
+            r.status_code,
+            200,
+            r.json,
+        )
+
+        stations = r.json[
+            'stations'
+        ]
+
+        self.assertEqual(
+            len(stations),
+            10,
+        )
+
+        revenues = [
+            x['revenue_cents']
+            for x in stations
+        ]
+
+        self.assertEqual(
+            revenues,
+            sorted(
+                revenues,
+                reverse=True,
+            ),
+        )
+
+        self.assertGreater(
+            revenues[0],
+            0,
+        )
+
+        self.assertGreaterEqual(
+            r.json[
+                'average_cents'
+            ],
+            0,
+        )
+
+        self.assertIn(
+            'debt_cents',
+            stations[0],
+        )
+
+        client2, token2 = self.login(
+            '13900139000',
+            'User123456',
+        )
+
+        self.assertEqual(
+            client2.get(
+                '/api/admin/revenue_stations'
+            ).status_code,
+            403,
         )
 
 if __name__=='__main__': unittest.main(verbosity=2)

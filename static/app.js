@@ -68,6 +68,7 @@ const names = new Proxy(
     offline: "离线",
     maintenance: "维修中",
     completed: "已结算",
+    debt: "欠费",
     cancelled: "已取消",
     expired: "已过期",
     operating: "运营中",
@@ -108,6 +109,17 @@ const paymentBadge = (status) =>
     <i class="dot"></i>
     ${esc(paymentNames[status] || status || "—")}
   </span>`;
+
+const orderStatus = (o) =>
+  o.debt_cents > 0 && o.status === "completed"
+    ? "debt"
+    : o.status;
+
+function kindSummary(cs) {
+  const f = cs.filter((c) => c.kind === "fast");
+  const s = cs.filter((c) => c.kind === "slow");
+  return `${tr("快充")} ${f.length} ${tr("个")}（${tr("空闲")} ${f.filter((c) => c.status === "idle").length}）｜${tr("慢充")} ${s.length} ${tr("个")}（${tr("空闲")} ${s.filter((c) => c.status === "idle").length}）`;
+}
 
 const paths = {
   home: "M3 10 12 3l9 7v10H3z M9 20v-7h6v7",
@@ -677,7 +689,6 @@ const roleNav = [
   ["chargers", "bolt", "电桩管理", "charger.view"],
   ["realtime", "chart", "实时监控", "charger.view"],
   ["agent", "help", "AI 智能助手", null],
-  ["pricing", "wallet", "价格管理", "pricing.manage"],
   ["faults", "help", "故障管理", "fault.manage"],
   ["users", "user", "用户管理", "user.manage"],
   ["orders", "orders", "订单管理", "order.view_all"],
@@ -685,7 +696,6 @@ const roleNav = [
   ["prediction", "chart", "负荷预测", "prediction.view"],
   ["roles", "grid", "角色与权限", "role.manage"],
   ["logs", "orders", "操作日志", "log.view"],
-  ["settings", "grid", "偏好设置", null],
 ];
 
 function currentNav() {
@@ -1868,14 +1878,11 @@ function stationCard(s) {
         ${s.distance.toFixed(1)}
         km ·
 
-        ${s.fast_count || 0}
-        快充 /
-
-        ${s.slow_count || 0}
-        慢充 ·
-
-        ${s.free || 0}
-        空闲
+        ${
+          can("station.manage")
+            ? `${tr("快充")} ${s.fast_count || 0} ${tr("个")}（${tr("空闲")} ${s.fast_free ?? 0}·${tr("故障")} ${s.fast_fault ?? 0}·${tr("离线")} ${s.fast_offline ?? 0}）｜${tr("慢充")} ${s.slow_count || 0} ${tr("个")}（${tr("空闲")} ${s.slow_free ?? 0}·${tr("故障")} ${s.slow_fault ?? 0}·${tr("离线")} ${s.slow_offline ?? 0}）`
+            : `${tr("快充")} ${s.fast_count || 0} ${tr("个")}（${tr("空闲")} ${s.fast_free ?? 0}）｜${tr("慢充")} ${s.slow_count || 0} ${tr("个")}（${tr("空闲")} ${s.slow_free ?? 0}）`
+        }
 
         <br>
 
@@ -2039,11 +2046,9 @@ function agentMessageHtml(
                 <small
                   class="agent-intent"
                 >
-                  ${
-                    esc(
-                      message.intent,
-                    )
-                  }
+                  ${esc(
+                    message.intent,
+                  )}
                 </small>
               `
             : ""
@@ -2057,11 +2062,10 @@ function agentMessageHtml(
           ? `
               <div class="agent-user-avatar">
                 ${esc(
-                  S.user.nickname
-                    .slice(
-                      0,
-                      1,
-                    ),
+                  S.user.nickname.slice(
+                    0,
+                    1,
+                  ),
                 )}
               </div>
             `
@@ -2153,7 +2157,6 @@ function showAgentThinking() {
     target.scrollHeight;
 }
 
-
 function hideAgentThinking() {
   $("#agent-thinking")
     ?.remove();
@@ -2202,13 +2205,11 @@ async function agentPage() {
 
         </div>
 
-
         <div
           id="agent-messages"
           class="agent-messages"
         >
         </div>
-
 
         <form
           id="agent-form"
@@ -2234,7 +2235,6 @@ async function agentPage() {
         </form>
 
       </section>
-
 
       <aside class="stack">
 
@@ -2268,12 +2268,10 @@ async function agentPage() {
                       class="
                         agent-suggestion
                       "
-                      data-action=
-                        "agent-suggest"
-                      data-question=
-                        "${esc(
-                          question,
-                        )}"
+                      data-action="agent-suggest"
+                      data-question="${esc(
+                        question,
+                      )}"
                     >
                       ${esc(
                         question,
@@ -2286,7 +2284,6 @@ async function agentPage() {
           </div>
 
         </section>
-
 
         <section
           class="
@@ -2353,7 +2350,6 @@ async function agentPage() {
 
         </section>
 
-
         <section class="note">
           Agent 会根据当前登录角色访问允许的数据。
           AI 助手不会绕过系统 RBAC 权限。
@@ -2365,11 +2361,322 @@ async function agentPage() {
   `;
 }
 
+function trendChartSVG(
+  ds,
+  key,
+  gran,
+) {
+  const vs =
+    ds.map(
+      (d) =>
+        d[key] || 0,
+    );
+
+  const max =
+    Math.max(
+      ...vs,
+      1,
+    );
+
+  const n =
+    Math.max(
+      vs.length - 1,
+      1,
+    );
+
+  const pts =
+    vs.map(
+      (v, i) => [
+        10 +
+          (i * 580) /
+            n,
+
+        132 -
+          (v / max) *
+            110,
+      ],
+    );
+
+  const ln =
+    pts
+      .map(
+        (p) =>
+          p
+            .map(
+              (x) =>
+                x.toFixed(1),
+            )
+            .join(","),
+      )
+      .join(" ");
+
+  const fmt =
+    gran === "month"
+      ? (l) =>
+          l.slice(2)
+      : (l) =>
+          l.slice(5);
+
+  return trHtml`
+    <svg
+      class="chart"
+      viewBox="0 0 600 150"
+      preserveAspectRatio="none"
+      role="img"
+    >
+
+      <defs>
+        <linearGradient
+          id="trfill"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
+          <stop
+            stop-color="#ad9bdf"
+            stop-opacity="0.18"
+          />
+
+          <stop
+            offset="1"
+            stop-color="#ad9bdf"
+            stop-opacity="0"
+          />
+        </linearGradient>
+      </defs>
+
+      ${[
+        20,
+        60,
+        100,
+        140,
+      ]
+        .map(
+          (y) =>
+            `<path
+              d="M0 ${y}H600"
+              stroke="#f1eef7"
+              stroke-dasharray="4 5"
+            />`,
+        )
+        .join("")}
+
+      <polygon
+        points="10,145 ${ln} 590,145"
+        fill="url(#trfill)"
+      />
+
+      <polyline
+        points="${ln}"
+        stroke="#ad9bdf"
+        stroke-width="3"
+        fill="none"
+        stroke-linejoin="round"
+        vector-effect="non-scaling-stroke"
+      />
+
+      ${pts
+        .map(
+          (p, i) =>
+            `<circle
+              cx="${p[0].toFixed(1)}"
+              cy="${p[1].toFixed(1)}"
+              r="3.5"
+              fill="#fff"
+              stroke="#ad9bdf"
+              stroke-width="2"
+            >
+              <title>
+                ${esc(ds[i].label)}：
+                ${
+                  key === "cents"
+                    ? "¥ " +
+                      yuan(
+                        vs[i],
+                      )
+                    : vs[i]
+                }
+              </title>
+            </circle>`,
+        )
+        .join("")}
+
+    </svg>
+
+    <div class="chart-labels">
+
+      ${ds
+        .map(
+          (d) =>
+            `<span>
+              ${fmt(
+                d.label,
+              )}
+            </span>`,
+        )
+        .join("")}
+
+    </div>
+  `;
+}
+
+function trendChartsHtml() {
+  const data =
+    S.trendData;
+
+  const metric =
+    $("#trend-metric")
+      ?.value ||
+    "done";
+
+  if (
+    !data ||
+    !data.points
+  ) {
+    return "";
+  }
+
+  const gran =
+    data.granularity ||
+    "day";
+
+  const ord =
+    data.points.reduce(
+      (x, p) =>
+        x +
+        (
+          metric === "total"
+            ? p.total
+            : p.done
+        ),
+      0,
+    );
+
+  const rev =
+    data.points.reduce(
+      (x, p) =>
+        x +
+        p.cents,
+      0,
+    );
+
+  return trHtml`
+    <div class="trend-cell card">
+
+      <div class="section-head">
+
+        <h3>
+          ${tr(
+            "订单趋势",
+          )}
+        </h3>
+
+        <small>
+          ${
+            metric === "total"
+              ? tr(
+                  "全部订单",
+                )
+              : tr(
+                  "有效完成订单",
+                )
+          }
+          ·
+          ${ord}
+        </small>
+
+      </div>
+
+      ${trendChartSVG(
+        data.points,
+        metric,
+        gran,
+      )}
+
+    </div>
+
+    <div class="trend-cell card">
+
+      <div class="section-head">
+
+        <h3>
+          ${tr(
+            "收入趋势",
+          )}
+        </h3>
+
+        <small>
+          ${tr("实收")}
+          ¥
+          ${yuan(rev)}
+        </small>
+
+      </div>
+
+      ${trendChartSVG(
+        data.points,
+        "cents",
+        gran,
+      )}
+
+    </div>
+  `;
+}
+
+async function loadTrend() {
+  const p =
+    new URLSearchParams({
+      granularity:
+        $("#trend-granularity")
+          ?.value ||
+        "day",
+
+      range:
+        $("#trend-range")
+          ?.value ||
+        "7",
+    });
+
+  const st =
+    $("#trend-station")
+      ?.value;
+
+  if (st) {
+    p.set(
+      "station_id",
+      st,
+    );
+  }
+
+  const data =
+    await api(
+      "/admin/trend?" +
+        p.toString(),
+    );
+
+  S.trendData =
+    data;
+
+  renderTrendCharts();
+}
+
+function renderTrendCharts() {
+  const el =
+    $("#trend-charts");
+
+  if (el) {
+    el.innerHTML =
+      trendChartsHtml();
+  }
+}
+
 async function dashboard() {
   const [
     d,
     s,
     o,
+    td,
   ] =
     await Promise.all([
       api("/dashboard"),
@@ -2379,10 +2686,15 @@ async function dashboard() {
       ),
 
       api("/orders"),
+
+      can("analytics.view")
+        ? api("/admin/trend")
+        : Promise.resolve(null),
     ]);
 
   S.stations = s;
   S.orders = o;
+  S.trendData = td;
 
   if (S.user.role === "technician") {
     const m = d.maintenance_stats || d.counts || {};
@@ -2438,6 +2750,27 @@ async function dashboard() {
 
   const a =
       can("analytics.view"),
+
+    kind =
+      s.reduce(
+        (acc, st) => {
+          acc.fast += Number(st.fast) || 0;
+          acc.slow += Number(st.slow) || 0;
+          acc.fastFree += Number(st.fast_free) || 0;
+          acc.slowFree += Number(st.slow_free) || 0;
+          acc.fastFault += Number(st.fast_fault) || 0;
+          acc.slowFault += Number(st.slow_fault) || 0;
+          return acc;
+        },
+        {
+          fast: 0,
+          slow: 0,
+          fastFree: 0,
+          slowFree: 0,
+          fastFault: 0,
+          slowFault: 0,
+        },
+      ),
 
     total =
       Object.values(
@@ -2637,64 +2970,127 @@ async function dashboard() {
 
         </div>
 
-        <section class="card">
+        ${
+          a
+            ? trHtml`
+                <section class="card">
 
-          <div class="section-head">
+                  <div class="section-head">
 
-            <h2>
-              ${
-                a
-                  ? tr(
-                      "营收趋势",
-                    )
-                  : tr(
-                      "我的充电趋势",
-                    )
-              }
-            </h2>
+                    <h2>
+                      ${tr(
+                        "订单与收入趋势",
+                      )}
+                    </h2>
 
-            <span class="legend">
-              <i class="dot"></i>
-              最近 7 天 ·
-              ${
-                a
-                  ? tr("实收")
-                  : tr("电量")
-              }
-            </span>
-          </div>
+                    <small>
+                      ${tr(
+                        "后台首页 · 订单量与实收对照",
+                      )}
+                    </small>
+                  </div>
 
-          <div class="chart-summary">
-            ${
-              a
-                ? "¥ " +
-                  yuan(sum)
-                : sum.toFixed(
-                    1,
-                  )
-            }
+                  <div class="kind-stats">
+                    ${tr("平台资源")}：
+                    ${tr("快充")}
+                    <b>${kind.fast}</b>
+                    ${tr("个")}（
+                    ${tr("空闲")}
+                    <b>${kind.fastFree}</b>
+                    ·
+                    ${tr("故障")}
+                    <b>${kind.fastFault}</b>
+                    ）｜
+                    ${tr("慢充")}
+                    <b>${kind.slow}</b>
+                    ${tr("个")}（
+                    ${tr("空闲")}
+                    <b>${kind.slowFree}</b>
+                    ·
+                    ${tr("故障")}
+                    <b>${kind.slowFault}</b>
+                    ）
+                  </div>
 
-            <small>
-              ${
-                a
-                  ? tr(
-                      "实收金额",
-                    )
-                  : tr(
-                      "kWh / 最近 7 天",
-                    )
-              }
-            </small>
-          </div>
+                  <div class="toolbar" style="margin-bottom:16px">
+                    <select id="trend-granularity" aria-label="${tr("时间粒度")}">
+                      ${opt("day", tr("按天"))}
+                      ${opt("week", tr("按周"))}
+                      ${opt("month", tr("按月"))}
+                    </select>
 
-          ${chart(
-            d.days,
-            a
-              ? "cents"
-              : "energy",
-          )}
+                    <select id="trend-range" aria-label="${tr("时间范围")}">
+                      ${opt("7", tr("近 7 天"))}
+                      ${opt("30", tr("近 30 天"))}
+                      ${opt("year", tr("本年度"))}
+                    </select>
 
-        </section>
+                    <select id="trend-station" aria-label="${tr("电站")}">
+                      <option value="">
+                        ${tr("全部电站")}
+                      </option>
+
+                      ${s
+                        .map(
+                          (st) =>
+                            opt(
+                              st.id,
+                              st.name,
+                            ),
+                        )
+                        .join("")}
+                    </select>
+
+                    <select id="trend-metric" aria-label="${tr("订单口径")}">
+                      ${opt("done", tr("有效完成"))}
+                      ${opt("total", tr("全部订单"))}
+                    </select>
+                  </div>
+
+                  <div class="trend-grid" id="trend-charts">
+                    ${trendChartsHtml()}
+                  </div>
+
+                </section>
+              `
+            : trHtml`
+                <section class="card">
+
+                  <div class="section-head">
+
+                    <h2>
+                      ${tr(
+                        "我的充电趋势",
+                      )}
+                    </h2>
+
+                    <span class="legend">
+                      <i class="dot"></i>
+                      最近 7 天 ·
+                      ${tr("电量")}
+                    </span>
+                  </div>
+
+                  <div class="chart-summary">
+                    ${sum.toFixed(
+                      1,
+                    )}
+
+                    <small>
+                      ${tr(
+                        "kWh / 最近 7 天",
+                      )}
+                    </small>
+                  </div>
+
+                  ${chart(
+                    d.days,
+                    "energy",
+                  )}
+
+                </section>
+              `
+        }
 
         <section>
 
@@ -2982,6 +3378,11 @@ async function dashboard() {
 }
 
 async function stationsPage() {
+  S.stationKindFilter = {
+    fast: false,
+    slow: false,
+  };
+
   S.stationFilter = {
     status: "",
     sort: "distance",
@@ -3034,37 +3435,32 @@ async function stationsPage() {
           tr("有空闲桩"),
         )}
 
-        ${opt(
-          "fault",
-          tr("有故障桩"),
-        )}
-
-        ${opt(
-          "maintenance",
-          tr("有维修中桩"),
-        )}
-
-        ${opt(
-          "offline",
-          tr("有离线桩"),
-        )}
+        ${
+          S.user.role === "user"
+            ? ""
+            : trHtml`
+                ${opt("fault", tr("有故障桩"))}
+                ${opt("maintenance", tr("有维修中桩"))}
+                ${opt("offline", tr("有离线桩"))}
+              `
+        }
       </select>
 
       <select
         id="station-sort"
         aria-label="排序方式"
       >
-        <option value="distance">
-          ${tr(
-            "按距离排序",
-          )}
-        </option>
-
-        <option value="usage">
-          ${tr(
-            "充电次数最多",
-          )}
-        </option>
+        ${
+          S.user.role === "user"
+            ? trHtml`
+                <option value="distance">${tr("按距离排序")}</option>
+                <option value="usage">${tr("充电次数最多")}</option>
+              `
+            : trHtml`
+                <option value="usage">${tr("充电次数最多")}</option>
+                <option value="usage_asc">${tr("充电次数最少")}</option>
+              `
+        }
       </select>
 
       ${btn(
@@ -3110,7 +3506,9 @@ async function stationsPage() {
       id="station-list"
     >
       ${
-        S.stations
+        stationKindFiltered(
+          S.stations,
+        )
           .map(
             stationCard,
           )
@@ -3173,10 +3571,60 @@ async function loadStations() {
 
   if (list) {
     list.innerHTML =
-      stations
+      stationKindFiltered(
+        stations,
+      )
         .map(
           stationCard,
         )
+        .join("") ||
+      empty(
+        tr(
+          "没有匹配的电站",
+        ),
+      );
+  }
+}
+
+function stationKindFiltered(list) {
+  const f =
+    S.stationKindFilter ||
+    {};
+
+  return list.filter(
+    (s) =>
+      (!f.fast || (s.fast || 0) > 0) &&
+      (!f.slow || (s.slow || 0) > 0),
+  );
+}
+
+function renderStationList() {
+  const q =
+    (
+      $("#station-search")
+        ?.value || ""
+    ).toLowerCase();
+
+  const list =
+    stationKindFiltered(
+      S.stations,
+    ).filter((s) =>
+      (
+        s.name +
+        s.address +
+        s.city
+      )
+        .toLowerCase()
+        .includes(q),
+    );
+
+  const el =
+    $("#station-list");
+
+  if (el) {
+    el.innerHTML =
+      list
+        .map(stationCard)
         .join("") ||
       empty(
         tr(
@@ -3280,6 +3728,9 @@ function renderStationChargers() {
     S.chargerFilter ||
     {};
 
+  const kindOn =
+    f.fastOn || f.slowOn;
+
   let chargers =
     (
       S.detailChargers ||
@@ -3292,9 +3743,11 @@ function renderStationChargers() {
             f.status
         ) &&
         (
-          !f.kind ||
-          c.kind ===
-            f.kind
+          !kindOn ||
+          (
+            (f.fastOn && c.kind === "fast") ||
+            (f.slowOn && c.kind === "slow")
+          )
         ),
     );
 
@@ -3347,6 +3800,16 @@ async function stationDetail(
     pricing =
       data.pricing;
 
+  S.pricing = pricing;
+
+  S.pricingStation =
+    s.id;
+
+  if (can("pricing.manage")) {
+    S.stations =
+      await api("/stations");
+  }
+
   S.detail = s;
 
   S.detailChargers =
@@ -3354,7 +3817,8 @@ async function stationDetail(
 
   S.chargerFilter = {
     status: "",
-    kind: "",
+    fastOn: false,
+    slowOn: false,
     sort: "number",
   };
 
@@ -3421,6 +3885,9 @@ async function stationDetail(
 
     </div>`;
 
+  const canPrice =
+    can("pricing.manage");
+
   const tariff =
     table(
       [
@@ -3428,6 +3895,7 @@ async function stationDetail(
         tr("电费"),
         tr("服务费"),
         tr("合计"),
+        ...(canPrice ? [tr("操作")] : []),
       ],
 
       pricing.map(
@@ -3462,6 +3930,15 @@ async function stationDetail(
                 )}
               </b>
             </td>
+
+            ${
+              canPrice
+                ? `<td>
+                    ${btn(tr("编辑"), "edit-pricing", "secondary small", `data-id="${p.id}"`)}
+                    ${btn(tr("删除"), "delete-pricing", "danger small", `data-id="${p.id}"`)}
+                  </td>`
+                : ""
+            }
           </tr>`,
       ),
     );
@@ -3542,18 +4019,29 @@ async function stationDetail(
 
       ${info}
 
-      <h3
-        style="
-          margin:
-            22px 0 12px
-        "
-      >
-        ${tr(
-          "分时收费标准",
-        )}
-      </h3>
+    </div>
+
+    <div class="card" style="margin-bottom:20px">
+
+      <div class="section-head">
+
+        <h3>
+          ${tr(
+            "分时收费标准",
+          )}
+        </h3>
+
+      </div>
 
       ${tariff}
+
+      ${
+        canPrice
+          ? `<div class="actions" style="margin-top:12px">
+              ${btn(tr("＋ 添加价格时段"), "edit-pricing")}
+            </div>`
+          : ""
+      }
 
     </div>
 
@@ -3567,18 +4055,8 @@ async function stationDetail(
           )}
         </h3>
 
-        <small>
-          ${
-            cs.filter(
-              (c) =>
-                c.status ===
-                "idle",
-            ).length
-          }
-
-          ${tr(
-            "个空闲",
-          )}
+        <small class="station-kind-summary">
+          ${kindSummary(cs)}
         </small>
 
       </div>
@@ -3598,9 +4076,6 @@ async function stationDetail(
             "idle",
             "reserved",
             "charging",
-            "fault",
-            "maintenance",
-            "offline",
           ]
             .map(
               (k) =>
@@ -3612,25 +4087,15 @@ async function stationDetail(
             .join("")}
         </select>
 
-        <select
-          id="charger-filter-kind"
-        >
-          <option value="">
-            ${tr(
-              "全部类型",
-            )}
-          </option>
+        <label class="kind-check kind-fast">
+          <input type="checkbox" id="charger-filter-fast">
+          <span>${tr("快充")}</span>
+        </label>
 
-          ${opt(
-            "fast",
-            tr("快充"),
-          )}
-
-          ${opt(
-            "slow",
-            tr("慢充"),
-          )}
-        </select>
+        <label class="kind-check kind-slow">
+          <input type="checkbox" id="charger-filter-slow">
+          <span>${tr("慢充")}</span>
+        </label>
 
         <select
           id="charger-filter-sort"
@@ -3875,7 +4340,7 @@ function ordersTable(os) {
           </td>
 
           <td>
-            ${badge(o.status)}
+            ${badge(orderStatus(o))}
           </td>
 
           <td>
@@ -3969,6 +4434,7 @@ async function ordersPage() {
           "reserved",
           "charging",
           "completed",
+          "debt",
           "cancelled",
           "expired",
         ]
@@ -4465,7 +4931,7 @@ async function receipt(id) {
     ) + id,
 
     trHtml`
-      ${badge(o.status)}
+      ${badge(orderStatus(o))}
 
       <div class="payment-highlight">
         ${paymentBadge(
@@ -4656,6 +5122,77 @@ async function receipt(id) {
   );
 }
 
+async function debtOrdersModal() {
+  const orders =
+    (
+      await api(
+        "/orders",
+      )
+    ).filter((o) => o.debt_cents > 0);
+
+  S.debtModal = true;
+
+  modal(
+    tr("欠费订单"),
+
+    trHtml`
+      <p class="sub" style="margin-bottom:16px">
+        ${tr("共")}
+        ${orders.length}
+        ${tr("笔待补缴订单，可直接查看小票详情或在线补缴。")}
+      </p>
+
+      ${
+        orders.length
+          ? table(
+              [
+                tr("订单号"),
+                tr("电站 / 电桩"),
+                tr("欠费金额"),
+                tr("创建时间"),
+                tr("操作"),
+              ],
+
+              orders.map(
+                (o) =>
+                  `<tr>
+                    <td>
+                      <b>#${String(o.id).padStart(5, "0")}</b>
+                    </td>
+
+                    <td>
+                      ${esc(o.station_name)}
+                      <br>
+                      <small>${esc(o.charger_number)}</small>
+                    </td>
+
+                    <td>
+                      <b style="color:#c67588">
+                        ¥ ${yuan(o.debt_cents)}
+                      </b>
+                    </td>
+
+                    <td>
+                      ${time(o.created_at).slice(0, 16)}
+                    </td>
+
+                    <td>
+                      ${btn(tr("详情"), "receipt", "secondary small", `data-id="${o.id}"`)}
+                      ${btn(tr("补缴欠费"), "order-pay", "small", `data-id="${o.id}"`)}
+                    </td>
+                  </tr>`,
+              ),
+            )
+          : empty(
+              tr(
+                "暂无欠费订单",
+              ),
+            )
+      }
+    `,
+  );
+}
+
 async function walletPage() {
   const [
     ls,
@@ -4775,11 +5312,11 @@ async function walletPage() {
             )}
           </div>
 
-          ${pageBtn(
-            "orders",
+          ${btn(
             tr(
               "查看欠费订单",
             ),
+            "debt-orders",
           )}
 
         </div>
@@ -5819,9 +6356,24 @@ async function rolesPage() {
 }
 
 async function revenuePage() {
-  const d =
-    await api(
-      "/dashboard",
+  const [
+    d,
+    rs,
+  ] =
+    await Promise.all([
+      api("/dashboard"),
+
+      api(
+        "/admin/revenue_stations",
+      ),
+    ]);
+
+  const maxRev =
+    Math.max(
+      ...rs.stations.map(
+        (x) => x.revenue_cents,
+      ),
+      1,
     );
 
   return trHtml`
@@ -5861,6 +6413,55 @@ async function revenuePage() {
                 .debt_cents,
             ),
         )}
+
+      </div>
+
+      <div class="card">
+
+        <div class="section-head">
+
+          <h2>
+            ${tr("各电站营收")}
+          </h2>
+
+          <small>
+            ${tr("按实收从高到低排序")}
+            ·
+            ${tr("平均每站实收")}
+            ¥
+            ${yuan(
+              rs.average_cents,
+            )}
+          </small>
+        </div>
+
+        <div class="bar-chart">
+          ${
+            rs.stations
+              .map(
+                (x) => {
+                  const h =
+                    Math.round(
+                      (x.revenue_cents /
+                        maxRev) *
+                        140,
+                    );
+
+                  return `<div class="bar-item" title="${esc(x.name)}：¥ ${yuan(x.revenue_cents)}">
+                    <small>${yuan(x.revenue_cents)}</small>
+                    <i style="height:${Math.max(2, h)}px"></i>
+                    <small>${esc(x.name.length > 6 ? x.name.slice(0, 6) + "…" : x.name)}</small>
+                  </div>`;
+                },
+              )
+              .join("") ||
+            empty(
+              tr(
+                "暂无营收数据",
+              ),
+            )
+          }
+        </div>
 
       </div>
 
@@ -6245,9 +6846,29 @@ async function go(
   const v =
     ++S.version;
 
+  const sidebar =
+    document.querySelector(
+      ".sidebar",
+    );
+
+  const sidebarScroll =
+    sidebar
+      ? sidebar.scrollTop
+      : 0;
+
   $("#modal").close();
 
   shell();
+
+  const sb =
+    document.querySelector(
+      ".sidebar",
+    );
+
+  if (sb) {
+    sb.scrollTop =
+      sidebarScroll;
+  }
 
   $("#content").innerHTML =
     tr(
@@ -6715,7 +7336,7 @@ function editStation(id) {
 
         <div class="note">
           新增电站时会自动生成早/日间/晚三个分时价格；
-          之后请到“价格管理”单独调整。
+          之后请在电站详情的“分时收费标准”中调整。
         </div>
 
         <button
@@ -7552,6 +8173,10 @@ async function act(
       rechargeModal();
       break;
 
+    case "debt-orders":
+      debtOrdersModal();
+      break;
+
     case "preset":
       $("#f-amount")
         .value =
@@ -7782,9 +8407,42 @@ async function act(
 
       await refresh();
 
-      await go(
-        "orders",
-      );
+      if (S.debtModal) {
+        await debtOrdersModal();
+
+        if (S.page === "wallet") {
+          const bal =
+            $(".card.wallet .balance");
+
+          if (bal) {
+            bal.textContent =
+              "¥ " +
+              yuan(
+                S.user.balance_cents,
+              );
+          }
+
+          const debt =
+            $(".card .chart-summary");
+
+          if (debt) {
+            const d =
+              await api(
+                "/dashboard",
+              );
+
+            debt.textContent =
+              "¥ " +
+              yuan(
+                d.totals.debt_cents,
+              );
+          }
+        }
+      } else {
+        await go(
+          "orders",
+        );
+      }
 
       toast(
         tr(
@@ -7886,7 +8544,12 @@ async function act(
         );
 
         await go(
-          "pricing",
+          S.page === "station"
+            ? "station"
+            : "stations",
+          S.page === "station"
+            ? S.pageId
+            : undefined,
         );
 
         toast(
@@ -8115,7 +8778,7 @@ async function act(
                 分时计价
               </b>
 
-              管理员在价格管理维护电费与服务费；
+              管理员在电站详情维护电费与服务费；
               开始充电时锁定当前时段价格。
             </p>
 
@@ -8628,7 +9291,8 @@ document.addEventListener(
             d.station_id;
 
           await go(
-            "pricing",
+            "station",
+            d.station_id,
           );
 
           toast(
@@ -8724,7 +9388,7 @@ function filterOrders() {
           (o) =>
             (
               !s ||
-              o.status ===
+              orderStatus(o) ===
                 s
             ) &&
             `${
@@ -8860,34 +9524,7 @@ document.addEventListener(
       e.target.id ===
       "station-search"
     ) {
-      const q =
-        e.target.value
-          .toLowerCase();
-
-      $("#station-list")
-        .innerHTML =
-          S.stations
-            .filter(
-              (s) =>
-                (
-                  s.name +
-                  s.address +
-                  s.city
-                )
-                  .toLowerCase()
-                  .includes(
-                    q,
-                  ),
-            )
-            .map(
-              stationCard,
-            )
-            .join("") ||
-          empty(
-            tr(
-              "没有匹配的电站",
-            ),
-          );
+      renderStationList();
     }
 
     if (
@@ -9007,6 +9644,25 @@ document.addEventListener(
       }
 
       if (
+        [
+          "trend-granularity",
+          "trend-range",
+          "trend-station",
+        ].includes(
+          e.target.id,
+        )
+      ) {
+        await loadTrend();
+      }
+
+      if (
+        e.target.id ===
+        "trend-metric"
+      ) {
+        renderTrendCharts();
+      }
+
+      if (
         e.target.id ===
         "charger-filter-status"
       ) {
@@ -9018,10 +9674,15 @@ document.addEventListener(
 
       if (
         e.target.id ===
-        "charger-filter-kind"
+          "charger-filter-fast" ||
+        e.target.id ===
+          "charger-filter-slow"
       ) {
-        S.chargerFilter.kind =
-          e.target.value;
+        S.chargerFilter = {
+          ...(S.chargerFilter || {}),
+          [e.target.id === "charger-filter-fast" ? "fastOn" : "slowOn"]:
+            e.target.checked,
+        };
 
         renderStationChargers();
       }
@@ -9171,7 +9832,8 @@ document.addEventListener(
           );
 
         await go(
-          "pricing",
+          "station",
+          S.pricingStation,
         );
       }
     } catch (err) {

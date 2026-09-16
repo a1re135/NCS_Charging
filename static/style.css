@@ -602,3 +602,132 @@
     padding:14px
   }
 }
+
+/* =========================================================
+   Jiaqi integration:
+   dashboard trends + charger kind filters
+   ========================================================= */
+
+.trend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 4px;
+}
+
+.trend-cell {
+  box-shadow: none;
+  padding: 18px 20px;
+}
+
+.trend-cell .section-head {
+  margin-bottom: 10px;
+}
+
+.trend-cell h3 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.trend-cell .chart-labels {
+  margin-top: 8px;
+}
+
+.kind-stats {
+  font-size: 12px;
+  color: var(--muted, #888);
+  background: #faf8fe;
+  border: 1px solid #eee9f7;
+  border-radius: 12px;
+  padding: 12px 15px;
+  margin-bottom: 14px;
+  line-height: 1.9;
+}
+
+.kind-stats b {
+  color: #5c5470;
+  font-weight: 600;
+}
+
+.kind-check {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.kind-check input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.kind-check span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9b94b8;
+  background: #fff;
+  border: 1px solid #e9e5f2;
+  border-radius: 999px;
+  padding: 9px 16px;
+  transition: all 0.18s ease;
+}
+
+.kind-check span::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #cfc9e6;
+  transition: all 0.18s ease;
+}
+
+.kind-check:hover span {
+  border-color: #d9d0f4;
+  color: #7c6fc0;
+}
+
+.kind-check input:checked + span {
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(123, 107, 214, 0.32);
+}
+
+.kind-check input:checked + span::before {
+  background: #fff;
+  transform: scale(1.15);
+}
+
+.kind-check.kind-fast input:checked + span {
+  background: linear-gradient(
+    135deg,
+    #8d7be7,
+    #6f96ef
+  );
+}
+
+.kind-check.kind-slow input:checked + span {
+  background: linear-gradient(
+    135deg,
+    #0ea5a0,
+    #3ecf8e
+  );
+}
+
+.station-kind-summary {
+  font-size: 12px;
+  color: var(--muted, #888);
+}
+
+@media (max-width: 900px) {
+  .trend-grid {
+    grid-template-columns: 1fr;
+  }
+}
