@@ -63,6 +63,253 @@ let notificationTimer = null;
 let notificationInitialized = false;
 let notificationSeen = new Set();
 
+function notificationCopy(item) {
+  const rawTitle =
+    String(
+      item?.title ||
+      "通知"
+    );
+
+  const rawBody =
+    String(
+      item?.body ||
+      ""
+    );
+
+  // Chinese mode keeps the original stored notification.
+  if (
+    NCSPreferences.state.language !==
+    "en"
+  ) {
+    return {
+      title: rawTitle,
+      body: rawBody,
+    };
+  }
+
+  let match;
+
+  // =====================================================
+  // Charging completed
+  // =====================================================
+
+  if (
+    item?.kind ===
+    "charging_completed"
+  ) {
+    match =
+      rawBody.match(
+        /^充电已完成，最终费用 ¥([\d.]+)，余额不足，需补缴 ¥([\d.]+)。$/,
+      );
+
+    if (match) {
+      return {
+        title:
+          "Charging completed",
+
+        body:
+          `Charging completed. Final cost: ¥${match[1]}. ` +
+          `Insufficient balance; ¥${match[2]} remains due.`,
+      };
+    }
+
+    match =
+      rawBody.match(
+        /^充电已完成，最终费用 ¥([\d.]+)，优惠券已使用。$/,
+      );
+
+    if (match) {
+      return {
+        title:
+          "Charging completed",
+
+        body:
+          `Charging completed. Final cost: ¥${match[1]}. ` +
+          `Coupon applied.`,
+      };
+    }
+
+    match =
+      rawBody.match(
+        /^充电已完成，最终费用 ¥([\d.]+)。$/,
+      );
+
+    if (match) {
+      return {
+        title:
+          "Charging completed",
+
+        body:
+          `Charging completed. Final cost: ¥${match[1]}.`,
+      };
+    }
+  }
+
+  // =====================================================
+  // Active charging / reservation reminder
+  // =====================================================
+
+  if (
+    item?.kind ===
+    "active_order"
+  ) {
+    match =
+      rawBody.match(
+        /^(.*?)：你有一个正在充电的订单。$/,
+      );
+
+    if (match) {
+      return {
+        title:
+          "Charging status",
+
+        body:
+          `${tr(match[1])}: You have an active charging session.`,
+      };
+    }
+
+    match =
+      rawBody.match(
+        /^(.*?)：预约中的充电订单仍在保留。$/,
+      );
+
+    if (match) {
+      return {
+        title:
+          "Charging status",
+
+        body:
+          `${tr(match[1])}: Your charging reservation is still active.`,
+      };
+    }
+  }
+
+  // =====================================================
+  // Low balance
+  // =====================================================
+
+  if (
+    item?.kind ===
+    "low_balance"
+  ) {
+    return {
+      title:
+        "Low balance",
+
+      body:
+        "Your balance is below ¥10. Please top up before charging.",
+    };
+  }
+
+  // =====================================================
+  // Outstanding debt
+  // =====================================================
+
+  if (
+    item?.kind ===
+    "debt"
+  ) {
+    match =
+      rawBody.match(
+        /^当前有 ¥([\d.]+) 欠费，请补缴后再开始下一次充电。$/,
+      );
+
+    if (match) {
+      return {
+        title:
+          "Outstanding payment",
+
+        body:
+          `You have an outstanding balance of ¥${match[1]}. ` +
+          `Please pay it before starting another charging session.`,
+      };
+    }
+  }
+
+  // =====================================================
+  // Insufficient balance
+  // =====================================================
+
+  if (
+    item?.kind ===
+    "insufficient_balance"
+  ) {
+    return {
+      title:
+        "Insufficient balance",
+
+      body:
+        "Your current balance is ¥0.00. Please top up before starting a charging session.",
+    };
+  }
+
+  // =====================================================
+  // Fault reminder
+  // =====================================================
+
+  if (
+    item?.kind ===
+    "fault"
+  ) {
+    match =
+      rawBody.match(
+        /^(.*?) · (.*?) 当前状态：([a-z]+)。$/,
+      );
+
+    if (match) {
+      const statusNames = {
+        pending:
+          "Pending",
+        processing:
+          "In progress",
+        resolved:
+          "Resolved",
+        fault:
+          "Fault",
+        maintenance:
+          "Maintenance",
+        offline:
+          "Offline",
+      };
+
+      return {
+        title:
+          "Charger fault requires attention",
+
+        body:
+          `${tr(match[1])} · ${match[2]} — ` +
+          `Status: ${statusNames[match[3]] || match[3]}.`,
+      };
+    }
+  }
+
+  // =====================================================
+  // Backup reminder
+  // =====================================================
+
+  if (
+    item?.kind ===
+    "backup"
+  ) {
+    return {
+      title:
+        "Create your first database backup",
+
+      body:
+        "No database backup has been detected yet. Creating a recoverable backup is recommended.",
+    };
+  }
+
+  // Fallback for ordinary dictionary-based translations.
+  return {
+    title:
+      tr(rawTitle),
+
+    body:
+      tr(rawBody),
+  };
+}
+
 async function refreshUserNotifications(showPopup = true) {
   if (!S.user) return;
   try {
@@ -76,9 +323,14 @@ async function refreshUserNotifications(showPopup = true) {
       for (const item of items.slice().reverse()) {
         const id = String(item.id);
         if (!notificationSeen.has(id)) {
-          const title = tr(item.title || "通知");
-          const body = tr(item.body || "");
-          toast(`${title}: ${body}`);
+          const copy =
+            notificationCopy(
+              item,
+            );
+
+          toast(
+            `${copy.title}: ${copy.body}`,
+          );
         }
       }
       notificationSeen = ids;
@@ -108,9 +360,21 @@ async function showUserNotifications() {
     return;
   }
   const html = items.map((item) => {
-    const title = tr(item.title || "通知");
-    const body = tr(item.body || "");
-    const timeText = time(item.created_at);
+    const copy =
+      notificationCopy(
+        item,
+      );
+
+    const title =
+      copy.title;
+
+    const body =
+      copy.body;
+
+    const timeText =
+      time(
+        item.created_at,
+      );
     const unread = !Number(item.read);
     return `<div class="note" style="margin-bottom:10px;${unread ? "border-left:3px solid var(--accent);" : ""}">
       <strong>${esc(title)}</strong>
