@@ -177,6 +177,21 @@ const dataText = (value) =>
 const roleLabel = (role, roleName = "") =>
   tr(roleName || roleNames[role] || role);
 
+const translateOperation = (value) => {
+  const text = String(value ?? "");
+  const prefix = "创建数据库备份";
+
+  if (text === prefix) {
+    return tr(prefix);
+  }
+
+  if (text.startsWith(prefix + " ")) {
+    return tr(prefix) + text.slice(prefix.length);
+  }
+
+  return tr(text);
+};
+
 const can = (permission) =>
   S.user?.role === "admin" ||
   (S.user?.permissions || []).includes(permission);
@@ -757,6 +772,11 @@ const userNav = [
     "我的钱包",
   ],
   [
+    "member",
+    "gift",
+    "会员中心",
+  ],
+  [
     "agent",
     "help",
     "AI 智能助手",
@@ -767,19 +787,34 @@ const userNav = [
     "个人中心",
   ],
 ];
+
 const roleNav = [
   ["dashboard", "home", "运营总览", null],
   ["stations", "pin", "电站管理", "station.view"],
   ["chargers", "bolt", "电桩管理", "charger.view"],
+
+  // DEV
   ["realtime", "chart", "实时监控", "charger.view"],
+
+  // LIM
+  ["pricing", "wallet", "价格管理", "pricing.manage"],
+
+  // DEV
   ["agent", "help", "AI 智能助手", null],
+
   ["faults", "help", "故障管理", "fault.manage"],
   ["users", "user", "用户管理", "user.manage"],
   ["orders", "orders", "订单管理", "order.view_all"],
   ["revenue", "chart", "营收统计", "analytics.view"],
-  ["prediction", "chart", "负荷预测", "prediction.view"],
-  ["roles", "grid", "角色与权限", "role.manage"],
-  ["logs", "orders", "操作日志", "log.view"],
+
+  // LIM's icon/details
+  ["prediction", "trend", "负荷预测", "prediction.view"],
+  ["roles", "shield", "角色与权限", "role.manage"],
+  ["logs", "clipboard", "操作日志", "log.view"],
+
+  // LIM
+  ["settings", "settings", "偏好设置", null],
+  ["ops-center", "activity", "运营中心", "system.monitor"],
 ];
 
 function currentNav() {

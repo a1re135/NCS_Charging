@@ -569,7 +569,25 @@ def _refresh_notifications(db, user):
         debt = db.execute("SELECT COALESCE(SUM(debt_cents),0) v FROM orders WHERE user_id=? AND debt_cents>0", (uid,)).fetchone()["v"]
         if debt:
             _upsert_notification(db, uid, "debt", "存在待补缴订单", f"当前有 ¥{debt/100:.2f} 欠费，请补缴后再开始下一次充电。", "danger")
-        active = db.execute("SELECT id,status,station_name FROM orders o JOIN chargers c ON c.id=o.charger_id JOIN stations s ON s.id=c.station_id WHERE o.user_id=? AND o.status IN ('reserved','charging') ORDER BY o.id DESC LIMIT 1", (uid,)).fetchone()
+        active = db.execute(
+            """
+            SELECT
+                o.id AS id,
+                o.status AS status,
+                s.name AS station_name
+            FROM orders o
+            JOIN chargers c
+                ON c.id = o.charger_id
+            JOIN stations s
+                ON s.id = c.station_id
+            WHERE
+                o.user_id = ?
+                AND o.status IN ('reserved', 'charging')
+            ORDER BY o.id DESC
+            LIMIT 1
+            """,
+            (uid,),
+        ).fetchone()
         if active:
             text = "预约中的充电订单仍在保留。" if active["status"] == "reserved" else "你有一个正在充电的订单。"
             _upsert_notification(db, uid, "active_order", "充电状态提醒", f"{active['station_name']}：{text}", "info", "order", active["id"])

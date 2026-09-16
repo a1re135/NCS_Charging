@@ -214,16 +214,54 @@ PERMISSION_DEFINITIONS = [
     ('user.manage','管理用户','用户'),
     ('role.manage','管理角色与权限','权限'),
     ('log.view','查看操作日志','审计'),
+
+    # LIM Operations Center
+    ('system.monitor','查看系统运行监控','运维'),
+    ('analytics.utilization','查看设备利用率分析','分析'),
+    ('audit.view','查看增强审计日志','审计'),
+    ('backup.manage','管理数据库备份','可靠性'),
+    ('notification.view','查看通知中心','通知'),
 ]
 
 ROLE_PERMISSION_KEYS = {
-    'user': {'station.view'},
-    'operator': {
-        'station.view','station.manage','charger.view','order.view_all',
-        'order.export','pricing.manage','analytics.view','prediction.view'
+    'user': {
+        'station.view',
+        'notification.view',
     },
-    'technician': {'station.view','charger.view','charger.manage','fault.manage'},
-    'admin': {k for k,_,_ in PERMISSION_DEFINITIONS},
+
+    'operator': {
+        'station.view',
+        'station.manage',
+        'charger.view',
+        'order.view_all',
+        'order.export',
+        'pricing.manage',
+        'analytics.view',
+        'prediction.view',
+
+        # LIM
+        'system.monitor',
+        'analytics.utilization',
+        'audit.view',
+        'notification.view',
+    },
+
+    'technician': {
+        'station.view',
+        'charger.view',
+        'charger.manage',
+        'fault.manage',
+
+        # LIM
+        'system.monitor',
+        'analytics.utilization',
+        'notification.view',
+    },
+
+    'admin': {
+        k
+        for k, _, _ in PERMISSION_DEFINITIONS
+    },
 }
 
 def _ensure_rbac_schema(db):
