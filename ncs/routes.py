@@ -1033,7 +1033,7 @@ def new_order():
 @api.post('/orders/<int:oid>/<action>')
 @auth(allow_frozen=True)
 def order_action(oid,action):
-    if not g.user['active'] and action not in ('finish','pay'):
+    if not g.user['active'] and action not in ('stop','finish','pay'):
         raise BusinessError('账号已冻结，无法执行该操作',403)
 
     data = body() if action == 'finish' else {}

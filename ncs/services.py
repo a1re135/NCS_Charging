@@ -153,19 +153,92 @@ def maybe_expire_reservations(interval=1.0):
         _expire_lock.release()
 
 def quote(order, at=None):
-    o=dict(order)
-    if o['status']=='charging':
-        seconds=max(0,int(((at or datetime.now())-datetime.fromisoformat(o['started_at'])).total_seconds()))*o['time_scale']
-        energy=Decimal(str(o['power']))*Decimal(seconds)/Decimal(3600)
-        o.update(simulated_seconds=seconds,energy=round(float(energy),3),amount_cents=int((energy*o['price_cents']).quantize(Decimal('1'),rounding=ROUND_HALF_UP)))
-    amount=int(o.get('amount_cents') or 0); paid=int(o.get('paid_cents') or 0); debt=int(o.get('debt_cents') or 0)
-    if o.get('status') in ('reserved','charging'): status='待结算'
-    elif debt>0: status='待补缴'
-    elif amount<=0: status='无需支付'
-    elif paid>=amount: status='已支付'
-    elif paid>0: status='部分支付'
-    else: status='支付失败'
-    o['payment_status']=status
+    o = dict(order)
+
+    if o['status'] == 'charging':
+
+        # If ended_at already exists, charging has already been
+        # stopped and the fee must stay frozen at that moment.
+        if o.get('ended_at'):
+            end_at = datetime.fromisoformat(
+                o['ended_at']
+            )
+        else:
+            end_at = at or datetime.now()
+
+        seconds = max(
+            0,
+            int(
+                (
+                    end_at
+                    - datetime.fromisoformat(
+                        o['started_at']
+                    )
+                ).total_seconds()
+            )
+        ) * o['time_scale']
+
+        energy = (
+            Decimal(str(o['power']))
+            * Decimal(seconds)
+            / Decimal(3600)
+        )
+
+        o.update(
+            simulated_seconds=seconds,
+            energy=round(
+                float(energy),
+                3,
+            ),
+            amount_cents=int(
+                (
+                    energy
+                    * o['price_cents']
+                ).quantize(
+                    Decimal('1'),
+                    rounding=ROUND_HALF_UP,
+                )
+            ),
+        )
+
+    amount = int(
+        o.get('amount_cents')
+        or 0
+    )
+
+    paid = int(
+        o.get('paid_cents')
+        or 0
+    )
+
+    debt = int(
+        o.get('debt_cents')
+        or 0
+    )
+
+    if o.get('status') in (
+        'reserved',
+        'charging',
+    ):
+        status = '待结算'
+
+    elif debt > 0:
+        status = '待补缴'
+
+    elif amount <= 0:
+        status = '无需支付'
+
+    elif paid >= amount:
+        status = '已支付'
+
+    elif paid > 0:
+        status = '部分支付'
+
+    else:
+        status = '支付失败'
+
+    o['payment_status'] = status
+
     return o
 
 ORDER_SELECT='''SELECT o.*,s.name station_name,s.address,s.city,s.lat,s.lng,c.number charger_number,u.nickname,u.phone
@@ -272,14 +345,111 @@ def act_order(uid,oid,action,payload=None):
                        (now(),tariff['price_cents'],tariff['electricity_fee_cents'],tariff['service_fee_cents'],oid))
             db.execute("UPDATE chargers SET status='charging' WHERE id=?",(c['id'],))
         elif action=='cancel':
-            if o['status']!='reserved': raise BusinessError('只能取消预约订单',409)
-            db.execute("UPDATE orders SET status='cancelled',ended_at=? WHERE id=?",(now(),oid))
-            db.execute("UPDATE chargers SET status='idle' WHERE id=? AND status='reserved'",(c['id'],))
+            if o['status']!='reserved':
+                raise BusinessError(
+                    '只能取消预约订单',
+                    409
+                )
+
+            db.execute(
+                """
+                UPDATE orders
+                SET
+                    status='cancelled',
+                    ended_at=?
+                WHERE id=?
+                """,
+                (
+                    now(),
+                    oid,
+                ),
+            )
+
+            db.execute(
+                """
+                UPDATE chargers
+                SET status='idle'
+                WHERE
+                    id=?
+                    AND status='reserved'
+                """,
+                (
+                    c['id'],
+                ),
+            )
+
+        elif action=='stop':
+            if o['status']!='charging':
+                raise BusinessError(
+                    '订单已停止或未开始充电',
+                    409,
+                )
+
+            # Make stop idempotent.
+            # If ended_at already exists, the amount has already
+            # been frozen and should not be recalculated.
+            if not o['ended_at']:
+
+                end = datetime.now()
+
+                q = quote(
+                    o,
+                    end,
+                )
+
+                db.execute(
+                    """
+                    UPDATE orders
+                    SET
+                        ended_at=?,
+                        energy=?,
+                        amount_cents=?,
+                        simulated_seconds=?
+                    WHERE id=?
+                    """,
+                    (
+                        end.isoformat(
+                            timespec='seconds'
+                        ),
+                        q['energy'],
+                        q['amount_cents'],
+                        q['simulated_seconds'],
+                        oid,
+                    ),
+                )
+
+                # Charging is physically finished immediately.
+                # The user can take their time completing payment.
+                db.execute(
+                    """
+                    UPDATE chargers
+                    SET status='idle'
+                    WHERE
+                        id=?
+                        AND status='charging'
+                    """,
+                    (
+                        c['id'],
+                    ),
+                )
+
         elif action=='finish':
-            if o['status']!='charging': raise BusinessError('订单已处理或未开始，不能重复结算',409)
-            end=datetime.now()
-            q=quote(o,end)
-            q['charger_id']=c['id']
+            if o['status']!='charging':
+                raise BusinessError(
+                    '订单已处理或未开始，不能重复结算',
+                    409
+                )
+
+            end = datetime.now()
+
+            # quote() will automatically use the earlier ended_at
+            # if the user already clicked "结束充电并结算".
+            q = quote(
+                o,
+                end,
+            )
+
+            q['charger_id'] = c['id']
 
             from .loyalty import settle_with_loyalty
 

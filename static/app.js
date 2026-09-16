@@ -9904,7 +9904,19 @@ async function act(
       break;
 
     case "order-finish":
-      await finishOrderModal(id);
+      // Stop charging immediately and freeze the
+      // time, energy and amount before opening
+      // the settlement window.
+      await api(
+        `/orders/${id}/stop`,
+        "POST",
+        {},
+      );
+
+      await finishOrderModal(
+        id,
+      );
+
       break;
 
     case "order-cancel":

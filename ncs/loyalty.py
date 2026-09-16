@@ -672,8 +672,19 @@ def settle_with_loyalty(
     debt = final_amount - paid
     balance_after = balance - paid
 
-    end = datetime.now().isoformat(
+    settled_at = datetime.now().isoformat(
         timespec="seconds"
+    )
+
+    # If /stop already froze the charging session,
+    # preserve the real charging end time.
+    charge_end = (
+        quote_result.get("ended_at")
+        or settled_at
+    )
+
+    already_stopped = bool(
+        quote_result.get("ended_at")
     )
 
     seconds = int(
@@ -699,7 +710,7 @@ def settle_with_loyalty(
         WHERE id=?
         """,
         (
-            end,
+            charge_end,
             quote_result["energy"],
             final_amount,
             paid,
@@ -735,7 +746,7 @@ def settle_with_loyalty(
                 AND status='available'
             """,
             (
-                end,
+                settled_at,
                 order_id,
                 int(
                     chosen[1]["user_coupon_id"]
@@ -743,12 +754,20 @@ def settle_with_loyalty(
             ),
         )
 
+    release_charger = (
+        0
+        if already_stopped
+        else 1
+    )
+
     db.execute(
         """
         UPDATE chargers
         SET
             status=CASE
-                WHEN status='charging'
+                WHEN
+                    ?=1
+                    AND status='charging'
                 THEN 'idle'
                 ELSE status
             END,
@@ -757,6 +776,7 @@ def settle_with_loyalty(
         WHERE id=?
         """,
         (
+            release_charger,
             seconds // 60,
             quote_result["charger_id"],
         ),
