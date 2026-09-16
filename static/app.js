@@ -810,7 +810,6 @@ const roleNav = [
   // LIM's icon/details
   ["prediction", "trend", "负荷预测", "prediction.view"],
   ["roles", "shield", "角色与权限", "role.manage"],
-  ["logs", "clipboard", "操作日志", "log.view"],
 
   // LIM
   ["settings", "settings", "偏好设置", null],
