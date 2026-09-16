@@ -12,6 +12,7 @@ the existing local Agent in agent.py is used instead.
 
 import json
 import os
+import threading
 
 from flask import current_app
 from openai import OpenAI
@@ -38,6 +39,58 @@ TRUE_VALUES = {
     "on",
 }
 
+_glm_client = None
+_glm_client_key = None
+_glm_client_lock = threading.Lock()
+
+
+def get_glm_client(
+    api_key,
+    base_url,
+):
+    """
+    Reuse one OpenAI-compatible client so concurrent
+    Agent requests can reuse HTTP connections instead
+    of creating a new client/TLS connection every time.
+    """
+
+    global _glm_client
+    global _glm_client_key
+
+    key = (
+        api_key,
+        base_url,
+    )
+
+    if (
+        _glm_client is not None
+        and _glm_client_key == key
+    ):
+        return _glm_client
+
+    with _glm_client_lock:
+        if (
+            _glm_client is not None
+            and _glm_client_key == key
+        ):
+            return _glm_client
+
+        if _glm_client is not None:
+            try:
+                _glm_client.close()
+            except Exception:
+                pass
+
+        _glm_client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=20.0,
+            max_retries=1,
+        )
+
+        _glm_client_key = key
+
+        return _glm_client
 
 # =========================================================
 # Tool definitions
@@ -410,76 +463,19 @@ def system_prompt(user):
     )
 
     return f"""
-你是 NCS 智能充电桩运营服务平台的 AI Agent。
+你是 NCS 智能充电平台的 AI Agent。
+当前用户角色：{role_name}。
 
-当前登录角色：{role_name}
-
-你不是普通聊天机器人。
-你的任务是理解自然语言，并在需要真实平台数据时调用系统提供的业务工具。
+任务：理解用户自然语言，并选择合适的已提供业务工具。
 
 规则：
-
-1. 涉及充电站、设备、订单、余额、欠费、营收、故障或运营数据的问题，
-   必须使用提供的工具查询真实系统数据。
-
-2. 不得编造任何：
-   - 充电站
-   - 设备状态
-   - 订单
-   - 用户余额
-   - 收入
-   - 故障
-   - 运营统计
-
-3. 不得调用当前角色没有权限使用的功能。
-
-4. 不得尝试生成 SQL，也不得要求直接访问数据库。
-
-5. 不得泄露：
-   - API Key
-   - 数据库密码
-   - 用户密码
-   - 系统密钥
-
-6. 如果用户使用中文，就用中文回答。
-   如果用户使用英文，就用英文回答。
-
-7. 回答尽量简洁、自然，适合充电平台用户阅读。
-
-8. 如果某项信息无法从工具结果确认，要明确说明无法确认，
-   不要自行猜测。
-
-9. 如果问题与 NCS 充电平台无关，可以简单说明：
-   你主要负责 NCS 充电服务相关问题。
-
-
-普通用户可以咨询：
-
-- 附近充电站
-- 空闲快充
-- 当前充电订单
-- 最近充电记录
-- 钱包余额
-- 欠费
-- 充电无法启动
-
-
-运营人员和管理员可以咨询：
-
-- 今日订单
-- 近期营收
-- 当前设备状态
-- 故障情况
-- 故障排名
-- 运营报告
-
-
-运维人员可以咨询：
-
-- 当前设备状态
-- 故障设备
-- 故障历史
-"""
+1. 涉及充电站、充电桩、订单、钱包、故障、营收或运营数据时，必须调用工具。
+2. 只能使用当前提供的工具，不得自行访问数据库或生成 SQL。
+3. 不得编造业务数据。
+4. 不得泄露密码、API Key 或系统密钥。
+5. 中文问题使用中文，英文问题使用英文。
+6. 如果不需要工具，可以直接简短回答。
+""".strip()
 
 
 # =========================================================
@@ -565,7 +561,7 @@ def hybrid_chat(
 
     model = os.getenv(
         "BIGMODEL_MODEL",
-        "glm-5.2",
+        "glm-4-flashx-250414",
     ).strip()
 
     if (
@@ -598,13 +594,10 @@ def hybrid_chat(
     # ---------------------------------------------
 
     try:
-        client = OpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            timeout=20.0,
-            max_retries=1,
+        client = get_glm_client(
+            api_key,
+            base_url,
         )
-
         messages = [
             {
                 "role": "system",
@@ -629,6 +622,8 @@ def hybrid_chat(
                 messages=messages,
                 tools=tools,
                 tool_choice="auto",
+                temperature=0,
+                max_tokens=128,
             )
         )
 
@@ -713,107 +708,27 @@ def hybrid_chat(
         )
 
         # -----------------------------------------
-        # Add GLM's tool request to history
+        # One-call Agent path
+        #
+        # GLM has already understood the user's
+        # natural-language request and selected the
+        # approved business tool.
+        #
+        # The local tool returns verified system data
+        # together with a ready-to-display answer, so
+        # a second GLM API call is unnecessary.
         # -----------------------------------------
-
-        messages.append(
-            {
-                "role": "assistant",
-                "content":
-                    assistant_message
-                    .content
-                    or "",
-
-                "tool_calls": [
-                    {
-                        "id":
-                            tool_call.id,
-
-                        "type":
-                            "function",
-
-                        "function": {
-                            "name":
-                                tool_name,
-
-                            "arguments":
-                                raw_arguments,
-                        },
-                    }
-                ],
-            }
-        )
-
-        # -----------------------------------------
-        # Add our verified database result
-        # -----------------------------------------
-
-        messages.append(
-            {
-                "role": "tool",
-
-                "tool_call_id":
-                    tool_call.id,
-
-                "content":
-                    json.dumps(
-                        result,
-                        ensure_ascii=False,
-                        default=str,
-                    ),
-            }
-        )
-
-        # -----------------------------------------
-        # Tell GLM to produce final response
-        # -----------------------------------------
-
-        messages.append(
-            {
-                "role": "system",
-                "content": (
-                    "业务工具已经返回真实系统数据。"
-                    "请根据工具结果直接回答用户。"
-                    "不要编造工具结果中没有的数据。"
-                    "不要再调用其他工具。"
-                ),
-            }
-        )
-
-        final_response = (
-            client.chat.completions.create(
-                model=model,
-                messages=messages,
-            )
-        )
 
         answer = (
-            final_response
-            .choices[0]
-            .message
-            .content
-            or ""
-        ).strip()
-
-        if not answer:
-            answer = result.get(
-                "answer",
-                "暂时无法生成回答。",
-            )
+            result.get("answer")
+            or "暂时无法生成回答。"
+        )
 
         return {
             "answer": answer,
-
-            "intent":
-                tool_name,
-
-            "data":
-                result.get(
-                    "data"
-                ),
-
-            "agent_mode":
-                "glm",
+            "intent": tool_name,
+            "data": result.get("data"),
+            "agent_mode": "glm",
         }
 
     # ---------------------------------------------

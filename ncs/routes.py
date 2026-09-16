@@ -12,7 +12,7 @@ from flask import Blueprint,request,session,jsonify,g,Response,current_app
 from werkzeug.security import check_password_hash,generate_password_hash
 import qrcode
 import qrcode.image.svg
-from .db import get_db,now
+from .db import get_db, now, close_db
 from .llm_agent import hybrid_chat as agent_chat
 from .services import (BusinessError,transaction,money,number,required,distance,
     maybe_expire_reservations,quote,ORDER_SELECT,create_order,act_order,audit,pricing_for_station)
@@ -265,6 +265,14 @@ def agent():
         180,
         '经度',
     )
+
+    # Authentication has already loaded g.user.
+    #
+    # Release the pooled DB connection before waiting
+    # for the external GLM API. If the selected Agent
+    # tool needs the database later, get_db() will
+    # transparently borrow another pooled connection.
+    close_db()
 
     result = agent_chat(
         g.user,
