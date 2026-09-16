@@ -4374,6 +4374,16 @@ async function stationDetail(
     pricing =
       data.pricing;
 
+  const totalChargingCount =
+    cs.reduce(
+      (sum, charger) =>
+        sum +
+        Number(
+          charger.total_count || 0,
+        ),
+      0,
+    );
+
   S.pricing = pricing;
 
   S.pricingStation =
@@ -4454,6 +4464,13 @@ async function stationDetail(
             tr(
               " / 度",
             ),
+        )}
+
+        ${line(
+          tr(
+            "总充电次数",
+          ),
+          `${totalChargingCount} ${tr("次")}`,
         )}
       </div>
 
