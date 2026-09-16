@@ -353,41 +353,117 @@ function startNotificationPolling() {
 }
 
 async function showUserNotifications() {
-  const data = await api("/notifications");
-  const items = Array.isArray(data.items) ? data.items : [];
+  const data =
+    await api(
+      "/notifications",
+    );
+
+  const items =
+    Array.isArray(
+      data.items,
+    )
+      ? data.items
+      : [];
+
   if (!items.length) {
-    modal(tr("通知"), tr("暂无通知"));
+    modal(
+      tr("通知"),
+      tr("暂无通知"),
+    );
+
     return;
   }
-  const html = items.map((item) => {
-    const copy =
-      notificationCopy(
-        item,
-      );
 
-    const title =
-      copy.title;
+  // Opening the notification center means
+  // the user has viewed the notifications.
+  //
+  // Mark them all as read before displaying
+  // the notification list.
+  if (
+    Number(
+      data.unread || 0,
+    ) > 0
+  ) {
+    await api(
+      "/notifications/read-all",
+      "POST",
+      {},
+    );
+  }
 
-    const body =
-      copy.body;
+  const html =
+    items
+      .map(
+        (item) => {
+          const copy =
+            notificationCopy(
+              item,
+            );
 
-    const timeText =
-      time(
-        item.created_at,
-      );
-    const unread = !Number(item.read);
-    return `<div class="note" style="margin-bottom:10px;${unread ? "border-left:3px solid var(--accent);" : ""}">
-      <strong>${esc(title)}</strong>
-      <small style="display:block;margin-top:4px">${esc(timeText)}</small>
-      <p style="margin:6px 0 0">${esc(body)}</p>
-      ${unread ? `<button class="btn secondary small" data-action="notification-read" data-nid="${esc(item.id)}">${tr("标记已读")}</button>` : ""}
-    </div>`;
-  }).join("");
-  modal(tr("通知"), html);
-  await api("/notifications/read-all", "POST", {});
-  notificationSeen = new Set(items.map((x) => String(x.id)));
-  const badge = document.querySelector("[data-user-notification-badge]");
-  if (badge) { badge.hidden = true; badge.textContent = "0"; }
+          const title =
+            copy.title;
+
+          const body =
+            copy.body;
+
+          const timeText =
+            time(
+              item.created_at,
+            );
+
+          return `
+            <div
+              class="note"
+              style="margin-bottom:10px"
+            >
+              <strong>
+                ${esc(title)}
+              </strong>
+
+              <small
+                style="
+                  display:block;
+                  margin-top:4px
+                "
+              >
+                ${esc(timeText)}
+              </small>
+
+              <p
+                style="
+                  margin:6px 0 0
+                "
+              >
+                ${esc(body)}
+              </p>
+            </div>
+          `;
+        },
+      )
+      .join("");
+
+  modal(
+    tr("通知"),
+    html,
+  );
+
+  notificationSeen =
+    new Set(
+      items.map(
+        (item) =>
+          String(item.id),
+      ),
+    );
+
+  const badge =
+    document.querySelector(
+      "[data-user-notification-badge]",
+    );
+
+  if (badge) {
+    badge.hidden = true;
+    badge.textContent = "0";
+  }
 }
 
 const names = new Proxy(
@@ -9884,15 +9960,6 @@ async function act(
     case "notifications":
       await showUserNotifications();
       break;
-
-    case "notification-read": {
-      const nid = b.dataset.nid;
-      if (nid) {
-        await api(`/notifications/${encodeURIComponent(nid)}/read`, "POST", {});
-        await showUserNotifications();
-      }
-      break;
-    }
 
     case "menu":
       $(".sidebar")

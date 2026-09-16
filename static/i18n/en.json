@@ -151,6 +151,7 @@
   "历史数据不足，请积累充电订单后重试": "Not enough historical orders. Try again after more charging sessions.",
   "原密码": "Current password",
   "原密码不正确": "The current password is incorrect",
+  "新密码不能与原密码相同，请重试": "The new password cannot be the same as the current password. Please try again.",
   "去处理": "View order",
   "参考平均负荷": "Estimated average load",
   "发送": "Send",

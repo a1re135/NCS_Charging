@@ -1067,12 +1067,61 @@ def profile():
 @api.post('/profile/password')
 @auth()
 def password():
-    d=body()
-    if not check_password_hash(g.user['password_hash'],str(d.get('old_password',''))): raise BusinessError('原密码不正确')
-    pw=required(d.get('new_password'),'新密码',128)
-    if len(pw)<8: raise BusinessError('密码至少 8 位')
-    get_db().execute('UPDATE users SET password_hash=? WHERE id=?',(generate_password_hash(pw),g.user['id']))
-    return jsonify(ok=True)
+    d = body()
+
+    old_password = str(
+        d.get(
+            'old_password',
+            ''
+        )
+    )
+
+    if not check_password_hash(
+        g.user['password_hash'],
+        old_password
+    ):
+        raise BusinessError(
+            '原密码不正确'
+        )
+
+    new_password = required(
+        d.get('new_password'),
+        '新密码',
+        128
+    )
+
+    if len(new_password) < 8:
+        raise BusinessError(
+            '密码至少 8 位'
+        )
+
+    # Prevent the user from setting the
+    # current password as the new password.
+    if check_password_hash(
+        g.user['password_hash'],
+        new_password
+    ):
+        raise BusinessError(
+            '新密码不能与原密码相同，请重试'
+        )
+
+    get_db().execute(
+        '''
+        UPDATE users
+        SET password_hash=?
+        WHERE id=?
+        ''',
+        (
+            generate_password_hash(
+                new_password
+            ),
+            g.user['id'],
+        ),
+    )
+
+    return jsonify(
+        ok=True
+    )
 
 @api.post('/wallet/recharge')
 @auth(allow_frozen=True)
