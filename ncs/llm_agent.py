@@ -17,6 +17,8 @@ import threading
 from flask import current_app
 from openai import OpenAI
 
+from .i18n import current_language
+
 from .agent import (
     chat as local_chat,
     station_recommendation,
@@ -29,6 +31,7 @@ from .agent import (
     device_summary,
     fault_ranking,
     operations_report,
+    localize_result,
 )
 
 
@@ -451,16 +454,32 @@ def system_prompt(user):
     role = user["role"]
 
     role_names = {
-        "user": "普通用户",
-        "operator": "运营人员",
-        "technician": "运维人员",
-        "admin": "系统管理员",
+        "user": ("普通用户", "User"),
+        "operator": ("运营人员", "Operator"),
+        "technician": ("运维人员", "Technician"),
+        "admin": ("系统管理员", "System administrator"),
     }
 
-    role_name = role_names.get(
-        role,
-        role,
-    )
+    english = current_language() == "en"
+    role_pair = role_names.get(role, (role, role))
+    role_name = role_pair[1] if english else role_pair[0]
+
+    if english:
+        return f"""
+You are the AI Agent for the NCS Smart Charging Platform.
+Current user role: {role_name}.
+
+Task: understand the user's natural-language request and select the appropriate
+approved business tool when business data is required.
+
+Rules:
+1. For charging stations, chargers, orders, wallets, faults, revenue or operations data, use an approved tool.
+2. Only use the tools provided to you. Never access the database directly or generate SQL.
+3. Never invent business data.
+4. Never reveal passwords, API keys or system secrets.
+5. The interface language is English, so always answer in English, even if the user asks in Chinese.
+6. Keep ordinary answers concise.
+""".strip()
 
     return f"""
 你是 NCS 智能充电平台的 AI Agent。
@@ -473,10 +492,9 @@ def system_prompt(user):
 2. 只能使用当前提供的工具，不得自行访问数据库或生成 SQL。
 3. 不得编造业务数据。
 4. 不得泄露密码、API Key 或系统密钥。
-5. 中文问题使用中文，英文问题使用英文。
+5. 当前界面语言是中文，因此始终使用中文回答。
 6. 如果不需要工具，可以直接简短回答。
 """.strip()
-
 
 # =========================================================
 # Configuration
@@ -707,6 +725,12 @@ def hybrid_chat(
             lng,
         )
 
+        # Rebuild the verified tool answer in the selected UI language.
+        result = localize_result(
+            tool_name,
+            result,
+        )
+
         # -----------------------------------------
         # One-call Agent path
         #
@@ -721,7 +745,11 @@ def hybrid_chat(
 
         answer = (
             result.get("answer")
-            or "暂时无法生成回答。"
+            or (
+                "Unable to generate a response right now."
+                if current_language() == "en"
+                else "暂时无法生成回答。"
+            )
         )
 
         return {

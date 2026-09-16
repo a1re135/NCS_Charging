@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from .db import get_db
 from .services import distance, pricing_for_station
+from .i18n import current_language, translate
 
 
 def normalize(text):
@@ -641,6 +642,187 @@ def operations_report(days=7):
         },
     }
 
+
+def _english_mode():
+    return current_language() == "en"
+
+
+def _display_text(value):
+    if value is None:
+        return ""
+    return translate(str(value))
+
+
+def localize_result(intent, result):
+    # Rebuild verified local-tool answers in the current interface language.
+    if not _english_mode():
+        return result
+
+    result = dict(result or {})
+    data = result.get("data")
+
+    aliases = {
+        "recommend_station": "station_recommendation",
+        "wallet_info": "wallet",
+    }
+    intent = aliases.get(intent, intent)
+
+    if intent == "station_recommendation":
+        if not data:
+            answer = "There are currently no nearby available chargers matching your request."
+        else:
+            station = data[0]
+            station_name = _display_text(station.get("station_name", ""))
+            free_fast = int(station.get("free_fast") or 0)
+            free = int(station.get("free") or 0)
+            available = (
+                f"{free_fast} available fast charger(s)"
+                if free_fast
+                else f"{free} available charger(s)"
+            )
+            answer = (
+                f'I recommend "{station_name}". '
+                f'It is about {station.get("distance", 0)} km away, '
+                f'with {available}. '
+                f'The current rate is approximately '
+                f'¥{(station.get("price_cents") or 0) / 100:.2f}/kWh.'
+            )
+
+    elif intent == "current_order":
+        if not data:
+            answer = "You do not currently have an unfinished charging order."
+        else:
+            status = {
+                "reserved": "reserved",
+                "charging": "charging",
+            }.get(data.get("status"), data.get("status", "active"))
+            answer = (
+                f'You currently have a {status} order at '
+                f'"{_display_text(data.get("station_name", ""))}". '
+                f'Charger: {data.get("charger_number", "—")}.'
+            )
+
+    elif intent == "latest_order":
+        if not data:
+            answer = "You do not have any completed charging orders yet."
+        else:
+            answer = (
+                f'Your most recent charging session was at '
+                f'"{_display_text(data.get("station_name", ""))}". '
+                f'Energy: {float(data.get("energy") or 0):.2f} kWh. '
+                f'Order amount: ¥{(data.get("amount_cents") or 0) / 100:.2f}. '
+                f'Paid: ¥{(data.get("paid_cents") or 0) / 100:.2f}.'
+            )
+
+    elif intent == "wallet":
+        data = data or {}
+        answer = (
+            f'Your current balance is ¥{(data.get("balance_cents") or 0) / 100:.2f}. '
+            f'Outstanding payment: ¥{(data.get("debt_cents") or 0) / 100:.2f}.'
+        )
+
+    elif intent == "charging_fault_help":
+        if not data:
+            answer = (
+                "You do not currently have an active reservation or charging order. "
+                "If charging cannot start after scanning, check that the charger is "
+                "available and that your account is not frozen and has no unpaid balance."
+            )
+        else:
+            status = data.get("charger_status")
+            if status == "fault":
+                advice = (
+                    "This charger is currently faulty and cannot start charging. "
+                    "Please choose another available charger and contact staff."
+                )
+            elif status == "offline":
+                advice = (
+                    "This charger is offline, so the platform cannot communicate with it. "
+                    "Please use another charger."
+                )
+            elif status == "maintenance":
+                advice = (
+                    "This charger is under maintenance and cannot be used. "
+                    "Please choose another available charger."
+                )
+            elif data.get("operating_status") != "operating":
+                advice = (
+                    "This charging station is paused or under maintenance, "
+                    "so charging cannot start right now."
+                )
+            else:
+                advice = (
+                    "The charger currently appears normal. If charging still cannot start, "
+                    "check your reservation status, wallet balance and unpaid orders."
+                )
+            answer = f'Charger {data.get("number", "—")}: {advice}'
+
+    elif intent == "today_top_station":
+        if not data:
+            answer = "There are no charging orders yet today."
+        else:
+            answer = (
+                f'The station with the most orders today is '
+                f'"{_display_text(data.get("name", ""))}", '
+                f'with {data.get("orders", 0)} order(s).'
+            )
+
+    elif intent == "revenue_summary":
+        data = data or {}
+        answer = (
+            f'Recent period summary: {data.get("orders", 0)} settled order(s), '
+            f'¥{(data.get("revenue") or 0) / 100:.2f} collected revenue, '
+            f'and {float(data.get("energy") or 0):.2f} kWh delivered.'
+        )
+
+    elif intent == "device_summary":
+        data = data or {}
+        abnormal = (
+            int(data.get("fault") or 0)
+            + int(data.get("offline") or 0)
+            + int(data.get("maintenance") or 0)
+        )
+        answer = (
+            "Current device status: "
+            f'{data.get("idle", 0)} available, '
+            f'{data.get("charging", 0)} charging, '
+            f'{data.get("reserved", 0)} reserved, '
+            f'{data.get("fault", 0)} faulty, '
+            f'{data.get("maintenance", 0)} under maintenance, '
+            f'{data.get("offline", 0)} offline. '
+            f'Total abnormal devices: {abnormal}.'
+        )
+
+    elif intent == "fault_ranking":
+        if not data:
+            answer = "There are currently no device fault records."
+        else:
+            top = data[0]
+            answer = (
+                f'Charger {top.get("number", "—")} has the most recorded faults. '
+                f'It is located at "{_display_text(top.get("station_name", ""))}" '
+                f'with {top.get("faults", 0)} fault record(s).'
+            )
+
+    elif intent == "operations_report":
+        data = data or {}
+        answer = (
+            "Operations report:\n"
+            f'1. Settled orders: {data.get("orders", 0)}.\n'
+            f'2. Collected revenue: ¥{(data.get("revenue_cents") or 0) / 100:.2f}.\n'
+            f'3. Total charging energy: {float(data.get("energy") or 0):.2f} kWh.\n'
+            f'4. Registered users: {data.get("users", 0)}.\n'
+            f'5. Total devices: {data.get("devices", 0)}.\n'
+            f'6. Open faults: {data.get("open_faults", 0)}.'
+        )
+
+    else:
+        return result
+
+    result["answer"] = answer
+    return result
+
+
 def chat(
     user,
     message,
@@ -648,189 +830,176 @@ def chat(
     lng=116.2981,
 ):
     text = normalize(message)
+    english = _english_mode()
 
     if not text:
         return {
-            "answer": "请输入你想咨询的问题。",
+            "answer": (
+                "Please enter a question."
+                if english
+                else "请输入你想咨询的问题。"
+            ),
             "intent": "empty",
         }
 
     role = user["role"]
 
-    # -----------------------------
-    # Ordinary user tools
-    # -----------------------------
+    def finish(result, intent):
+        result["intent"] = intent
+        return localize_result(intent, result)
 
-    if (
+    nearby = (
         "附近" in text
-        and (
-            "快充" in text
-            or "充电站" in text
-            or "充电桩" in text
-        )
-    ):
-        result = station_recommendation(
-            user,
-            lat,
-            lng,
-            fast_only="快充" in text,
+        or "nearby" in text
+        or "nearest" in text
+        or "closest" in text
+    )
+    charger_topic = (
+        "快充" in text
+        or "充电站" in text
+        or "充电桩" in text
+        or "charger" in text
+        or "charging station" in text
+        or "fast charge" in text
+        or "fast charger" in text
+    )
+    if nearby and charger_topic:
+        return finish(
+            station_recommendation(
+                user,
+                lat,
+                lng,
+                fast_only=("快充" in text or "fast" in text),
+            ),
+            "station_recommendation",
         )
 
-        result["intent"] = (
-            "station_recommendation"
-        )
-
-        return result
-
-    if (
+    latest_words = (
         "最近一次" in text
         or "上一次" in text
-    ) and (
+        or "most recent" in text
+        or "latest" in text
+        or "last charging" in text
+    )
+    latest_topic = (
         "充电" in text
         or "花了多少钱" in text
-    ):
-        result = latest_order(
-            user["id"]
-        )
-
-        result["intent"] = (
-            "latest_order"
-        )
-
-        return result
+        or "charging" in text
+        or "cost" in text
+        or "spent" in text
+    )
+    if latest_words and latest_topic:
+        return finish(latest_order(user["id"]), "latest_order")
 
     if (
         "余额" in text
         or "欠费" in text
+        or "balance" in text
+        or "outstanding" in text
+        or "unpaid" in text
+        or "debt" in text
     ):
-        result = wallet_info(
-            user["id"]
+        return finish(wallet_info(user["id"]), "wallet")
+
+    fault_question = (
+        (
+            "为什么" in text
+            and ("无法" in text or "不能" in text or "启动" in text)
         )
-
-        result["intent"] = "wallet"
-
-        return result
-
-    if (
-        "为什么" in text
-        and (
-            "无法" in text
-            or "不能" in text
-            or "启动" in text
+        or (
+            ("why" in text or "can't" in text or "cannot" in text or "unable" in text)
+            and ("start" in text or "charger" in text or "charging" in text)
         )
-    ):
-        result = fault_help(
-            user["id"]
-        )
-
-        result["intent"] = (
-            "charging_fault_help"
-        )
-
-        return result
+    )
+    if fault_question:
+        return finish(fault_help(user["id"]), "charging_fault_help")
 
     if (
         "当前订单" in text
         or "现在有订单" in text
         or "正在充电" in text
+        or "current order" in text
+        or "active order" in text
+        or "charging order" in text
+        or ("do i have" in text and "order" in text)
     ):
-        result = current_order(
-            user["id"]
-        )
+        return finish(current_order(user["id"]), "current_order")
 
-        result["intent"] = (
-            "current_order"
-        )
-
-        return result
-
-    # -----------------------------
-    # Staff tools
-    # -----------------------------
-
-    if role in (
-        "operator",
-        "admin",
-    ):
-
+    if role in ("operator", "admin"):
         if (
-            "今天" in text
-            and "订单最多" in text
+            ("今天" in text and "订单最多" in text)
+            or ("today" in text and "most" in text and "order" in text)
         ):
-            result = today_top_station()
+            return finish(today_top_station(), "today_top_station")
 
-            result["intent"] = (
-                "today_top_station"
-            )
-
-            return result
-
-        if (
+        recent_7 = (
             "最近一周" in text
             or "最近7天" in text
             or "最近 7 天" in text
-        ) and (
+            or "last 7 days" in text
+            or "past 7 days" in text
+            or "last week" in text
+        )
+        revenue_topic = (
             "收入" in text
             or "营收" in text
-        ):
-            result = revenue_summary(7)
-
-            result["intent"] = (
-                "revenue_summary"
-            )
-
-            return result
+            or "revenue" in text
+            or "income" in text
+        )
+        if recent_7 and revenue_topic:
+            return finish(revenue_summary(7), "revenue_summary")
 
         if (
             "运营报告" in text
             or "生成报告" in text
+            or "operations report" in text
+            or "operation report" in text
+            or "generate report" in text
         ):
-            result = operations_report(
-                7
-            )
+            return finish(operations_report(7), "operations_report")
 
-            result["intent"] = (
-                "operations_report"
-            )
-
-            return result
-
-    if role in (
-        "operator",
-        "technician",
-        "admin",
-    ):
-
+    if role in ("operator", "technician", "admin"):
         if (
             "设备情况" in text
             or "多少故障" in text
             or "多少设备" in text
+            or "device status" in text
+            or "devices status" in text
+            or "how many faulty" in text
+            or "how many devices" in text
+            or "faulty devices" in text
         ):
-            result = device_summary()
-
-            result["intent"] = (
-                "device_summary"
-            )
-
-            return result
+            return finish(device_summary(), "device_summary")
 
         if (
             "故障次数" in text
             or "故障最多" in text
+            or "most faults" in text
+            or "highest number of faults" in text
+            or "fault most" in text
         ):
-            result = fault_ranking()
+            return finish(fault_ranking(), "fault_ranking")
 
-            result["intent"] = (
-                "fault_ranking"
+    if english:
+        if role == "user":
+            examples = (
+                "You can ask me:\n"
+                "• Where is the nearest available fast charger?\n"
+                "• Do I have an active charging order?\n"
+                "• What is my balance?\n"
+                "• How much did my most recent charging session cost?\n"
+                "• Why can't my charger start?"
             )
-
-            return result
-
-    # -----------------------------
-    # Fallback
-    # -----------------------------
-
-    if role == "user":
+        else:
+            examples = (
+                "You can ask me:\n"
+                "• Which station has the most orders today?\n"
+                "• How has revenue performed over the last 7 days?\n"
+                "• How many devices are faulty right now?\n"
+                "• Which devices have the most faults?\n"
+                "• Generate an operations report for the last 7 days."
+            )
+    elif role == "user":
         examples = (
             "你可以问我：\n"
             "• 附近哪里有空闲快充？\n"

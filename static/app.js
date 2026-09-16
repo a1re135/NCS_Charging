@@ -100,6 +100,16 @@ const roleNames = {
   admin: "系统管理员",
 };
 
+/*
+ * Translate known business/demo values only for display.
+ * tr() falls back to the original value, so unknown user-entered data is kept.
+ */
+const dataText = (value) =>
+  tr(String(value ?? ""));
+
+const roleLabel = (role, roleName = "") =>
+  tr(roleName || roleNames[role] || role);
+
 const can = (permission) =>
   S.user?.role === "admin" ||
   (S.user?.permissions || []).includes(permission);
@@ -107,7 +117,7 @@ const can = (permission) =>
 const paymentBadge = (status) =>
   `<span class="pay-badge ${esc(String(status || "").replaceAll(" ", "-"))}">
     <i class="dot"></i>
-    ${esc(paymentNames[status] || status || "—")}
+    ${esc(tr(paymentNames[status] || status || "—"))}
   </span>`;
 
 const orderStatus = (o) =>
@@ -170,7 +180,7 @@ const badge = (s) =>
 
 const av = (u = S.user) =>
   `<div class="avatar ${esc(u.avatar)}">
-    ${esc(u.nickname.slice(0, 1))}
+    ${esc(dataText(u.nickname).slice(0, 1))}
   </div>`;
 
 const btn = (
@@ -235,7 +245,7 @@ const opt = (
           : ""
       }
    >
-      ${esc(t)}
+      ${esc(dataText(t))}
    </option>`;
 
 const table = (
@@ -274,7 +284,7 @@ const line = (
 ) =>
   `<div class="receipt-line">
     <span>${k}</span>
-    <b>${esc(v)}</b>
+    <b>${esc(dataText(v))}</b>
   </div>`;
 
 function toast(t) {
@@ -795,9 +805,7 @@ function shell() {
 
               <span>
                 <b>
-                  ${esc(
-                    S.user.nickname,
-                  )}
+                  ${esc(dataText(S.user.nickname))}
                 </b>
 
                 <small
@@ -806,11 +814,7 @@ function shell() {
                     margin-top:4px
                   "
                 >
-                  ${esc(
-                    S.user.role_name ||
-                      roleNames[S.user.role] ||
-                      S.user.role,
-                  )}
+                  ${esc(roleLabel(S.user.role, S.user.role_name))}
                 </small>
               </span>
 
@@ -884,11 +888,7 @@ function shell() {
                 ops
                   ? `<span class="role-chip">
                        ${ic("grid")}
-                       ${esc(
-                         S.user.role_name ||
-                           roleNames[S.user.role] ||
-                           S.user.role,
-                       )}
+                       ${esc(roleLabel(S.user.role, S.user.role_name))}
                      </span>`
                   : ""
               }
@@ -1211,7 +1211,7 @@ function liveBars(
                 <div class="live-bar-label">
                   <span>
                     ${esc(
-                      x[labelKey],
+                      dataText(x[labelKey]),
                     )}
                   </span>
 
@@ -1864,12 +1864,12 @@ function stationCard(s) {
       </div>
 
       <h3>
-        ${esc(s.name)}
+        ${esc(dataText(s.name))}
       </h3>
 
       <div class="station-meta">
 
-        ${esc(s.address)}
+        ${esc(dataText(s.address))}
         <br>
 
         ${ic("pin")}
@@ -2024,9 +2024,7 @@ function agentMessageHtml(
           ${
             role ===
             "user"
-              ? esc(
-                  S.user.nickname,
-                )
+              ? esc(dataText(S.user.nickname))
               : "NCS AI"
           }
         </div>
@@ -2062,7 +2060,7 @@ function agentMessageHtml(
           ? `
               <div class="agent-user-avatar">
                 ${esc(
-                  S.user.nickname.slice(
+                  dataText(S.user.nickname).slice(
                     0,
                     1,
                   ),
@@ -2086,7 +2084,7 @@ function renderAgentMessages() {
 
   const welcome = {
     role: "assistant",
-    text: agentWelcome(),
+    text: tr(agentWelcome()),
   };
 
   const messages = [
@@ -2269,13 +2267,9 @@ async function agentPage() {
                         agent-suggestion
                       "
                       data-action="agent-suggest"
-                      data-question="${esc(
-                        question,
-                      )}"
+                      data-question="${esc(tr(question))}"
                     >
-                      ${esc(
-                        question,
-                      )}
+                      ${esc(tr(question))}
                     </button>
                   `,
               )
@@ -2339,7 +2333,7 @@ async function agentPage() {
                         "chart",
                       )}
                       <span>
-                        运营数据分析与报告
+                        ${tr("运营数据分析与报告")}
                       </span>
                     </div>
                   `
@@ -3416,9 +3410,7 @@ async function dashboard() {
 
                     <div>
                       <p>
-                        ${esc(
-                          x.station_name,
-                        )}
+                        ${esc(dataText(x.station_name))}
                       </p>
 
                       <small>
@@ -3685,7 +3677,10 @@ function renderStationList() {
       (
         s.name +
         s.address +
-        s.city
+        s.city +
+        dataText(s.name) +
+        dataText(s.address) +
+        dataText(s.city)
       )
         .toLowerCase()
         .includes(q),
@@ -4021,11 +4016,11 @@ async function stationDetail(
 
       <div>
         <h2>
-          ${esc(s.name)}
+          ${esc(dataText(s.name))}
         </h2>
 
         <p class="sub">
-          ${esc(s.address)}
+          ${esc(dataText(s.address))}
           ·
           ${badge(
             s.operating_status,
@@ -4244,9 +4239,7 @@ async function scanPage(
           </div>
 
           <p class="muted">
-            ${esc(
-              c.station_name,
-            )}
+            ${esc(dataText(c.station_name))}
           </p>
         </div>
 
@@ -4341,9 +4334,7 @@ async function scanPage(
 
         <p class="sub">
           停车说明：
-          ${esc(
-            c.parking_info,
-          )}
+          ${esc(dataText(c.parking_info))}
         </p>
 
       </div>
@@ -4393,17 +4384,13 @@ function ordersTable(os) {
           ${
             can("order.view_all")
               ? `<td>
-                   ${esc(
-                     o.nickname,
-                   )}
+                   ${esc(dataText(o.nickname))}
                  </td>`
               : ""
           }
 
           <td>
-            ${esc(
-              o.station_name,
-            )}
+            ${esc(dataText(o.station_name))}
             <br>
             <small>
               ${esc(
@@ -5234,7 +5221,7 @@ async function debtOrdersModal() {
                     </td>
 
                     <td>
-                      ${esc(o.station_name)}
+                      ${esc(dataText(o.station_name))}
                       <br>
                       <small>${esc(o.charger_number)}</small>
                     </td>
@@ -5618,7 +5605,7 @@ function chargersTable(cs) {
 
         return `<tr>
           <td><b>${esc(c.number)}</b></td>
-          <td>${esc(c.station_name)}</td>
+          <td>${esc(dataText(c.station_name))}</td>
           <td>
             ${c.kind === "fast" ? tr("快充") : tr("慢充")}
             / ${c.power} kW
@@ -5949,9 +5936,7 @@ function faultsTable(fs) {
           </td>
 
           <td>
-            ${esc(
-              f.station_name,
-            )}
+            ${esc(dataText(f.station_name))}
 
             <br>
 
@@ -5963,15 +5948,11 @@ function faultsTable(fs) {
           </td>
 
           <td>
-            ${esc(
-              f.fault_type,
-            )}
+            ${esc(tr(f.fault_type))}
           </td>
 
           <td>
-            ${esc(
-              f.description,
-            )}
+            ${esc(tr(f.description))}
           </td>
 
           <td>
@@ -5987,10 +5968,7 @@ function faultsTable(fs) {
           </td>
 
           <td>
-            ${esc(
-              f.resolution ||
-                "—",
-            )}
+            ${esc(tr(f.resolution || "—"))}
           </td>
 
           <td>
@@ -6128,7 +6106,7 @@ function usersTable(users) {
     users.map(
       (u) =>
         `<tr>
-          <td>${esc(u.nickname)}</td>
+          <td>${esc(dataText(u.nickname))}</td>
           <td>${esc(u.phone)}</td>
           <td>
             ${
@@ -6140,11 +6118,7 @@ function usersTable(users) {
                      ${opt("admin", tr("系统管理员"), u.role)}
                    </select>`
                 : `<span class="role-chip compact">
-                     ${esc(
-                       u.role_name ||
-                         roleNames[u.role] ||
-                         u.role,
-                     )}
+                     ${esc(roleLabel(u.role, u.role_name))}
                    </span>`
             }
           </td>
@@ -6394,9 +6368,9 @@ async function rolesPage() {
             `<section class="card">
               <div class="section-head">
                 <div>
-                  <h3>${esc(role.name)}</h3>
+                  <h3>${esc(tr(role.name))}</h3>
                   <p class="sub">
-                    ${esc(role.description)}
+                    ${esc(tr(role.description))}
                   </p>
                 </div>
 
@@ -6410,10 +6384,7 @@ async function rolesPage() {
                   .map(
                     (key) =>
                       `<span class="permission-pill">
-                        ${esc(
-                          permissionMap[key]?.name ||
-                            key,
-                        )}
+                        ${esc(tr(permissionMap[key]?.name || key))}
                         <small class="role-code">
                           ${esc(key)}
                         </small>
@@ -6520,10 +6491,10 @@ async function revenuePage() {
                         140,
                     );
 
-                  return `<div class="bar-item" title="${esc(x.name)}：¥ ${yuan(x.revenue_cents)}">
+                  return `<div class="bar-item" title="${esc(dataText(x.name))}：¥ ${yuan(x.revenue_cents)}">
                     <small>${yuan(x.revenue_cents)}</small>
                     <i style="height:${Math.max(2, h)}px"></i>
-                    <small>${esc(x.name.length > 6 ? x.name.slice(0, 6) + "…" : x.name)}</small>
+                    <small>${esc(dataText(x.name).length > 12 ? dataText(x.name).slice(0, 12) + "…" : dataText(x.name))}</small>
                   </div>`;
                 },
               )
@@ -7704,7 +7675,7 @@ function newFaultModal() {
             "故障类型",
           ),
           "fault_type",
-          "通信故障",
+          tr("通信故障"),
           "text",
           'required maxlength="60"',
         )}
@@ -7752,9 +7723,7 @@ function processFaultModal(id) {
       >
 
         <div class="note">
-          ${esc(
-            f.station_name,
-          )}
+          ${esc(dataText(f.station_name))}
           ·
           ${esc(
             f.charger_number,
@@ -7762,13 +7731,9 @@ function processFaultModal(id) {
 
           <br>
 
-          ${esc(
-            f.fault_type,
-          )}
+          ${esc(tr(f.fault_type))}
           ：
-          ${esc(
-            f.description,
-          )}
+          ${esc(tr(f.description))}
         </div>
 
         <div class="field">
@@ -7897,13 +7862,11 @@ function mapModal(id) {
 
   modal(
     tr("前往 ") +
-      s.name,
+      dataText(s.name),
 
     trHtml`
       <p class="sub">
-        ${esc(
-          s.address,
-        )}
+        ${esc(dataText(s.address))}
       </p>
 
       <div class="note">
@@ -8121,7 +8084,7 @@ async function sendAgentMessage(
         "assistant",
 
       text:
-        "请求失败：" +
+        tr("请求失败：") +
         e.message,
     });
 
@@ -9470,6 +9433,10 @@ function filterOrders() {
               o.station_name
             } ${
               o.nickname
+            } ${
+              dataText(o.station_name)
+            } ${
+              dataText(o.nickname)
             }`
               .toLowerCase()
               .includes(
@@ -9567,6 +9534,8 @@ function filterChargers() {
             c.number
           } ${
             c.station_name
+          } ${
+            dataText(c.station_name)
           }`
             .toLowerCase()
             .includes(q),
