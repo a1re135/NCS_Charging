@@ -121,7 +121,7 @@ def ensure_schema(db):
             """,
             """
             CREATE TABLE IF NOT EXISTS member_accounts (
-                user_id INT PRIMARY KEY,
+                user_id BIGINT UNSIGNED PRIMARY KEY,
                 tier_key VARCHAR(32) NOT NULL,
                 points_balance INT NOT NULL DEFAULT 0,
                 lifetime_points INT NOT NULL DEFAULT 0,
@@ -134,13 +134,13 @@ def ensure_schema(db):
             """,
             """
             CREATE TABLE IF NOT EXISTS points_ledger (
-                id INT PRIMARY KEY AUTO_INCREMENT,
-                user_id INT NOT NULL,
+                id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                user_id BIGINT UNSIGNED NOT NULL,
                 amount INT NOT NULL,
                 balance_after INT NOT NULL,
                 kind VARCHAR(32) NOT NULL,
                 note VARCHAR(255) NOT NULL,
-                order_id INT NULL,
+                order_id BIGINT UNSIGNED NULL,
                 created_at VARCHAR(32) NOT NULL,
                 FOREIGN KEY(user_id)
                     REFERENCES users(id)
@@ -150,7 +150,7 @@ def ensure_schema(db):
             """,
             """
             CREATE TABLE IF NOT EXISTS coupons (
-                id INT PRIMARY KEY AUTO_INCREMENT,
+                id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
                 code VARCHAR(64) NOT NULL UNIQUE,
                 name VARCHAR(128) NOT NULL,
                 description VARCHAR(255) NOT NULL,
@@ -167,13 +167,13 @@ def ensure_schema(db):
             """,
             """
             CREATE TABLE IF NOT EXISTS user_coupons (
-                id INT PRIMARY KEY AUTO_INCREMENT,
-                user_id INT NOT NULL,
-                coupon_id INT NOT NULL,
+                id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+                user_id BIGINT UNSIGNED NOT NULL,
+                coupon_id BIGINT UNSIGNED NOT NULL,
                 status VARCHAR(16) NOT NULL DEFAULT 'available',
                 claimed_at VARCHAR(32) NOT NULL,
                 used_at VARCHAR(32) NULL,
-                order_id INT NULL,
+                order_id BIGINT UNSIGNED NULL,
                 FOREIGN KEY(user_id)
                     REFERENCES users(id)
                     ON DELETE CASCADE,
@@ -186,12 +186,12 @@ def ensure_schema(db):
             """,
             """
             CREATE TABLE IF NOT EXISTS order_loyalty (
-                order_id INT PRIMARY KEY,
+                order_id BIGINT UNSIGNED PRIMARY KEY,
                 original_amount_cents INT NOT NULL,
                 membership_discount_cents INT NOT NULL DEFAULT 0,
                 coupon_discount_cents INT NOT NULL DEFAULT 0,
                 final_amount_cents INT NOT NULL DEFAULT 0,
-                coupon_id INT NULL,
+                coupon_id BIGINT UNSIGNED NULL,
                 points_earned INT NOT NULL DEFAULT 0,
                 FOREIGN KEY(order_id)
                     REFERENCES orders(id)

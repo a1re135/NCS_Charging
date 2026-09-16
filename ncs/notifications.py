@@ -9,15 +9,15 @@ def ensure_notification_table(db) -> None:
     db.execute(
         """CREATE TABLE IF NOT EXISTS notifications(
             id VARCHAR(64) PRIMARY KEY,
-            user_id INTEGER,
-            kind TEXT NOT NULL,
-            title TEXT NOT NULL,
+            user_id BIGINT UNSIGNED,
+            kind VARCHAR(32) NOT NULL,
+            title VARCHAR(255) NOT NULL,
             body TEXT NOT NULL,
-            level TEXT NOT NULL DEFAULT 'info',
-            read INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL,
-            ref_type TEXT,
-            ref_id TEXT
+            level VARCHAR(16) NOT NULL DEFAULT 'info',
+            read TINYINT(1) NOT NULL DEFAULT 0,
+            created_at VARCHAR(32) NOT NULL,
+            ref_type VARCHAR(64),
+            ref_id VARCHAR(128)
         )"""
     )
     try:
