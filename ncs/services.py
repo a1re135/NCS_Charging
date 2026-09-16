@@ -131,7 +131,19 @@ def create_order(uid,cid,reserve):
         if existing: raise BusinessError('您有未完成的充电订单，请先处理',409,order_id=existing['id'])
         if db.execute('SELECT 1 FROM orders WHERE user_id=? AND debt_cents>0',(uid,)).fetchone():
             raise BusinessError('您有欠费订单，请先充值并补缴欠费',409)
-        if user['balance_cents']<=0: raise BusinessError('请先充值后再预约或充电')
+        if user['balance_cents']<=0:
+            from .notifications import create_notification
+            create_notification(
+                db,
+                uid,
+                'insufficient_balance',
+                '余额不足',
+                '当前余额为 ¥0.00，无法开始充电，请先充值。',
+                'danger',
+                'wallet',
+                f'attempt:{now()}',
+            )
+            raise BusinessError('请先充值后再预约或充电')
         c = db.execute(
             lock_sql(
                 """
@@ -212,32 +224,8 @@ def act_order(uid,oid,action,payload=None):
             db.execute("UPDATE chargers SET status='idle' WHERE id=? AND status='reserved'",(c['id'],))
         elif action=='finish':
             if o['status']!='charging': raise BusinessError('订单已处理或未开始，不能重复结算',409)
-            payload = payload or {}
-            locked_seconds = payload.get('simulated_seconds')
-            if locked_seconds not in (None, ""):
-                try:
-                    locked_seconds = max(0, int(locked_seconds))
-                except (TypeError, ValueError):
-                    raise BusinessError('模拟充电时长无效',400)
-
-                from decimal import Decimal, ROUND_HALF_UP
-                power = Decimal(str(o['power']))
-                energy = (
-                    power * Decimal(locked_seconds) / Decimal(3600)
-                )
-                q = dict(o)
-                q.update(
-                    simulated_seconds=locked_seconds,
-                    energy=round(float(energy), 3),
-                    amount_cents=int(
-                        (energy * Decimal(o['price_cents'])).quantize(
-                            Decimal('1'),
-                            rounding=ROUND_HALF_UP,
-                        )
-                    ),
-                )
-            else:
-                q=quote(o,datetime.now())
+            end=datetime.now()
+            q=quote(o,end)
             q['charger_id']=c['id']
 
             from .loyalty import settle_with_loyalty

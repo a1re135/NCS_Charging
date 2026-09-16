@@ -55,6 +55,73 @@ const S = {
     : null,
 };
 
+let notificationTimer = null;
+let notificationInitialized = false;
+let notificationSeen = new Set();
+
+async function refreshUserNotifications(showPopup = true) {
+  if (!S.user) return;
+  try {
+    const data = await api("/notifications");
+    const items = Array.isArray(data.items) ? data.items : [];
+    const ids = new Set(items.map((x) => String(x.id)));
+    if (!notificationInitialized) {
+      notificationSeen = ids;
+      notificationInitialized = true;
+    } else if (showPopup) {
+      for (const item of items.slice().reverse()) {
+        const id = String(item.id);
+        if (!notificationSeen.has(id)) {
+          const title = tr(item.title || "通知");
+          const body = tr(item.body || "");
+          toast(`${title}: ${body}`);
+        }
+      }
+      notificationSeen = ids;
+    }
+    const badge = document.querySelector("[data-user-notification-badge]");
+    if (badge) {
+      const unread = Number(data.unread || 0);
+      badge.textContent = unread > 99 ? "99+" : String(unread);
+      badge.hidden = unread <= 0;
+    }
+  } catch (_) {}
+}
+
+function startNotificationPolling() {
+  clearInterval(notificationTimer);
+  notificationInitialized = false;
+  notificationSeen = new Set();
+  refreshUserNotifications(false);
+  notificationTimer = setInterval(() => refreshUserNotifications(true), 5000);
+}
+
+async function showUserNotifications() {
+  const data = await api("/notifications");
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (!items.length) {
+    modal(tr("通知"), tr("暂无通知"));
+    return;
+  }
+  const html = items.map((item) => {
+    const title = tr(item.title || "通知");
+    const body = tr(item.body || "");
+    const timeText = time(item.created_at);
+    const unread = !Number(item.read);
+    return `<div class="note" style="margin-bottom:10px;${unread ? "border-left:3px solid var(--accent);" : ""}">
+      <strong>${esc(title)}</strong>
+      <small style="display:block;margin-top:4px">${esc(timeText)}</small>
+      <p style="margin:6px 0 0">${esc(body)}</p>
+      ${unread ? `<button class="btn secondary small" data-action="notification-read" data-nid="${esc(item.id)}">${tr("标记已读")}</button>` : ""}
+    </div>`;
+  }).join("");
+  modal(tr("通知"), html);
+  await api("/notifications/read-all", "POST", {});
+  notificationSeen = new Set(items.map((x) => String(x.id)));
+  const badge = document.querySelector("[data-user-notification-badge]");
+  if (badge) { badge.hidden = true; badge.textContent = "0"; }
+}
+
 const names = new Proxy(
   {
     idle: "空闲",
@@ -143,6 +210,8 @@ const paths = {
     "M20 3C5 2 1 13 7 18c5 5 15-1 13-15ZM5 21l10-12",
   help:
     "M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
+  bell:
+    "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4",
   menu: "M3 6h18M3 12h18M3 18h18",
   activity:
     "M3 12h4l2.5-7 5 14 2.5-7H21",
@@ -932,6 +1001,20 @@ function shell() {
                     },
                   )}
               </span>
+
+              <button
+                class="circle-btn"
+                data-action="notifications"
+                aria-label="通知"
+                style="position:relative"
+              >
+                ${ic("bell")}
+                <span
+                  data-user-notification-badge
+                  hidden
+                  style="position:absolute;right:-2px;top:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;font-size:10px;line-height:16px;background:#e5484d;color:#fff"
+                >0</span>
+              </button>
 
               <button
                 class="circle-btn"
@@ -1741,7 +1824,7 @@ async function dashboard() {
             <span>
               ${free}
 
-              <small>
+              <small style="font-size:8px; line-height:1.3; white-space:nowrap;">
                 空闲充电桩 /
                 ${total}
               </small>
@@ -6617,6 +6700,7 @@ async function refresh() {
 
 async function afterLogin() {
   await adoptAccountPreferences();
+  startNotificationPolling();
 
   if (
     S.scanNumber &&
@@ -7525,6 +7609,19 @@ async function act(
     case "close":
       $("#modal").close();
       break;
+
+    case "notifications":
+      await showUserNotifications();
+      break;
+
+    case "notification-read": {
+      const nid = b.dataset.nid;
+      if (nid) {
+        await api(`/notifications/${encodeURIComponent(nid)}/read`, "POST", {});
+        await showUserNotifications();
+      }
+      break;
+    }
 
     case "menu":
       $(".sidebar")

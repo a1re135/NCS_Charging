@@ -810,6 +810,31 @@ def settle_with_loyalty(
             order_id,
         )
 
+    from .notifications import create_notification
+    if debt > 0:
+        create_notification(
+            db,
+            uid,
+            'charging_completed',
+            '充电完成',
+            f'充电已完成，最终费用 ¥{final_amount / 100:.2f}，余额不足，需补缴 ¥{debt / 100:.2f}。',
+            'warning',
+            'order',
+            order_id,
+        )
+    else:
+        coupon_text = '，优惠券已使用' if coupon_id else ''
+        create_notification(
+            db,
+            uid,
+            'charging_completed',
+            '充电完成',
+            f'充电已完成，最终费用 ¥{final_amount / 100:.2f}{coupon_text}。',
+            'success',
+            'order',
+            order_id,
+        )
+
     db.execute(
         """
         INSERT INTO order_loyalty(
@@ -1094,6 +1119,20 @@ def claim_coupon(coupon_id):
             WHERE id=?
             """,
             (coupon_id,),
+        )
+
+        from .notifications import create_notification
+        expiry = coupon['expires_at']
+        expiry_text = f' 有效期至 {expiry}。' if expiry else ''
+        create_notification(
+            db,
+            uid,
+            'coupon_available',
+            '优惠券已到账',
+            f'你已领取「{coupon["name"]}」充电优惠券。{expiry_text}',
+            'success',
+            'coupon',
+            coupon_id,
         )
 
     return jsonify(ok=True)

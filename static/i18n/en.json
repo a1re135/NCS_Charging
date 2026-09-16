@@ -52,7 +52,7 @@
   "我的订单": "My orders",
   "我的钱包": "My wallet",
   "个人中心": "My profile",
-  "运营总览": "Operations overview",
+  "运营总览": "Operations Overview",
   "电站管理": "Stations",
   "电桩管理": "Chargers",
   "价格管理": "Pricing",
@@ -670,8 +670,8 @@
   "查看权限矩阵": "View Permission Matrix",
   "通知": "Notifications",
   "笔订单": "orders",
-  "按近 28 天已完成订单的实际充电分钟数": "Based on actual charging minutes from completed orders in the last 28 days",
-  "÷ 电桩可服务分钟数计算。": "divided by the available charger service minutes.",
+  "按近 28 天已完成订单的实际充电分钟数": "Calculated from actual charging minutes of completed orders in the past 28 days",
+  "÷ 电桩可服务分钟数计算。": "divided by the available service minutes of charging piles.",
   "条未读通知": "unread notifications",
   "建议建立首个数据库备份": "Create Your First Database Backup",
   "当前还没有检测到数据库备份，建议先建立一份可恢复备份。": "No database backup has been detected yet. It is recommended to create a recoverable backup first.",
@@ -755,5 +755,11 @@
   "满 100 元享 8 折，最高减 20 元": "20% off when you spend ¥100, up to ¥20 off",
   "满 30 元减 5 元": "¥5 off when you spend ¥30",
   "满 70 元减 12 元": "¥12 off when you spend ¥70",
-  "充电消费积分": "Charging spending points"
+  "余额不足": "Insufficient balance",
+  "当前余额为 ¥0.00，无法开始充电，请先充值。": "Your balance is ¥0.00, so charging cannot start. Please top up first.",
+  "充电完成": "Charging completed",
+  "充电已完成，最终费用": "Charging completed. Final cost",
+  "优惠券已到账": "Coupon added",
+  "你已领取": "You claimed",
+  "有未完成的充电订单，请先处理": "You have an unfinished charging order. Please handle it first."
 }
