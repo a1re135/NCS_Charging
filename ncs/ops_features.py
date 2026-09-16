@@ -80,15 +80,15 @@ def _ensure_feature_schema(db) -> None:
             title VARCHAR(255) NOT NULL,
             body TEXT NOT NULL,
             level VARCHAR(16) NOT NULL DEFAULT 'info',
-            read TINYINT(1) NOT NULL DEFAULT 0,
+            `read` TINYINT(1) NOT NULL DEFAULT 0,
             created_at VARCHAR(32) NOT NULL,
             ref_type VARCHAR(64),
             ref_id VARCHAR(128)
         )""",
         """CREATE INDEX IF NOT EXISTS notification_user_read
-            ON notifications(user_id, read, created_at)""",
+            ON notifications(user_id, `read`, created_at)""",
         """CREATE TABLE IF NOT EXISTS ops_feature_kv(
-            key VARCHAR(64) PRIMARY KEY,
+            `key` VARCHAR(64) PRIMARY KEY,
             value TEXT NOT NULL
         )""",
     ]
@@ -554,7 +554,7 @@ def _upsert_notification(db, user_id, kind, title, body, level="info", ref_type=
     if exists:
         return
     db.execute(
-        """INSERT INTO notifications(id,user_id,kind,title,body,level,read,created_at,ref_type,ref_id)
+        """INSERT INTO notifications(id,user_id,kind,title,body,level,`read`,created_at,ref_type,ref_id)
            VALUES(?,?,?,?,?,?,0,?,?,?)""",
         (nid, user_id, kind, title, body, level, now(), ref_type, str(ref_id) if ref_id is not None else None),
     )
@@ -599,7 +599,7 @@ def _refresh_notifications(db, user):
 
     # Persist a backup reminder if there has never been a backup.
     if user["role"] == "admin":
-        row = db.execute("SELECT value FROM ops_feature_kv WHERE key='last_backup' LIMIT 1").fetchone()
+        row = db.execute("SELECT value FROM ops_feature_kv WHERE `key`='last_backup' LIMIT 1").fetchone()
         if not row:
             _upsert_notification(db, uid, "backup", "建议建立首个数据库备份", "当前还没有检测到数据库备份，建议先建立一份可恢复备份。", "warning")
 
@@ -610,7 +610,7 @@ def notifications():
     db = get_db()
     _refresh_notifications(db, user)
     rows = [dict(r) for r in db.execute(
-        "SELECT * FROM notifications WHERE user_id=? ORDER BY read ASC, created_at DESC LIMIT 100",
+        "SELECT * FROM notifications WHERE user_id=? ORDER BY `read` ASC, created_at DESC LIMIT 100",
         (user["id"],),
     ).fetchall()]
     unread = sum(1 for r in rows if not r["read"])
@@ -621,7 +621,7 @@ def notifications():
 def notification_read(nid):
     user = _require_capability("notification.view")
     db = get_db()
-    row = db.execute("UPDATE notifications SET read=1 WHERE id=? AND user_id=?", (nid, user["id"]))
+    row = db.execute("UPDATE notifications SET `read`=1 WHERE id=? AND user_id=?", (nid, user["id"]))
     return jsonify(ok=True, updated=bool(getattr(row, "rowcount", 0)))
 
 
@@ -629,7 +629,7 @@ def notification_read(nid):
 def notifications_read_all():
     user = _require_capability("notification.view")
     db = get_db()
-    db.execute("UPDATE notifications SET read=1 WHERE user_id=?", (user["id"],))
+    db.execute("UPDATE notifications SET `read`=1 WHERE user_id=?", (user["id"],))
     return jsonify(ok=True)
 
 
@@ -746,7 +746,7 @@ def backup_create():
 
     db = get_db()
     db.execute(
-        "INSERT OR REPLACE INTO ops_feature_kv(key,value) VALUES(?,?)",
+        "INSERT OR REPLACE INTO ops_feature_kv(`key`,value) VALUES(?,?)",
         ("last_backup", json.dumps({"filename": target.name, "created_at": now()})),
     )
     try:

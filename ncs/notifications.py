@@ -14,7 +14,7 @@ def ensure_notification_table(db) -> None:
             title VARCHAR(255) NOT NULL,
             body TEXT NOT NULL,
             level VARCHAR(16) NOT NULL DEFAULT 'info',
-            read TINYINT(1) NOT NULL DEFAULT 0,
+            `read` TINYINT(1) NOT NULL DEFAULT 0,
             created_at VARCHAR(32) NOT NULL,
             ref_type VARCHAR(64),
             ref_id VARCHAR(128)
@@ -22,7 +22,7 @@ def ensure_notification_table(db) -> None:
     )
     try:
         db.execute(
-            "CREATE INDEX IF NOT EXISTS notification_user_read ON notifications(user_id, read, created_at)"
+            "CREATE INDEX IF NOT EXISTS notification_user_read ON notifications(user_id, `read`, created_at)"
         )
     except Exception:
         pass
@@ -36,7 +36,7 @@ def create_notification(db, user_id, kind, title, body, level="info", ref_type=N
     if exists:
         return nid
     db.execute(
-        """INSERT INTO notifications(id,user_id,kind,title,body,level,read,created_at,ref_type,ref_id)
+        """INSERT INTO notifications(id,user_id,kind,title,body,level,`read`,created_at,ref_type,ref_id)
            VALUES(?,?,?,?,?,?,0,?,?,?)""",
         (
             nid,
