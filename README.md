@@ -1,258 +1,2642 @@
-> **新增中英文切换与深色模式**：升级、设置入口和本次验证范围请先阅读 [UPGRADE_I18N_DARK.md](UPGRADE_I18N_DARK.md)。保留现有 `.env` 和数据库，打开包含 `app.py` / `requirements.txt` 的项目文件夹启动。
+# NCS Charging — 智能充电管理平台
 
-## 1. Windows + VS Code 启动（先看这里）
+NCS Charging 是一个基于 **Flask + JavaScript + MySQL/SQLite** 的智能充电管理平台课程项目。
 
-1. 安装 Python 3.11 或更新版本（建议使用 3.12），安装时勾选 **Add python.exe to PATH**。
-2. 把整个压缩包解压，例如 `D:\Projects\NCS_Charging_Python`。不要直接在压缩包内部运行。
-3. 在 VS Code 选择“文件 → 打开文件夹”，选中包含 `app.py` 的文件夹。
-4. 安装 Microsoft 的 **Python** 和 **Python Debugger** 扩展。
-5. 打开“终端 → 新建终端”，依次执行下面三条命令。
+项目包含：
+
+* 用户充电完整闭环
+* 电站与电桩管理
+* 钱包、结算与欠费
+* 分时收费
+* 实时设备监控
+* 运营与营收统计
+* 负荷预测
+* RBAC 角色权限
+* AI Agent
+* GLM / BigModel + Local Agent fallback
+* MySQL 连接池
+* L1 性能测试
+* 中英文与深色模式
+
+> 推荐所有组员第一次配置时按照：
+>
+> **安装环境 → 安装依赖 → 配置数据库 → 配置 `.env` → 配置 AI Agent → 启动 → 测试**
+>
+> 当前主要开发分支：`dev`
+
+---
+
+# 目录
+
+1. [环境要求](#1-环境要求)
+2. [获取代码](#2-获取代码)
+3. [安装 Python 依赖](#3-安装-python-依赖)
+4. [选择数据库：SQLite 或 MySQL](#4-选择数据库sqlite-或-mysql)
+5. [配置 `.env`](#5-配置-env)
+6. [配置 AI Agent](#6-配置-ai-agent)
+7. [启动项目](#7-启动项目)
+8. [演示账号](#8-演示账号)
+9. [首次启动会自动做什么](#9-首次启动会自动做什么)
+10. [功能说明](#10-功能说明)
+11. [运行测试](#11-运行测试)
+12. [L1 性能测试](#12-l1-性能测试)
+13. [手机访问](#13-手机访问)
+14. [Docker](#14-docker)
+15. [常见问题](#15-常见问题)
+16. [项目结构](#16-项目结构)
+17. [团队开发建议](#17-团队开发建议)
+
+---
+
+# 1. 环境要求
+
+## 必装
+
+建议安装：
+
+* **Git**
+* **Python 3.11 或以上**
+
+  * 推荐 Python 3.12
+* **VS Code**
+* Chrome / Edge 浏览器
+
+## VS Code 推荐扩展
+
+安装：
+
+* Python
+* Python Debugger
+
+## 完整模式推荐额外安装
+
+如果要使用完整 MySQL 环境：
+
+* **MySQL 8.x**
+* MySQL Workbench（可选）
+
+如果需要做 JavaScript 语法检查：
+
+* Node.js
+
+如果需要容器运行：
+
+* Docker Desktop
+
+---
+
+## 检查环境
+
+打开 PowerShell：
+
+```powershell
+git --version
+python --version
+```
+
+Windows 如果安装了 Python Launcher：
+
+```powershell
+py --version
+```
+
+例如：
+
+```text
+Python 3.12.x
+```
+
+即可。
+
+---
+
+# 2. 获取代码
+
+Clone 项目：
+
+```powershell
+git clone https://github.com/a1re135/NCS_Charging.git
+```
+
+进入项目：
+
+```powershell
+cd NCS_Charging
+```
+
+切换到 `dev`：
+
+```powershell
+git checkout dev
+git pull origin dev
+```
+
+确认：
+
+```powershell
+git branch --show-current
+```
+
+应该显示：
+
+```text
+dev
+```
+
+---
+
+# 3. 安装 Python 依赖
+
+项目根目录应该可以看到：
+
+```text
+app.py
+requirements.txt
+ncs/
+static/
+templates/
+tests/
+```
+
+---
+
+## Windows 创建虚拟环境
 
 ```powershell
 py -3 -m venv .venv
+```
+
+如果没有 `py`：
+
+```powershell
+python -m venv .venv
+```
+
+---
+
+## 安装依赖
+
+不需要执行 `Activate.ps1`。
+
+直接使用虚拟环境中的 Python：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+```
+
+然后：
+
+```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe app.py
 ```
 
-这里直接使用虚拟环境中的 Python，不需要执行 Activate.ps1，也不需要调整 PowerShell 执行策略。电脑没有 `py` 命令、但 `python --version` 正常时，第一条改为 `python -m venv .venv`。
+当前主要 Python 依赖包括：
 
-6. 保持终端运行，在 Edge 或 Chrome 打开 **http://127.0.0.1:5000**。(先在终端输入ipconfig查看自己的ip然后改成http://ip：5000)
-7. 在 VS Code 按 `Ctrl+Shift+P` → `Python: Select Interpreter` → 选择 `.venv\Scripts\python.exe`。此后可以按 F5，选择 `NCS Python - Windows` 调试。
-8. 停止系统：在运行终端按 `Ctrl+C`。
+```text
+Flask
+waitress
+requests
+qrcode
+PyMySQL
+python-dotenv
+Pillow
+openai
+DBUtils
+```
 
-也可以直接双击 `start_windows.bat`：它创建虚拟环境、安装依赖，然后启动程序。第一次需要联网下载依赖；后续可使用第三条命令直接启动，无需再安装。
+其中：
 
-**下次运行只需要：**
+* `Flask`：Web 后端
+* `Waitress`：运行 Web Server
+* `PyMySQL`：连接 MySQL
+* `DBUtils`：MySQL connection pool
+* `python-dotenv`：读取 `.env`
+* `openai`：用于连接 OpenAI-compatible 的 BigModel / GLM API
+* `qrcode`：生成充电桩二维码
+* `Pillow`：图片相关处理
+
+> 项目安装 `openai` SDK 并不代表必须使用 OpenAI API。
+>
+> 当前 AI Agent 使用该 SDK 连接智谱 BigModel 的 OpenAI-compatible API。
+
+---
+
+## VS Code 选择 Python
+
+在 VS Code：
+
+```text
+Ctrl + Shift + P
+```
+
+选择：
+
+```text
+Python: Select Interpreter
+```
+
+然后选择：
+
+```text
+.venv\Scripts\python.exe
+```
+
+---
+
+# 4. 选择数据库：SQLite 或 MySQL
+
+NCS Charging 同时支持：
+
+### SQLite
+
+优点：
+
+* 最简单
+* 不需要安装 MySQL
+* 适合第一次运行
+* 适合 UI 开发
+* 适合功能测试
+
+### MySQL
+
+优点：
+
+* 推荐完整演示
+* 推荐多人统一开发
+* 推荐 L1 性能测试
+* 支持 connection pooling
+* 更接近正式部署环境
+
+当前项目默认：
+
+```text
+DB_BACKEND=mysql
+```
+
+因此第一次运行之前，请明确选择数据库。
+
+---
+
+# 4.1 SQLite 快速启动
+
+如果只是想最快把整个系统跑起来，推荐先使用 SQLite。
+
+创建 `.env` 后写：
+
+```env
+DB_BACKEND=sqlite
+NCS_DATABASE=data/ncs.db
+```
+
+第一次运行时系统会自动创建：
+
+```text
+data/ncs.db
+```
+
+并自动：
+
+* 建表
+* 创建演示账号
+* 创建电站
+* 创建电桩
+* 创建历史订单
+* 创建 RBAC 权限
+* 创建分时价格
+* 创建示例故障数据
+
+不需要自己导入 SQL。
+
+---
+
+# 4.2 MySQL 完整模式
+
+推荐项目最终演示和性能测试使用 MySQL。
+
+## 安装 MySQL
+
+推荐：
+
+```text
+MySQL 8.x
+```
+
+Windows 可以安装：
+
+* MySQL Server
+* MySQL Workbench
+
+安装时记住：
+
+```text
+root password
+```
+
+---
+
+## 创建数据库
+
+进入 MySQL：
+
+```powershell
+mysql -u root -p
+```
+
+或者直接使用 MySQL Workbench。
+
+执行：
+
+```sql
+CREATE DATABASE ncs_charging
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+---
+
+## 创建项目专用 MySQL 用户
+
+建议不要让项目直接使用 `root`。
+
+执行：
+
+```sql
+CREATE USER 'ncs_app'@'localhost'
+IDENTIFIED BY 'CHANGE_THIS_PASSWORD';
+```
+
+授权：
+
+```sql
+GRANT ALL PRIVILEGES
+ON ncs_charging.*
+TO 'ncs_app'@'localhost';
+```
+
+然后：
+
+```sql
+FLUSH PRIVILEGES;
+```
+
+---
+
+## MySQL `.env`
+
+例如：
+
+```env
+DB_BACKEND=mysql
+
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=ncs_charging
+MYSQL_USER=ncs_app
+MYSQL_PASSWORD=CHANGE_THIS_PASSWORD
+```
+
+其中：
+
+```text
+MYSQL_PASSWORD
+```
+
+必须与你刚才创建 MySQL user 时设置的密码一致。
+
+---
+
+## 不需要手动导入 schema
+
+只需要：
+
+1. MySQL Server 已运行
+2. `ncs_charging` database 已存在
+3. MySQL user 可以访问 database
+
+启动 NCS 后，Python 会自动创建项目需要的数据表。
+
+---
+
+## 判断是否使用 MySQL
+
+启动时终端会显示类似：
+
+```text
+[Database] MySQL localhost:3306/ncs_charging
+```
+
+表示当前正在使用 MySQL。
+
+如果使用 SQLite，则会看到类似：
+
+```text
+[Database] SQLite ...\data\ncs.db
+```
+
+---
+
+# 5. 配置 `.env`
+
+项目已经提供：
+
+```text
+.env.example
+```
+
+请复制为：
+
+```text
+.env
+```
+
+PowerShell：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+CMD：
+
+```cmd
+copy .env.example .env
+```
+
+`.env` 已经被 `.gitignore` 排除，因此正常情况下不会提交到 GitHub。
+
+---
+
+## 推荐完整 `.env`
+
+```env
+# =========================================================
+# Application
+# =========================================================
+
+NCS_SECRET_KEY=replace-with-a-long-random-secret
+NCS_CAPACITY_LEVEL=L1
+
+
+# =========================================================
+# Deployment
+# =========================================================
+
+NCS_COOKIE_SECURE=0
+NCS_TRUST_PROXY=0
+
+
+# =========================================================
+# Database
+# =========================================================
+
+DB_BACKEND=mysql
+
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=ncs_charging
+MYSQL_USER=ncs_app
+MYSQL_PASSWORD=CHANGE_THIS_PASSWORD
+
+
+# =========================================================
+# SQLite alternative
+# =========================================================
+
+# DB_BACKEND=sqlite
+# NCS_DATABASE=data/ncs.db
+
+
+# =========================================================
+# AI Agent - Zhipu BigModel / GLM
+# =========================================================
+
+NCS_LLM_ENABLED=0
+NCS_LLM_PROVIDER=bigmodel
+
+BIGMODEL_API_KEY=
+BIGMODEL_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
+BIGMODEL_MODEL=glm-4-flashx-250414
+
+
+# =========================================================
+# Web server
+# =========================================================
+
+NCS_THREADS=48
+```
+
+---
+
+# 5.1 NCS_SECRET_KEY
+
+建议每个人生成自己的随机 Secret Key。
+
+运行：
+
+```powershell
+.\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_hex(32))"
+```
+
+例如输出：
+
+```text
+52c7d4....
+```
+
+复制到：
+
+```env
+NCS_SECRET_KEY=52c7d4....
+```
+
+不要把真实 Secret Key 提交到 GitHub。
+
+---
+
+# 5.2 NCS_THREADS
+
+当前 Web Server 使用 Waitress。
+
+例如：
+
+```env
+NCS_THREADS=48
+```
+
+表示 Waitress 最多使用 48 个 worker threads 处理请求。
+
+本地普通开发也可以降低，例如：
+
+```env
+NCS_THREADS=16
+```
+
+但性能测试推荐保持项目指定值。
+
+---
+
+# 6. 配置 AI Agent
+
+NCS AI Agent 有两种模式：
+
+```text
+Local Agent
+```
+
+和：
+
+```text
+GLM / BigModel Agent
+```
+
+---
+
+# 6.1 Local Agent
+
+Local Agent 不需要任何 API Key。
+
+只要：
+
+```env
+NCS_LLM_ENABLED=0
+```
+
+即可。
+
+此时：
+
+```text
+用户问题
+↓
+本地 Agent 判断 intent
+↓
+调用 NCS Python 业务函数
+↓
+查询真实业务数据
+↓
+返回答案
+```
+
+优点：
+
+* 不需要联网
+* 不消耗 API 额度
+* 不需要 BigModel Key
+* 更稳定
+* 自动测试使用该模式
+
+---
+
+# 6.2 GLM / BigModel Agent
+
+如果希望使用真正的 LLM 做自然语言理解，可以开启 GLM。
+
+需要获取：
+
+```text
+BIGMODEL_API_KEY
+```
+
+然后修改 `.env`：
+
+```env
+NCS_LLM_ENABLED=1
+
+NCS_LLM_PROVIDER=bigmodel
+
+BIGMODEL_API_KEY=YOUR_REAL_API_KEY
+
+BIGMODEL_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
+
+BIGMODEL_MODEL=glm-4-flashx-250414
+```
+
+保存后必须重启项目。
+
+停止：
+
+```text
+Ctrl + C
+```
+
+重新：
 
 ```powershell
 .\.venv\Scripts\python.exe app.py
 ```
 
-## 2. 演示账号
+---
 
-| 身份 | 登录账号 | 密码 |
-| --- | --- | --- |
-| 用户 | 13800138000 | User123456 |
-| 另一位用户 | 13900139000 | User123456 |
-| 管理员 | admin | Admin123456 |
+# 6.3 AI Agent 的工作方式
 
-登录页可点击演示账号自动填入。也可注册自己的手机号、昵称和密码；新账号余额为 0。手机号只做格式验证，不发送短信。示例用户“小林”初始余额 288 元，数据库初始化时生成 5 个电站、30 个电桩及近 28 天的示例历史订单，方便展示图表；其中部分电桩预置为故障、维修中、离线状态，用户“小明”预置一笔昨日未补缴订单欠费，便于演示管理端“欠费”状态。
+GLM **不会直接连接数据库**。
 
-用户和管理员在同一个登录页面登录，系统按数据库角色展示对应菜单；用户请求管理接口会被后端拒绝。若想同时打开两个身份，请使用普通窗口和无痕窗口，它们的登录会话互相独立。
+架构是：
 
-## 3. 功能
-
-### 用户端
-
-- 总览：欢迎插画、充电统计、最近 7 天趋势、钱包余额、电桩状态、最近订单。
-- 附近电站：区域预置位置、浏览器定位、站名/地址搜索；状态筛选仅“全部状态 / 有空闲桩”，按距离或充电次数排序；每站展示“快充 N 个（空闲 M）｜慢充 N 个（空闲 K）”。
-- 电站详情：快慢充、功率、状态、累计次数；分区统计展示快充总数与空闲数、慢充总数与空闲数；状态下拉仅“全部状态/空闲/预约中/充电中”（选“全部”仍可见故障/维修中/离线桩），类型以“快充/慢充”勾选框过滤（不勾选默认快慢充全显示），可按编号或充电次数排序；空闲桩可预约或直接充电。
-- 预约：保留 15 分钟；可开始、取消或过期释放。
-- 我的充电：按 60 倍时间模拟电量与金额，每 3 秒刷新；页面关闭再打开后可恢复。
-- 结束结算：冻结计费参数，扣减余额、记录欠费、释放电桩、保存小票。
-- 我的订单：状态筛选（含“欠费”，即已完成但存在未补缴欠费的订单）、搜索、详情、浏览器打印小票、补缴欠费；支持按创建日期（起止年月日）筛选，含今天/近 7 天/近 30 天快捷按钮；欠费订单在状态列显示“欠费”而非“已结算”。
-- 我的钱包：模拟充值、流水、欠费汇总；待补缴金额卡“查看欠费订单”改为弹窗，列出全部欠费订单，可直接查看小票详情或在线补缴；在弹窗内补缴成功后，钱包可用余额与待补缴金额即时刷新，无需再手动刷新页面。
-- 个人中心：昵称、四种头像主题、修改密码、退出登录；重新登录后保留资料。
-- 路线导航：可选驾车/步行/公交，在浏览器打开腾讯地图路线链接。
-
-### 管理端
-
-- 运营总览、实时设备状态、累计营收；后台首页订单与收入趋势图（按天/按周/按月、近 7 天/近 30 天/本年度、全部电站或指定电站、订单口径可选全部订单/有效完成），与订单管理数据同源；平台快充/慢充总量及空闲、故障分型统计。
-- 电站新增、编辑、删除；电站有电桩时禁止删除；电站列表排序为“充电次数最多 / 充电次数最少”（管理端，已去掉按距离排序）；分时收费标准已并入电站详情（“价格管理”栏目不再单列），管理员在电站详情的“分时收费标准”中新增/编辑/删除价格时段。
-- 左侧导航栏保留点击位置（栏目较长时不回弹到顶部）；“偏好设置”仅保留在个人主页内，左侧栏不再单独列出。
-- 电桩新增、编辑、所属电站下拉筛选、类型（快充/慢充）筛选、状态筛选，按编号或充电次数（高到低/低到高）排序，故障/维修中/离线切换、恢复、软件模拟重启、删除。
-- 有未完成订单的电桩禁止管理操作；有历史订单的电桩禁止删除或迁移电站。
-- 用户查看：状态分正常/欠费/冻结三态（欠费=存在未补缴订单欠费）；支持按状态筛选、按注册时间起止日期区间筛选，按最新/最早注册排序；冻结/启用；冻结用户仍可取消预约、结束已有充电、补缴欠费和充值（修复：此前冻结用户无法充值也无法补缴欠费的死循环）。
-- 全部订单查看（欠费订单状态列显示“欠费”）、按创建日期筛选、CSV 导出（导出同步应用日期筛选范围）；导出 UTF-8 BOM，方便 Windows Excel 打开中文。
-- 营收统计：各电站总营收柱状图（按实收从高到低排序）、所有电站平均实收；近 7 天营收与导出。
-- 近 28 天同小时均值的负荷参考预测，展示未来 12 小时结果。
-- 电站、电桩和用户状态操作日志。
-
-## 4. 与原 Qt 项目的关系和边界
-
-| 原项目模块 | 新版实现 | 说明 |
-| --- | --- | --- |
-| client_user/LoginWindow | 登录页 + /api/login、/api/register | 改为手机号 + 密码；未接短信 |
-| PersonalHomePage / UserService | 个人中心、钱包 + profile、wallet 接口 | 资料和余额写入 SQLite；头像使用主题首字母，未迁移相机拍照/图片上传 |
-| MainWindow / StationService | 电站列表与详情 + stations 接口 | 保留预置坐标、定位和距离排序；未接地址文字地理编码 |
-| NavigationDialog / WebEngine | 外部腾讯地图路线链接 | 不需要 QtWebEngine；外部地图服务需联网，当前环境未完成外部路线服务联通验证 |
-| ChargeService / OrderSettlementDialog | services.py 事务与状态机 + 我的充电 | 保留预约、未完成订单拦截、模拟计费、结算、欠费 |
-| OrdersHistoryDialog | 我的订单、详情、打印小票 | 使用浏览器打印 |
-| client_admin | 按角色展示的管理端页面与 /api/admin 接口 | 电站、电桩、用户、订单、营收、操作日志 |
-| PredictionService | 历史小时均值预测 | 是可解释的基础版重写，未逐行移植原 C++ 预测算法 |
-| charger_simulator / TCP RESTART | 管理端“软件模拟重启” | 未移植独立 TCP 模拟器；不会控制真实设备 |
-| core/database | ncs/db.py + data/ncs.db | 新 schema，金额使用整数分；不能直接用旧 charge_platform.db 覆盖 |
-
-**这不是全部原功能逐项等价迁移。** 首版优先实现可演示的用户和管理闭环。真实短信、真实支付、内嵌地图/地址地理编码、摄像头头像、独立 TCP 设备模拟器及原预测算法精确迁移，均不包含在本次版本内。
-
-上传压缩包未包含运行时 SQLite 数据库，因此本项目不会包含旧电脑上的真实用户、余额或订单；演示数据在首次运行时生成。原 Qt 源码和配置没有放入新包，也没有复制原来的地图密钥。
-
-## 5. 推荐演示顺序
-
-1. 用 `13800138000` 登录，在个人中心修改昵称和头像主题，然后退出再登录，检查保留。
-2. 我的钱包 → 充值 1 元，检查余额增加 1.00 元。
-3. 附近电站 → 切换海淀区/朝阳区，观察排序变化。
-4. 电站详情 → 选空闲桩 → 预约，查看 15 分钟到期时间。
-5. 再去另一电站选桩，系统会拦截并跳回已有订单。
-6. 我的充电 → 开始充电。等待约 10 秒，观察电量增长。
-7. 结束充电并结算 → 查看小票、钱包扣款、电桩恢复空闲。
-8. 管理员登录 → 查看订单/营收 → 新增电站和电桩 → 故障/恢复 → 查看日志。
-9. 负荷预测 → 选择电站，展示未来 12 小时基础预测。
-
-模拟计算：`电量 = 功率(kW) × 真实经过秒数 × 60 ÷ 3600`。例如 60 kW 快充在真实 10 秒内模拟约 10 kWh；1.60 元/度时约 16 元。结束瞬间的最终计费时间可能比页面上次刷新晚几秒。
-
-同一用户只能有一个预约中或充电中的订单，同一个桩也只能有一个有效订单。服务层使用 `BEGIN IMMEDIATE` 事务与部分唯一索引防止并发重复占用。金额使用整数“分”，结束结算整体提交，避免重复扣款。预约过期在收到已登录 API 请求时检查；没有访问时不运行后台计时器，下次访问会先释放过期预约。
-
-## 6. 文件结构和学习入口
-
-| 文件 | 用途 |
-| --- | --- |
-| app.py | 启动 Flask 应用与 Waitress 本地服务器 |
-| ncs/__init__.py | 应用配置、会话、CSRF 校验、错误处理 |
-| ncs/db.py | 数据表、数据库连接、示例数据初始化 |
-| ncs/services.py | 预约、充电、结算、欠费、金额校验、距离计算 |
-| ncs/routes.py | 页面向 Python 发起的 API；登录、资料、用户和管理操作 |
-| templates/index.html | 网页骨架 |
-| static/style.css | 淡紫/蓝粉配色、侧栏、卡片、响应式布局 |
-| static/app.js | 浏览器交互、页面渲染、调用 Python 接口 |
-| static/hero.svg | 本地人物协作矢量插画，无需联网加载 |
-| tests/test_workflows.py | 15 项核心业务回归测试 |
-| backup_data.py | 使用 SQLite backup API 生成一致性备份 |
-| start_windows.bat | Windows 启动脚本 |
-| .vscode/ | VS Code 调试与测试配置 |
-
-如果老师问“怎么做到改昵称下次登录还在”：前端提交 `/api/profile` → Python 执行 `UPDATE users` → SQLite 写入 `data/ncs.db` → 下次 `/api/login` 和 `/api/session` 重新读取该用户 → 页面展示数据库中的昵称。
-
-如果问“Python 和网页怎么连接”：浏览器 JavaScript 用 `fetch('/api/...')` 请求；Flask routes.py 接收 JSON、验证身份，调用 services.py 操作数据库，返回 JSON；浏览器更新卡片和表格。类似 Qt 的按钮触发槽函数，只是这里经过 HTTP 请求。
-
-## 7. 数据保存、换电脑和备份
-
-首次启动生成 `data/ncs.db` 和随机会话密钥 `data/secret.key`。日常保留整个 `data` 文件夹；不要把它提交到公开仓库。
-
-生成备份：
-
-```powershell
-.\.venv\Scripts\python.exe backup_data.py
+```text
+User
+ ↓
+AI Agent UI
+ ↓
+/api/agent/chat
+ ↓
+GLM
+ ↓
+选择允许调用的 NCS Tool
+ ↓
+Python 本地业务函数
+ ↓
+MySQL / SQLite
+ ↓
+真实业务数据
+ ↓
+返回答案
 ```
 
-备份保存到 `backups`。迁移到另一台电脑：先停止目标系统，备份目标现有数据库，再把生成的备份复制成目标 `data/ncs.db`。关闭后的旧 `ncs.db-wal`、`ncs.db-shm` 也需一起移走，防止新旧混用。目标的 `secret.key` 可保留，登录会话需重新建立。
+也就是说：
 
-每台电脑独立运行时使用各自的 SQLite 数据库，同一个手机号不会跨电脑自动同步。要跨设备同步，需要以后部署一个统一后端并让各设备访问同一服务；当前仅监听 `127.0.0.1`，供本机使用。
+```text
+LLM = 理解问题
+Python Tool = 读取真实业务数据
+```
 
-## 8. 常见问题
+GLM 不能：
 
-- **ModuleNotFoundError: flask / waitress**：使用 `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`，并在 VS Code 选择相同解释器。
-- **浏览器打不开**：确认终端仍在运行，地址是 `http://127.0.0.1:5000`；不要直接双击 index.html，也不要用 Live Server 运行。
-- **端口占用**：先停止旧进程，或 PowerShell 执行 `$env:NCS_PORT="5001"` 再启动；浏览器访问 `http://127.0.0.1:5001`。
-- **画面没变化**：确认打开了正确文件夹；Python 改动需停止并重启服务，CSS/JS 改动后按 `Ctrl+F5` 强制刷新。
-- **初次 pip 下载失败**：检查电脑网络和 Python 版本；本项目依赖只有 Flask、Waitress 及其自动安装的小型依赖。
-- **地图定位失败**：允许浏览器定位，或选预置区域。浏览器定位可能不精确；路线使用外部服务，坐标/模式会带入 URL。
-- **管理员删除电桩失败**：有历史订单的电桩受外键保护；可标记故障，保留历史记录。
-- **待付款/欠费**：先充值足额，再进入订单详情点“补缴欠费”。
-- **数据想从头开始**：先备份，再停止系统并把整个 `data` 文件夹移到其他位置；下次启动重新生成演示数据。不要在运行中删除数据库。
+* 自己写 SQL
+* 直接访问数据库
+* 越过 RBAC
+* 调用当前角色没有权限的工具
 
-## 9. 测试与验证范围
+---
+
+# 6.4 Local fallback
+
+如果发生：
+
+* `NCS_LLM_ENABLED=0`
+* 没有填写 API Key
+* 网络失败
+* BigModel API timeout
+* API Key 无效
+* BigModel 服务异常
+
+系统会自动：
+
+```text
+GLM
+ ↓ 失败
+Local Agent
+ ↓
+继续回答
+```
+
+因此 AI Agent 页面不会因为 GLM 服务出问题而完全不能使用。
+
+终端可能会看到：
+
+```text
+GLM Agent failed; using local fallback
+```
+
+这是 fallback 机制正常工作的表现。
+
+---
+
+# 6.5 AI Agent 用户问题示例
+
+普通用户可以问：
+
+```text
+附近哪里有空闲快充？
+```
+
+```text
+我现在有充电订单吗？
+```
+
+```text
+我的余额是多少？
+```
+
+```text
+我有欠费吗？
+```
+
+```text
+我最近一次充电花了多少钱？
+```
+
+```text
+为什么我的充电桩无法启动？
+```
+
+---
+
+# 6.6 运营 / 管理员 Agent
+
+运营人员 / 管理员可以问：
+
+```text
+今天哪个充电站订单最多？
+```
+
+```text
+最近7天收入怎么样？
+```
+
+```text
+现在有多少故障设备？
+```
+
+```text
+现在设备情况怎么样？
+```
+
+```text
+哪些设备故障次数最多？
+```
+
+```text
+生成最近7天运营报告
+```
+
+---
+
+# 6.7 运维人员 Agent
+
+运维人员主要可以查询：
+
+```text
+现在有多少故障设备？
+```
+
+```text
+现在设备情况怎么样？
+```
+
+```text
+哪些设备故障次数最多？
+```
+
+---
+
+# 6.8 GLM 没生效怎么办
+
+检查 `.env`：
+
+```env
+NCS_LLM_ENABLED=1
+```
+
+以及：
+
+```env
+BIGMODEL_API_KEY=真实APIKey
+```
+
+确认：
+
+* `.env` 与 `app.py` 同级
+* 修改 `.env` 后重启 Python
+* 网络能访问 BigModel
+* API Key 有效
+* `openai` package 已安装
+
+可以重新安装 requirements：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+---
+
+## 自动测试不会调用 GLM
+
+当 Flask 运行：
+
+```python
+TESTING=True
+```
+
+时，系统强制使用：
+
+```text
+Local Agent
+```
+
+所以运行测试：
+
+```powershell
+python -m unittest
+```
+
+不会消耗 BigModel API 额度。
+
+---
+
+# 7. 启动项目
+
+Windows：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+正常情况下会看到：
+
+```text
+NCS Charging: http://127.0.0.1:5000
+Waitress threads: 48
+Press Ctrl+C to stop.
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:5000
+```
+
+---
+
+## 健康检查
+
+浏览器打开：
+
+```text
+http://127.0.0.1:5000/api/health
+```
+
+如果返回系统信息，说明后端正常。
+
+---
+
+## 停止系统
+
+终端：
+
+```text
+Ctrl + C
+```
+
+---
+
+## 下次运行
+
+一般只需要：
+
+```powershell
+cd NCS_Charging
+.\.venv\Scripts\python.exe app.py
+```
+
+不需要每次重新：
+
+```text
+pip install
+```
+
+---
+
+# 8. 演示账号
+
+系统初始化后提供以下演示账号。
+
+| 角色     | 账号            | 密码               |
+| ------ | ------------- | ---------------- |
+| 普通用户   | `13800138000` | `User123456`     |
+| 普通用户 2 | `13900139000` | `User123456`     |
+| 运营人员   | `operator`    | `Operator123456` |
+| 运维人员   | `tech`        | `Tech123456`     |
+| 系统管理员  | `admin`       | `Admin123456`    |
+
+登录页面也有演示账号快捷填入按钮。
+
+---
+
+## 角色说明
+
+### 普通用户
+
+可以：
+
+* 找充电站
+* 预约
+* 充电
+* 查看订单
+* 钱包充值
+* 处理欠费
+* 使用 AI Agent
+* 修改个人资料
+
+---
+
+### 运营人员
+
+主要负责：
+
+* 电站
+* 订单
+* 分时价格
+* 营收
+* 运营统计
+* 负荷预测
+
+---
+
+### 运维人员
+
+主要负责：
+
+* 电桩
+* 设备状态
+* 故障
+* 维修
+* 恢复
+* 实时设备数据
+
+---
+
+### 系统管理员
+
+拥有完整管理权限，包括：
+
+* 用户管理
+* 角色管理
+* 权限管理
+* 电站管理
+* 电桩管理
+* 故障管理
+* 营收
+* 订单
+* 日志
+
+---
+
+# 9. 首次启动会自动做什么
+
+只要数据库连接成功，系统启动时会自动初始化数据库。
+
+包括：
+
+* 创建数据表
+* 创建 RBAC tables
+* 创建角色
+* 创建权限
+* 创建 demo users
+* 创建电站
+* 创建电桩
+* 创建价格规则
+* 创建历史订单
+* 创建钱包数据
+* 创建故障演示数据
+* 创建操作日志相关表
+* 创建用户 preferences
+* 初始化 avatar 数据
+* 扩展演示电站网络
+
+因此正常情况下不需要运行：
+
+```text
+schema.sql
+```
+
+或手动导入数据库结构。
+
+---
+
+# 10. 功能说明
+
+# 用户端
+
+## 总览
+
+包含：
+
+* 欢迎页面
+* 累计充电量
+* 已完成订单
+* 累计消费
+* 最近 7 天趋势
+* 钱包余额
+* 电桩实时状态
+* 最近订单
+
+---
+
+## 附近电站
+
+支持：
+
+* 搜索电站
+* 搜索地址
+* 浏览器定位
+* 区域预置位置
+* 有空闲桩筛选
+* 距离排序
+* 充电次数排序
+
+每个电站显示：
+
+```text
+快充数量
+快充空闲数量
+慢充数量
+慢充空闲数量
+```
+
+---
+
+## 电站详情
+
+包含：
+
+1. 电站信息
+2. 分时收费标准
+3. 选择充电桩
+
+充电桩支持：
+
+* 全部状态
+* 空闲
+* 预约中
+* 充电中
+
+类型筛选：
+
+```text
+快充
+慢充
+```
+
+可以：
+
+* 都不选 → 显示全部
+* 只选快充
+* 只选慢充
+* 两个都选
+
+---
+
+## 预约
+
+用户可以预约空闲设备。
+
+预约时间：
+
+```text
+15 分钟
+```
+
+预约期间：
+
+* 可以开始充电
+* 可以取消
+* 超时后自动释放
+
+---
+
+## 充电
+
+支持：
+
+* 直接开始
+* 预约后开始
+* 实时电量
+* 实时费用
+* 模拟充电时间
+
+系统默认：
+
+```text
+60× 时间模拟
+```
+
+---
+
+## 结算
+
+结束充电后：
+
+* 计算最终能量
+* 锁定计费快照
+* 计算订单金额
+* 自动扣除余额
+* 更新 charger
+* 写入 wallet log
+* 保存 order receipt
+
+---
+
+## 欠费
+
+余额不足时：
+
+```text
+订单完成
++
+产生 debt_cents
+```
+
+用户可以在：
+
+```text
+我的钱包
+→ 待补缴金额
+→ 查看欠费订单
+```
+
+直接：
+
+* 查看欠费订单
+* 查看详情
+* 补缴
+
+补缴成功后：
+
+* 钱包余额立即刷新
+* 待补缴金额立即刷新
+* 欠费列表立即刷新
+
+---
+
+## 我的订单
+
+支持：
+
+* 搜索
+* 状态过滤
+* 欠费状态
+* 起始日期
+* 结束日期
+* 今天
+* 最近 7 天
+* 最近 30 天
+* 订单详情
+* 打印小票
+
+---
+
+## 钱包
+
+支持：
+
+* 模拟充值
+* 钱包流水
+* 当前余额
+* 欠费总额
+* 欠费订单
+
+---
+
+## 路线导航
+
+可选择：
+
+```text
+驾车
+步行
+公交
+```
+
+然后打开腾讯地图路线。
+
+---
+
+## AI Agent
+
+普通用户可以让 Agent 查询：
+
+* 附近空闲充电站
+* 当前充电订单
+* 最近订单
+* 钱包余额
+* 欠费
+* 无法开始充电的原因
+
+---
+
+# 管理端
+
+# 运营总览
+
+管理员 / 运营人员可以看到：
+
+* 累计电量
+* 已完成订单
+* 电站数量
+* 营收
+* 用户统计
+* 设备统计
+
+---
+
+## 订单与收入趋势
+
+支持：
+
+### 粒度
+
+```text
+按天
+按周
+按月
+```
+
+### 范围
+
+```text
+最近 7 天
+最近 30 天
+本年度
+```
+
+### 电站
+
+```text
+全部电站
+指定电站
+```
+
+### 订单口径
+
+```text
+有效完成
+全部订单
+```
+
+同时显示：
+
+* 订单趋势
+* 收入趋势
+
+---
+
+## 快充 / 慢充平台资源统计
+
+总览会统计：
+
+* 快充总数量
+* 快充空闲
+* 快充故障
+* 慢充总数量
+* 慢充空闲
+* 慢充故障
+
+---
+
+# 实时监控
+
+实时监控页面每：
+
+```text
+5 秒
+```
+
+刷新一次。
+
+包含：
+
+* 设备总数
+* 空闲设备
+* 使用中设备
+* 异常设备
+* 电桩状态分布
+* 电站利用率
+* 系统设备健康率
+* 最近 5 分钟设备趋势
+* 各电站异常设备
+
+状态趋势包括：
+
+```text
+空闲
+使用中
+异常
+```
+
+---
+
+# 电站管理
+
+支持：
+
+* 添加
+* 编辑
+* 删除
+* 运营状态
+
+排序：
+
+```text
+充电次数最多
+充电次数最少
+```
+
+---
+
+# 分时收费
+
+价格管理已经整合到：
+
+```text
+电站详情
+→ 分时收费标准
+```
+
+不再作为独立侧栏页面。
+
+管理员可以：
+
+* 添加价格时段
+* 编辑价格
+* 删除价格
+
+价格由：
+
+```text
+电费
++
+服务费
+=
+最终单价
+```
+
+组成。
+
+---
+
+# 电桩管理
+
+支持：
+
+* 新增
+* 编辑
+* QR Code
+* 快充 / 慢充
+* 功率
+* 电站筛选
+* 状态筛选
+* 充电次数排序
+
+状态操作：
+
+* 故障
+* 维修
+* 离线
+* 恢复
+* 重启
+* 删除
+
+---
+
+# 故障管理
+
+支持：
+
+* 登记故障
+* 待处理
+* 处理中
+* 已解决
+* 记录处理结果
+
+故障状态会同步更新 charger 状态。
+
+---
+
+# 用户管理
+
+用户有三类状态：
+
+```text
+正常
+欠费
+冻结
+```
+
+可以：
+
+* 状态筛选
+* 注册日期筛选
+* 最新注册排序
+* 最早注册排序
+* 冻结用户
+* 启用用户
+* 修改角色
+
+---
+
+## 冻结用户规则
+
+冻结用户：
+
+### 不可以
+
+```text
+创建新的充电订单
+```
+
+### 仍然可以
+
+* 取消已有预约
+* 结束正在进行的充电
+* 钱包充值
+* 补缴欠费
+
+这样避免：
+
+```text
+用户被冻结
+↓
+无法充值
+↓
+无法补缴
+↓
+欠费永远无法处理
+```
+
+---
+
+# RBAC
+
+系统有四个角色：
+
+```text
+user
+operator
+technician
+admin
+```
+
+数据库包含：
+
+```text
+roles
+permissions
+role_permissions
+```
+
+前端菜单只是展示层。
+
+真正权限检查在：
+
+```text
+Python Backend API
+```
+
+即使用户手动调用 API，没有权限也会返回：
+
+```text
+403
+```
+
+---
+
+# 营收统计
+
+包括：
+
+* 累计实收
+* 已结算订单
+* 欠费
+* 每个电站营收
+* 平均每站营收
+* 最近 7 天营收
+
+电站营收：
+
+```text
+从高到低排序
+```
+
+---
+
+# 负荷预测
+
+根据历史订单提供：
+
+```text
+未来 12 小时
+```
+
+负荷参考。
+
+包括：
+
+* 时间
+* 平均负荷
+* 预计空闲桩
+* 高峰标记
+
+---
+
+# 操作日志
+
+管理员可以查看重要后台操作记录。
+
+例如：
+
+* 设备状态修改
+* 电站操作
+* 用户管理
+* 故障操作
+
+---
+
+# 11. 运行测试
+
+合并代码或 Push 前推荐运行完整测试。
+
+Windows：
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-已在提供的 Linux 执行环境通过 Python 3.12 + Flask + SQLite 的 12 项回归测试，并在 Windows/Python 3.11 环境逐轮补充，当前业务回归共 38 项全部通过（覆盖欠费闭环、趋势/营收接口、快慢充分型、冻结用户充值补缴修复等）。业务测试用独立临时数据库，不修改实际数据。前端通过 `node --check` 与 DOM 桩冒烟，后端以独立临时库 + 真实 MySQL 只读双通道验证；具体结果见 `VALIDATION.md`。
+自动测试使用：
 
-Windows 批处理、VS Code 配置已提供并检查内容，但本环境不是 Windows，未实际运行 Windows 批处理或 VS Code GUI。请按第 1 节在你的电脑运行；如报错，把完整终端文字发来即可进一步定位。
+```text
+temporary SQLite databases
+```
 
-依赖与虚拟环境用法参考：[Flask 官方安装文档](https://flask.palletsprojects.com/en/stable/installation/)。本项目用例、界面和验证结果来自本次实现。
+不会修改：
 
-## 10. L1 容量等级、性能测试与云端部署
+* MySQL 正式数据
+* 本地 demo SQLite
+* 当前用户数据
 
-本版本已按课程要求申报 **L1 基础业务级**，目标规模为 10,000 注册用户、1,000 日活用户、10 个充电站、100 台充电设备、100 个同时在线用户。L1 峰值目标为：登录 20 QPS、查询充电站 50 QPS、查看设备 30 QPS、开始充电 10 QPS、结束充电 10 QPS、Agent 咨询 5 QPS。
+---
 
-容量目标集中定义在 `ncs/capacity.py`，后台管理员登录后可在 **容量等级** 页面查看。
+## Python 编译检查
 
-### 性能测试
+```powershell
+.\.venv\Scripts\python.exe -m compileall app.py ncs tests
+```
 
-先启动服务：
+---
+
+## JavaScript 检查
+
+如果安装 Node.js：
+
+```powershell
+node --check static/app.js
+```
+
+成功时没有输出。
+
+---
+
+## 检查 Git Merge Conflict
+
+```powershell
+git grep -n -E "^(<<<<<<<|=======|>>>>>>>)"
+```
+
+正常情况下：
+
+```text
+没有输出
+```
+
+---
+
+# 12. L1 性能测试
+
+项目包含：
+
+```text
+prepare_l1_loadtest.py
+performance_test.py
+performance_report.json
+PERFORMANCE_REPORT.md
+```
+
+L1 测试推荐：
+
+```text
+MySQL mode
+```
+
+---
+
+## 启动服务器
+
+终端 1：
 
 ```powershell
 .\.venv\Scripts\python.exe app.py
 ```
 
-再在另一个终端执行：
+---
+
+## 准备 L1 测试数据
+
+终端 2：
+
+```powershell
+.\.venv\Scripts\python.exe prepare_l1_loadtest.py --prepare
+```
+
+---
+
+## 运行测试
+
+例如：
 
 ```powershell
 .\.venv\Scripts\python.exe performance_test.py --base-url http://127.0.0.1:5000 --duration 15 --concurrency 20
 ```
 
-测试结束后会生成：
+测试会统计：
 
-- `performance_report.json`
-- `PERFORMANCE_REPORT.md`
+* QPS
+* 平均延迟
+* P95
+* P99
+* Error Rate
 
-脚本会统计 QPS、平均延迟、P95、P99 和错误率，并与 L1 目标进行对照。
+---
 
-### 云端部署
+## 清理测试数据
 
-项目已提供：
+```powershell
+.\.venv\Scripts\python.exe prepare_l1_loadtest.py --cleanup
+```
 
-- `Dockerfile`
-- `docker-compose.yml`
-- `Procfile`
-- `deploy.md`
+---
 
-Docker 运行：
+## Waitress threads
+
+性能测试时注意：
+
+```env
+NCS_THREADS=48
+```
+
+服务器线程数会影响高并发结果。
+
+---
+
+# 13. 手机访问
+
+`app.py` 使用：
+
+```text
+0.0.0.0
+```
+
+因此可以让同一局域网内的手机访问。
+
+---
+
+## 查询电脑 IP
+
+Windows：
+
+```powershell
+ipconfig
+```
+
+找到：
+
+```text
+IPv4 Address
+```
+
+例如：
+
+```text
+192.168.1.100
+```
+
+手机打开：
+
+```text
+http://192.168.1.100:5000
+```
+
+---
+
+## 手机打不开怎么办
+
+确认：
+
+1. Python 正在运行
+2. 手机和电脑连接同一个 Wi-Fi
+3. Windows Firewall 允许 Python
+4. Port 5000 没有被拦截
+5. Wi-Fi 没有启用 Client Isolation
+
+公共 Wi-Fi 很可能禁止设备之间通信。
+
+这种情况下电脑自己访问：
+
+```text
+127.0.0.1
+```
+
+正常，但手机仍然无法连接。
+
+---
+
+# 14. Docker
+
+项目包含：
+
+```text
+Dockerfile
+docker-compose.yml
+Procfile
+```
+
+---
+
+# Docker + SQLite
+
+最容易测试的方法：
+
+```bash
+docker build -t ncs-charging .
+```
+
+然后：
+
+```bash
+docker run --rm \
+  -p 5000:5000 \
+  -e DB_BACKEND=sqlite \
+  -e NCS_SECRET_KEY=change-me \
+  -v ncs-data:/app/data \
+  ncs-charging
+```
+
+访问：
+
+```text
+http://127.0.0.1:5000
+```
+
+---
+
+# Docker + MySQL
+
+如果 Flask 在 Docker 中，而 MySQL 在其他地方，需要配置：
+
+```text
+DB_BACKEND=mysql
+MYSQL_HOST
+MYSQL_PORT
+MYSQL_DATABASE
+MYSQL_USER
+MYSQL_PASSWORD
+```
+
+例如：
+
+```env
+DB_BACKEND=mysql
+
+MYSQL_HOST=host.docker.internal
+MYSQL_PORT=3306
+
+MYSQL_DATABASE=ncs_charging
+MYSQL_USER=ncs_app
+MYSQL_PASSWORD=YOUR_PASSWORD
+```
+
+如果 MySQL 在 Windows Host，Docker Desktop 中：
+
+```text
+localhost
+```
+
+通常表示 Docker container 自己，而不是 Windows Host。
+
+因此可以尝试：
+
+```text
+host.docker.internal
+```
+
+---
+
+## 当前 docker-compose 注意事项
+
+当前：
+
+```text
+docker-compose.yml
+```
+
+主要配置的是：
+
+```text
+NCS Web Application
+```
+
+它目前 **不会自动帮你创建 MySQL Server**。
+
+所以直接运行：
 
 ```bash
 docker compose up -d --build
 ```
 
-程序监听 `PORT` 环境变量，也兼容本地 `NCS_PORT`。生产环境建议设置随机的 `NCS_SECRET_KEY`，并将 `/app/data` 挂载到持久化磁盘/卷，以保存 SQLite 数据。
+之前，需要确保：
 
-部署后可以访问：
+### 方案 1
+
+明确设置：
 
 ```text
-/api/health
+DB_BACKEND=sqlite
 ```
 
-确认返回 `capacity_level: L1` 后，再从公网打开首页。
+或者：
 
-## L1 容量等级、性能测试与云端交付（新增）
+### 方案 2
 
-本版本把课程要求明确落到可执行的工程流程：
+已经有可访问的 MySQL，并传入完整 MySQL 配置。
 
-1. **容量等级：L1 基础业务级**
-   - 目标：10,000 注册用户、1,000 DAU、10 个电站、100 台电桩、100 同时在线用户。
-   - QPS：登录 20、查询电站 50、查看设备 30、开始/结束充电 10/10、Agent 5。
-   - 运行后进入管理员 → “容量等级”查看申报目标与当前数据规模。
+---
 
-2. **性能测试**
-   - `performance_test.py` 支持登录、站点查询、设备查看等只读压测。
-   - `--write-test` 使用真实订单创建与结算链路验证开始/结束充电，并记录 QPS、错误率、平均延迟、P95、P99。
-   - 测试前执行 `python prepare_l1_loadtest.py --prepare`；测试结束执行 `python prepare_l1_loadtest.py --cleanup`。
+# 15. 常见问题
 
-3. **云端部署**
-   - `Dockerfile`、`docker-compose.yml`、`docker-compose.prod.yml`、`nginx.conf` 已准备好。
-   - Flask/Waitress 使用 `PORT`，反向代理识别 `X-Forwarded-*`，SQLite 使用持久化 volume。
-   - `/api/health` 同时检查服务与数据库连通性。
+# 15.1 `Access denied for user 'ncs_app'`
 
-4. **持续集成**
-   - `.github/workflows/ci.yml` 自动进行依赖安装、Python 编译检查、业务回归测试和 Docker 构建。
+通常表示：
 
+* MySQL password 错误
+* user 不存在
+* user 没有权限
 
-## RBAC / 角色权限增强
+检查 `.env`：
 
-系统提供四种业务角色，并将权限持久化到 `roles`、`permissions`、`role_permissions` 三张表。关键管理 API 在服务端进行权限校验，前端导航仅作为用户体验层的可见性控制。
+```env
+MYSQL_USER=ncs_app
+MYSQL_PASSWORD=...
+```
 
-| 角色 | 示例账号 | 主要权限 |
-|---|---|---|
-| 普通用户 | `13800138000 / User123456` | 附近电站、充电、个人订单 |
-| 运营人员 | `operator / Operator123456` | 电站、电桩、订单、价格、运营分析 |
-| 运维人员 | `tech / Tech123456` | 电桩、设备维护、故障处理 |
-| 系统管理员 | `admin / Admin123456` | 全部权限、用户与角色管理 |
+MySQL：
 
-管理员可以在后台的 **角色与权限** 页面查看 RBAC 矩阵，并在 **用户管理** 中即时调整角色。关键 API 会返回 `403` 拒绝越权请求。
+```sql
+GRANT ALL PRIVILEGES
+ON ncs_charging.*
+TO 'ncs_app'@'localhost';
 
-## 支付状态与用户统计
+FLUSH PRIVILEGES;
+```
 
-订单接口现在会返回计算后的 `payment_status`：`已支付`、`待补缴`、`部分支付`、`支付失败`、`待结算`、`无需支付`。其中正常充电结束后会自动扣除余额并显示 `已支付`；余额不足则形成真实的欠费状态 `待补缴`，而不是虚构的“支付中”。
+---
 
-运营总览增加注册用户总数、活跃用户数及近 7 日新增用户数量，用户数量统计来源于数据库实时聚合。
+# 15.2 `Unknown database 'ncs_charging'`
+
+创建：
+
+```sql
+CREATE DATABASE ncs_charging
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+---
+
+# 15.3 我不想安装 MySQL
+
+使用：
+
+```env
+DB_BACKEND=sqlite
+NCS_DATABASE=data/ncs.db
+```
+
+然后：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+即可运行完整 Web App。
+
+---
+
+# 15.4 AI Agent 可以回答，但不是 GLM
+
+检查：
+
+```env
+NCS_LLM_ENABLED=1
+```
+
+以及：
+
+```env
+BIGMODEL_API_KEY=YOUR_REAL_KEY
+```
+
+然后重启 Python。
+
+如果 GLM 调用失败，系统会自动切换：
+
+```text
+Local Agent
+```
+
+所以页面仍然可以正常工作。
+
+---
+
+# 15.5 修改 `.env` 没有效果
+
+`.env` 是应用启动时读取。
+
+先：
+
+```text
+Ctrl+C
+```
+
+然后：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+---
+
+# 15.6 `ModuleNotFoundError`
+
+通常表示：
+
+* requirements 没安装
+* 用错 Python
+* VS Code interpreter 不正确
+
+重新：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+然后：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+---
+
+# 15.7 `openai` module 找不到
+
+运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+或者：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install openai
+```
+
+---
+
+# 15.8 `dbutils` 找不到
+
+运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install DBUtils
+```
+
+通常直接重新安装：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+即可。
+
+---
+
+# 15.9 Port 5000 被占用
+
+PowerShell：
+
+```powershell
+$env:NCS_PORT="5001"
+```
+
+然后：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+访问：
+
+```text
+http://127.0.0.1:5001
+```
+
+---
+
+# 15.10 SQLite 想完全重置
+
+停止程序。
+
+删除：
+
+```text
+data/ncs.db
+```
+
+然后重新启动：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+系统会重新生成 demo data。
+
+> 如果里面有需要保留的数据，不要删除。
+
+---
+
+# 15.11 MySQL 想完全重置
+
+警告：下面操作会删除当前数据库数据。
+
+可以：
+
+```sql
+DROP DATABASE ncs_charging;
+```
+
+然后：
+
+```sql
+CREATE DATABASE ncs_charging
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+重新启动 NCS 后会重新初始化。
+
+---
+
+# 15.12 手机无法访问，但电脑可以
+
+多数情况是：
+
+```text
+Windows Firewall
+```
+
+或者：
+
+```text
+Wi-Fi Client Isolation
+```
+
+尤其校园网 / 公共 Wi-Fi 很常见。
+
+---
+
+# 16. 项目结构
+
+```text
+NCS_Charging/
+│
+├─ app.py
+├─ requirements.txt
+├─ .env.example
+├─ .gitignore
+│
+├─ Dockerfile
+├─ docker-compose.yml
+├─ Procfile
+│
+├─ performance_test.py
+├─ prepare_l1_loadtest.py
+├─ performance_report.json
+├─ PERFORMANCE_REPORT.md
+│
+├─ ncs/
+│  ├─ __init__.py
+│  ├─ db.py
+│  ├─ mysql_schema.py
+│  ├─ routes.py
+│  ├─ services.py
+│  ├─ agent.py
+│  ├─ llm_agent.py
+│  ├─ preferences.py
+│  ├─ avatars.py
+│  ├─ expansion.py
+│  └─ ...
+│
+├─ static/
+│  ├─ app.js
+│  ├─ style.css
+│  ├─ preferences.js
+│  ├─ logo.svg
+│  ├─ hero.svg
+│  └─ i18n/
+│
+├─ templates/
+│  └─ index.html
+│
+├─ tests/
+│  └─ test_workflows.py
+│
+└─ data/
+   └─ ncs.db
+```
+
+其中：
+
+```text
+data/
+```
+
+不会提交到 Git。
+
+---
+
+# 重要文件说明
+
+| 文件                        | 作用                           |
+| ------------------------- | ---------------------------- |
+| `app.py`                  | 启动 Flask + Waitress          |
+| `requirements.txt`        | Python dependencies          |
+| `.env.example`            | 环境变量模板                       |
+| `ncs/__init__.py`         | Flask 配置、CSRF、数据库初始化         |
+| `ncs/db.py`               | SQLite / MySQL、连接池、Seed Data |
+| `ncs/mysql_schema.py`     | MySQL Schema                 |
+| `ncs/routes.py`           | API Routes                   |
+| `ncs/services.py`         | 预约、充电、结算等核心业务                |
+| `ncs/agent.py`            | Local AI Agent               |
+| `ncs/llm_agent.py`        | GLM + Local fallback Agent   |
+| `static/app.js`           | 前端逻辑                         |
+| `static/style.css`        | 前端 UI / Realtime / Agent 样式  |
+| `tests/test_workflows.py` | 核心业务 Regression Tests        |
+| `performance_test.py`     | 性能测试                         |
+| `prepare_l1_loadtest.py`  | L1 测试数据准备                    |
+
+---
+
+# 17. 团队开发建议
+
+不要直接长期在：
+
+```text
+dev
+```
+
+上开发。
+
+推荐：
+
+```text
+dev
+↓
+features/name
+↓
+完成开发
+↓
+测试
+↓
+merge 回 dev
+```
+
+---
+
+## 开始开发前
+
+```powershell
+git checkout dev
+git pull origin dev
+```
+
+---
+
+## 创建个人 branch
+
+例如：
+
+```powershell
+git checkout -b features/rey
+```
+
+或者：
+
+```powershell
+git checkout -b features/jiaqi
+```
+
+---
+
+## 开发完成后
+
+先测试：
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+如果安装 Node：
+
+```powershell
+node --check static/app.js
+```
+
+检查 conflict marker：
+
+```powershell
+git grep -n -E "^(<<<<<<<|=======|>>>>>>>)"
+```
+
+检查：
+
+```powershell
+git status
+```
+
+---
+
+## Commit
+
+```powershell
+git add .
+```
+
+```powershell
+git commit -m "feat: describe your feature"
+```
+
+---
+
+## Push
+
+```powershell
+git push -u origin features/your-name
+```
+
+然后：
+
+* Pull Request
+* 或交给 Integration branch 合并
+
+---
+
+# 不要提交这些文件
+
+不要提交：
+
+```text
+.env
+```
+
+```text
+.venv/
+```
+
+```text
+data/
+```
+
+```text
+*.db
+```
+
+```text
+backups/
+```
+
+以及：
+
+```text
+API Key
+MySQL Password
+Secret Key
+```
+
+这些大部分已经在 `.gitignore` 中，但仍应该在 commit 前检查：
+
+```powershell
+git status
+```
+
+---
+
+# 推荐第一次配置顺序
+
+如果你刚拿到这个项目，可以直接按下面执行。
+
+## Step 1
+
+安装：
+
+```text
+Git
+Python 3.11+
+VS Code
+```
+
+---
+
+## Step 2
+
+Clone：
+
+```powershell
+git clone https://github.com/a1re135/NCS_Charging.git
+cd NCS_Charging
+git checkout dev
+```
+
+---
+
+## Step 3
+
+Virtual Environment：
+
+```powershell
+py -3 -m venv .venv
+```
+
+---
+
+## Step 4
+
+Dependencies：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+---
+
+## Step 5
+
+复制 `.env`：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+---
+
+## Step 6
+
+如果想最快运行：
+
+```env
+DB_BACKEND=sqlite
+NCS_LLM_ENABLED=0
+```
+
+---
+
+## Step 7
+
+运行：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+---
+
+## Step 8
+
+打开：
+
+```text
+http://127.0.0.1:5000
+```
+
+---
+
+## Step 9
+
+登录：
+
+```text
+admin
+Admin123456
+```
+
+或者：
+
+```text
+13800138000
+User123456
+```
+
+---
+
+## Step 10
+
+确认基本功能正常后，再切换：
+
+```text
+SQLite
+↓
+MySQL
+```
+
+以及：
+
+```text
+Local Agent
+↓
+GLM Agent
+```
+
+---
+
+# 最快运行方案
+
+如果只是要最快看到系统：
+
+`.env`：
+
+```env
+DB_BACKEND=sqlite
+
+NCS_LLM_ENABLED=0
+
+NCS_SECRET_KEY=local-development-secret
+
+NCS_THREADS=16
+```
+
+然后：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+即可。
+
+不需要：
+
+* MySQL
+* BigModel Key
+* Docker
+* Node.js
+
+---
+
+# 完整演示推荐配置
+
+最终 Demo 推荐：
+
+```text
+Python 3.12
++
+MySQL 8
++
+Waitress
++
+NCS_THREADS=48
++
+GLM Agent
+```
+
+`.env`：
+
+```env
+NCS_SECRET_KEY=YOUR_RANDOM_SECRET
+
+NCS_CAPACITY_LEVEL=L1
+
+DB_BACKEND=mysql
+
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=ncs_charging
+MYSQL_USER=ncs_app
+MYSQL_PASSWORD=YOUR_PASSWORD
+
+NCS_LLM_ENABLED=1
+NCS_LLM_PROVIDER=bigmodel
+
+BIGMODEL_API_KEY=YOUR_API_KEY
+BIGMODEL_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
+BIGMODEL_MODEL=glm-4-flashx-250414
+
+NCS_THREADS=48
+```
+
+---
+
+# 相关文档
+
+项目中还有：
+
+```text
+VALIDATION.md
+```
+
+功能验证记录。
+
+```text
+PERFORMANCE_REPORT.md
+```
+
+L1 性能测试结果。
+
+```text
+RBAC_REFACTOR.md
+```
+
+RBAC 权限设计。
+
+```text
+UPGRADE_I18N_DARK.md
+```
+
+中英文与深色模式说明。
+
+---
+
+# 安全说明
+
+本项目是：
+
+```text
+课程项目 / Demo System
+```
+
+不应直接作为真实商业充电系统上线。
+
+当前包括：
+
+* 模拟钱包充值
+* 模拟充电
+* 模拟设备状态
+* 演示用户
+* 演示订单
+
+不包含真实：
+
+* 银行支付
+* 支付宝 / 微信支付
+* 真实充电桩硬件协议
+* 真实短信验证码
+* 商业级身份验证
+* 生产环境 Key Management
+
+---
+
+# NCS Smart Charging
+
+```text
+A LITTLE ENERGY.
+A BETTER DAY.
+```
+
+Smart Charging Management Platform
+Course Project / Demonstration System
