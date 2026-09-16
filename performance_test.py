@@ -377,21 +377,24 @@ def login_worker(
 
 
 def write_cycle_worker(
+    session: requests.Session,
+    csrf: str,
     base: str,
     duration: float,
     worker_id: int,
     offered_qps: float,
     worker_count: int,
+    start_event: threading.Event,
 ):
-    session = requests.Session()
-    phone, password = USERS[worker_id % len(USERS)]
-    charger_id = (worker_id % 100) + 1
-    try:
-        login(session, base, phone, password)
-    except (requests.RequestException, ValueError, RuntimeError):
-        return {"start": (0, 1, []), "finish": (0, 1, [])}
+    charger_id = (
+        worker_id % 100
+    ) + 1
 
-    deadline = time.perf_counter() + duration
+    start_event.wait()
+
+    started = time.perf_counter()
+    deadline = started + duration
+
     interval = max(
         0.001,
         worker_count
@@ -400,61 +403,164 @@ def write_cycle_worker(
             0.001,
         ),
     )
+
     next_at = (
-        time.perf_counter()
+        started
         + worker_id
         / max(
             offered_qps,
             0.001,
         )
     )
-    sc = fc = se = fe = 0
-    start_lat: list[float] = []
-    finish_lat: list[float] = []
 
-    while time.perf_counter() < deadline:
-        sleep_for = next_at - time.perf_counter()
+    sc = 0
+    fc = 0
+    se = 0
+    fe = 0
+
+    start_lat = []
+    finish_lat = []
+
+    while (
+        time.perf_counter()
+        < deadline
+    ):
+        sleep_for = (
+            next_at
+            - time.perf_counter()
+        )
+
         if sleep_for > 0:
-            time.sleep(min(sleep_for, max(0.0, deadline - time.perf_counter())))
-        if time.perf_counter() >= deadline:
-            break
-        try:
-            token = session.get(base + "/api/session", timeout=REQUEST_TIMEOUT).json()["csrf"]
-            good, ms, _code, start_payload = record_call(
-                session,
-                "POST",
-                base + "/api/orders",
-                json={"charger_id": charger_id, "mode": "start"},
-                headers={"X-CSRF-Token": token},
+            time.sleep(
+                min(
+                    sleep_for,
+                    max(
+                        0.0,
+                        deadline
+                        - time.perf_counter(),
+                    ),
+                )
             )
-        except (requests.RequestException, ValueError, KeyError):
-            good, ms, start_payload = False, 0.0, None
+
+        if (
+            time.perf_counter()
+            >= deadline
+        ):
+            break
+
+        # Refresh CSRF from the same authenticated
+        # session before the write operation.
+        try:
+            session_data = session.get(
+                base + "/api/session",
+                timeout=REQUEST_TIMEOUT,
+            ).json()
+
+            current_csrf = (
+                session_data.get("csrf")
+                or csrf
+            )
+
+            good, ms, _code, start_payload = (
+                record_call(
+                    session,
+                    "POST",
+                    base + "/api/orders",
+                    json={
+                        "charger_id":
+                            charger_id,
+
+                        "mode":
+                            "start",
+                    },
+                    headers={
+                        "X-CSRF-Token":
+                            current_csrf,
+                    },
+                )
+            )
+
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+        ):
+            good = False
+            ms = 0.0
+            start_payload = None
+
         start_lat.append(ms)
+
         sc += int(good)
         se += int(not good)
 
         if good:
             try:
-                oid = int(start_payload["id"])
-                token = session.get(base + "/api/session", timeout=REQUEST_TIMEOUT).json()["csrf"]
-                good2, ms2, _code2, _ = record_call(
-                    session,
-                    "POST",
-                    base + f"/api/orders/{oid}/finish",
-                    json={},
-                    headers={"X-CSRF-Token": token},
+                oid = int(
+                    start_payload["id"]
                 )
-            except (requests.RequestException, ValueError, KeyError, TypeError):
-                good2, ms2 = False, 0.0
-            finish_lat.append(ms2)
+
+                session_data = (
+                    session.get(
+                        base + "/api/session",
+                        timeout=
+                            REQUEST_TIMEOUT,
+                    ).json()
+                )
+
+                current_csrf = (
+                    session_data.get(
+                        "csrf"
+                    )
+                    or csrf
+                )
+
+                good2, ms2, _code2, _ = (
+                    record_call(
+                        session,
+                        "POST",
+                        (
+                            base
+                            + f"/api/orders/"
+                              f"{oid}/finish"
+                        ),
+                        json={},
+                        headers={
+                            "X-CSRF-Token":
+                                current_csrf,
+                        },
+                    )
+                )
+
+            except (
+                requests.RequestException,
+                ValueError,
+                KeyError,
+                TypeError,
+            ):
+                good2 = False
+                ms2 = 0.0
+
+            finish_lat.append(
+                ms2
+            )
+
             fc += int(good2)
             fe += int(not good2)
 
         next_at += interval
 
     return {
-        "start": (sc, se, start_lat),
-        "finish": (fc, fe, finish_lat),
+        "start": (
+            sc,
+            se,
+            start_lat,
+        ),
+        "finish": (
+            fc,
+            fe,
+            finish_lat,
+        ),
     }
 
 def agent_worker(
@@ -1033,28 +1139,121 @@ def bench_agent(
         ),
     }
 
-def bench_writes(base, duration, workers, scale=1.0):
-    target_start = TARGETS["qps"]["start_charging"] * scale
-    target_finish = TARGETS["qps"]["end_charging"] * scale
-    target = min(target_start, target_finish)
-    worker_count = max(1, min(workers, 100))
-    started = time.perf_counter()
+def bench_writes(
+    base,
+    duration,
+    workers,
+    scale=1.0,
+):
+    required_start = (
+        TARGETS["qps"][
+            "start_charging"
+        ]
+        * scale
+    )
+
+    required_finish = (
+        TARGETS["qps"][
+            "end_charging"
+        ]
+        * scale
+    )
+
+    required_target = min(
+        required_start,
+        required_finish,
+    )
+
+    # Offer 10% above the requirement.
+    # Pass/fail remains against the official
+    # L1 target of 10 QPS.
+    offered_target = (
+        required_target
+        * 1.10
+    )
+
+    worker_count = max(
+        1,
+        min(
+            workers,
+            100,
+        ),
+    )
+
+    # ---------------------------------
+    # Pre-authenticate OUTSIDE the
+    # measured benchmark window.
+    # ---------------------------------
+
+    sessions = []
+    csrf_tokens = []
+
+    for i in range(worker_count):
+        session = (
+            requests.Session()
+        )
+
+        phone, password = USERS[
+            i % len(USERS)
+        ]
+
+        try:
+            csrf = login(
+                session,
+                base,
+                phone,
+                password,
+            )
+
+        except (
+            requests.RequestException,
+            ValueError,
+            RuntimeError,
+        ):
+            raise RuntimeError(
+                "Write benchmark "
+                "pre-login failed for "
+                f"{phone}"
+            )
+
+        sessions.append(
+            session
+        )
+
+        csrf_tokens.append(
+            csrf
+        )
+
+    start_event = (
+        threading.Event()
+    )
+
     with ThreadPoolExecutor(
         max_workers=worker_count
     ) as pool:
+
         futures = [
             pool.submit(
                 write_cycle_worker,
+                sessions[i],
+                csrf_tokens[i],
                 base,
                 duration,
                 i,
-                target,
+                offered_target,
                 worker_count,
+                start_event,
             )
             for i in range(
                 worker_count
             )
         ]
+
+        started = (
+            time.perf_counter()
+        )
+
+        start_event.set()
 
         parts = [
             future.result()
@@ -1063,32 +1262,121 @@ def bench_writes(base, duration, workers, scale=1.0):
                 futures
             )
         ]
-    elapsed = max(time.perf_counter() - started, 0.001)
+
+    elapsed = max(
+        time.perf_counter()
+        - started,
+        0.001,
+    )
+
     out = []
-    for key, name, endpoint, target_qps in [
-        ("start", "start_charging", "/api/orders", target_start),
-        ("finish", "end_charging", "/api/orders/<id>/finish", target_finish),
+
+    for (
+        key,
+        name,
+        endpoint,
+        required_qps,
+    ) in [
+        (
+            "start",
+            "start_charging",
+            "/api/orders",
+            required_start,
+        ),
+        (
+            "finish",
+            "end_charging",
+            "/api/orders/<id>/finish",
+            required_finish,
+        ),
     ]:
-        ok = sum(p[key][0] for p in parts)
-        err = sum(p[key][1] for p in parts)
-        lat = [m for p in parts for m in p[key][2]]
+
+        ok = sum(
+            p[key][0]
+            for p in parts
+        )
+
+        err = sum(
+            p[key][1]
+            for p in parts
+        )
+
+        lat = [
+            m
+            for p in parts
+            for m in p[key][2]
+        ]
+
         total = ok + err
-        qps = ok / elapsed
-        out.append({
-            "name": name,
-            "endpoint": endpoint,
-            "requests": total,
-            "success": ok,
-            "errors": err,
-            "error_rate": err / max(total, 1),
-            "elapsed_seconds": elapsed,
-            "qps": qps,
-            "target_qps": target_qps,
-            "avg_ms": statistics.fmean(lat) if lat else 0,
-            "p95_ms": percentile(lat, 95),
-            "p99_ms": percentile(lat, 99),
-            "target_met": ok > 0 and qps >= target_qps and err == 0,
-        })
+
+        qps = (
+            ok / elapsed
+        )
+
+        out.append(
+            {
+                "name":
+                    name,
+
+                "endpoint":
+                    endpoint,
+
+                "requests":
+                    total,
+
+                "success":
+                    ok,
+
+                "errors":
+                    err,
+
+                "error_rate":
+                    err
+                    / max(
+                        total,
+                        1,
+                    ),
+
+                "elapsed_seconds":
+                    elapsed,
+
+                "qps":
+                    qps,
+
+                "target_qps":
+                    required_qps,
+
+                "offered_qps":
+                    offered_target,
+
+                "avg_ms":
+                    statistics.fmean(
+                        lat
+                    )
+                    if lat
+                    else 0,
+
+                "p95_ms":
+                    percentile(
+                        lat,
+                        95,
+                    ),
+
+                "p99_ms":
+                    percentile(
+                        lat,
+                        99,
+                    ),
+
+                "target_met": (
+                    ok > 0
+                    and qps
+                        >= required_qps
+                    and err == 0
+                ),
+            }
+        )
+
     return out
 
 

@@ -120,25 +120,57 @@ def prepare():
 
                 created += 1
 
-        # Restore available state for test chargers
-        # that are not actually occupied.
+        # L1 performance-test fixture:
+        # clear active orders owned by the load-test users
+        # so all benchmark chargers can start from idle.
+
+        load_users = db.execute(
+            """
+            SELECT id
+            FROM users
+            WHERE phone LIKE ?
+            """,
+            (
+                PHONE_PREFIX + "%",
+            ),
+        ).fetchall()
+
+        load_user_ids = [
+            row["id"]
+            for row in load_users
+        ]
+
+        if load_user_ids:
+            marks = ",".join(
+                "?"
+                for _ in load_user_ids
+            )
+
+            db.execute(
+                f"""
+                UPDATE orders
+                SET
+                    status='cancelled',
+                    ended_at=?
+                WHERE user_id IN ({marks})
+                  AND status IN (
+                      'reserved',
+                      'charging'
+                  )
+                """,
+                (
+                    now(),
+                    *load_user_ids,
+                ),
+            )
+
+        # The first 100 chargers are the deterministic
+        # L1 write-test fixtures.
         db.execute(
             """
             UPDATE chargers
             SET status='idle'
             WHERE id<=100
-              AND status IN (
-                  'charging',
-                  'reserved'
-              )
-              AND id NOT IN (
-                  SELECT charger_id
-                  FROM orders
-                  WHERE status IN (
-                      'charging',
-                      'reserved'
-                  )
-              )
             """
         )
 
