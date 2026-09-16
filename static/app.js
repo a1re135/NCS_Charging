@@ -107,7 +107,7 @@ const can = (permission) =>
 const paymentBadge = (status) =>
   `<span class="pay-badge ${esc(String(status || "").replaceAll(" ", "-"))}">
     <i class="dot"></i>
-    ${esc(paymentNames[status] || status || "—")}
+    ${esc(tr(paymentNames[status] || status) || "—")}
   </span>`;
 
 const orderStatus = (o) =>
@@ -807,9 +807,11 @@ function shell() {
                   "
                 >
                   ${esc(
-                    S.user.role_name ||
-                      roleNames[S.user.role] ||
-                      S.user.role,
+                    tr(
+                      S.user.role_name ||
+                        roleNames[S.user.role] ||
+                        S.user.role,
+                    ),
                   )}
                 </small>
               </span>
@@ -1864,7 +1866,7 @@ function stationCard(s) {
       </div>
 
       <h3>
-        ${esc(s.name)}
+        ${esc(tr(s.name))}
       </h3>
 
       <div class="station-meta">
@@ -2962,8 +2964,10 @@ async function dashboard() {
 
                     <small>
                       ${esc(
-                        d.active[0]
-                          .station_name,
+                        tr(
+                          d.active[0]
+                            .station_name,
+                        ),
                       )}
                     </small>
                   </div>
@@ -3108,7 +3112,7 @@ async function dashboard() {
                           (st) =>
                             opt(
                               st.id,
-                              st.name,
+                              tr(st.name),
                             ),
                         )
                         .join("")}
@@ -3417,7 +3421,7 @@ async function dashboard() {
                     <div>
                       <p>
                         ${esc(
-                          x.station_name,
+                          tr(x.station_name),
                         )}
                       </p>
 
@@ -3519,22 +3523,19 @@ async function stationsPage() {
         }
       </select>
 
-      <select
-        id="station-sort"
-        aria-label="排序方式"
-      >
-        ${
-          S.user.role === "user"
-            ? trHtml`
-                <option value="distance">${tr("按距离排序")}</option>
-                <option value="usage">${tr("充电次数最多")}</option>
-              `
-            : trHtml`
+      ${
+        S.user.role === "user"
+          ? ""
+          : trHtml`
+              <select
+                id="station-sort"
+                aria-label="排序方式"
+              >
                 <option value="usage">${tr("充电次数最多")}</option>
                 <option value="usage_asc">${tr("充电次数最少")}</option>
-              `
-        }
-      </select>
+              </select>
+            `
+      }
 
       ${btn(
         tr(
@@ -4021,7 +4022,7 @@ async function stationDetail(
 
       <div>
         <h2>
-          ${esc(s.name)}
+          ${esc(tr(s.name))}
         </h2>
 
         <p class="sub">
@@ -4137,6 +4138,22 @@ async function stationDetail(
       <div class="toolbar">
 
         <select
+          id="charger-filter-sort"
+        >
+          <option value="number">
+            ${tr(
+              "按编号排序",
+            )}
+          </option>
+
+          <option value="usage">
+            ${tr(
+              "充电次数最多",
+            )}
+          </option>
+        </select>
+
+        <select
           id="charger-filter-status"
         >
           <option value="">
@@ -4169,22 +4186,6 @@ async function stationDetail(
           <input type="checkbox" id="charger-filter-slow">
           <span>${tr("慢充")}</span>
         </label>
-
-        <select
-          id="charger-filter-sort"
-        >
-          <option value="number">
-            ${tr(
-              "按编号排序",
-            )}
-          </option>
-
-          <option value="usage">
-            ${tr(
-              "充电次数最多",
-            )}
-          </option>
-        </select>
 
       </div>
 
@@ -4245,7 +4246,7 @@ async function scanPage(
 
           <p class="muted">
             ${esc(
-              c.station_name,
+              tr(c.station_name),
             )}
           </p>
         </div>
@@ -4402,7 +4403,7 @@ function ordersTable(os) {
 
           <td>
             ${esc(
-              o.station_name,
+              tr(o.station_name),
             )}
             <br>
             <small>
@@ -4895,7 +4896,7 @@ async function chargingPage() {
               tr(
                 "电站",
               ),
-              o.station_name,
+              tr(o.station_name),
             ],
             [
               tr(
@@ -5234,7 +5235,7 @@ async function debtOrdersModal() {
                     </td>
 
                     <td>
-                      ${esc(o.station_name)}
+                      ${esc(tr(o.station_name))}
                       <br>
                       <small>${esc(o.charger_number)}</small>
                     </td>
@@ -5618,7 +5619,7 @@ function chargersTable(cs) {
 
         return `<tr>
           <td><b>${esc(c.number)}</b></td>
-          <td>${esc(c.station_name)}</td>
+          <td>${esc(tr(c.station_name))}</td>
           <td>
             ${c.kind === "fast" ? tr("快充") : tr("慢充")}
             / ${c.power} kW
@@ -5670,7 +5671,7 @@ async function chargersPage() {
             (s) =>
               opt(
                 s.id,
-                s.name,
+                tr(s.name),
               ),
           )
           .join("")}
@@ -5813,7 +5814,7 @@ async function pricingPage() {
             (s) =>
               opt(
                 s.id,
-                s.name,
+                tr(s.name),
                 sid,
               ),
           )
@@ -5950,7 +5951,7 @@ function faultsTable(fs) {
 
           <td>
             ${esc(
-              f.station_name,
+              tr(f.station_name),
             )}
 
             <br>
@@ -6520,10 +6521,10 @@ async function revenuePage() {
                         140,
                     );
 
-                  return `<div class="bar-item" title="${esc(x.name)}：¥ ${yuan(x.revenue_cents)}">
+                  return `<div class="bar-item" title="${esc(tr(x.name))}：¥ ${yuan(x.revenue_cents)}">
                     <small>${yuan(x.revenue_cents)}</small>
                     <i style="height:${Math.max(2, h)}px"></i>
-                    <small>${esc(x.name.length > 6 ? x.name.slice(0, 6) + "…" : x.name)}</small>
+                    <small>${esc((tr(x.name) || "").length > 6 ? tr(x.name).slice(0, 6) + "…" : tr(x.name))}</small>
                   </div>`;
                 },
               )
@@ -6655,7 +6656,7 @@ async function predictionPage() {
             (s) =>
               opt(
                 s.id,
-                s.name,
+                tr(s.name),
                 sid,
               ),
           )
@@ -7465,7 +7466,7 @@ function editCharger(id) {
                 (s) =>
                   opt(
                     s.id,
-                    s.name,
+                    tr(s.name),
                     c.station_id,
                   ),
               )
@@ -7573,7 +7574,7 @@ function editPricing(id) {
                 (s) =>
                   opt(
                     s.id,
-                    s.name,
+                    tr(s.name),
                     p.station_id ||
                       S.pricingStation,
                   ),
@@ -7689,7 +7690,7 @@ function newFaultModal() {
                 (c) =>
                   opt(
                     c.id,
-                    c.station_name +
+                    tr(c.station_name) +
                       " · " +
                       c.number,
                   ),
@@ -7753,7 +7754,7 @@ function processFaultModal(id) {
 
         <div class="note">
           ${esc(
-            f.station_name,
+            tr(f.station_name),
           )}
           ·
           ${esc(
@@ -7897,7 +7898,7 @@ function mapModal(id) {
 
   modal(
     tr("前往 ") +
-      s.name,
+      tr(s.name),
 
     trHtml`
       <p class="sub">

@@ -1260,3 +1260,39 @@ L1 功能与性能验证
 ```
 
 不代表真实商业充电平台生产认证。
+
+
+---
+
+# 28. 第六轮改动验证记录（2026-09-16）
+
+本轮为纯前端改动（i18n 补全 / 用户端排序下拉移除 / 充电桩工具栏重排 / 支付状态样式统一），
+未改动任何后端代码与数据库结构。
+
+## 改动文件
+
+* `static/app.js` — 25 处替换：支付状态文案走翻译（`tr(paymentNames[status] || status)`）、
+  侧边栏角色名翻译、20 处电站名渲染点包 `tr()`、用户端附近电站排序下拉移除（管理端保留）、
+  充电桩工具栏重排（编号排序 → 全部状态 → 快慢充勾选）。
+* `static/i18n/en.json` — 567 → 587 keys，新增导航三项、运维角色三个页面名、5 个支付状态、
+  4 个角色名、5 个演示电站名英文。
+* `static/style.css` — `.pay-badge` 与 `.badge` 风格统一（圆角 6px、5px 8px、字号 10px）。
+* `static/themes.css` — 深色模式新增 `.pay-badge` 三条配色（默认/红粉/黄橙）。
+
+## 验证结果
+
+| 检查项 | 结果 |
+| --- | --- |
+| `node --check static/app.js` | 通过 |
+| `en.json` JSON 解析 + 587 key | 通过 |
+| i18n 行为冒烟（Node + DOM 桩，25 项） | 25/25 通过（导航/站名/支付状态/角色名翻译、中文兜底、zh 模式原文返回） |
+| HTTP 冒烟（临时 SQLite 起真实服务，17 项） | 17/17 通过（静态资源 200、en.json 新 key、pay-badge 新样式与深色样式、登录、stations 返回中文站名、admin 三种排序接口） |
+| 充电桩工具栏 DOM 顺序 | 确认：`#charger-filter-sort` → `#charger-filter-status` → 快慢充勾选，事件绑定 id 未变 |
+
+## 环境阻塞说明
+
+* 完整 `tests/test_workflows.py` 回归无法运行：测试脚本强制使用 MySQL 测试库
+  `ncs_charging_test`，当前账号 `ncs_app@localhost` 对该库无权限
+  （`OperationalError 1044 Access denied`），与本次改动无关（本次未动后端）。
+  如需恢复完整回归，需先处理 MySQL 测试库授权（建库或授权或调整 `.env`）。
+* 项目根无 `node_modules`，DOM 冒烟使用自建轻量桩（`_report_tmp/smoke_r6_i18n.js`）。

@@ -328,6 +328,20 @@ html[data-theme="dark"] .badge.cancelled {
   background: #363543;
   color: #cecbdb;
 }
+html[data-theme="dark"] .pay-badge {
+  background: #253e35;
+  color: #b0e3c7;
+}
+html[data-theme="dark"] .pay-badge.待补缴,
+html[data-theme="dark"] .pay-badge.支付失败 {
+  background: #4b2d3a;
+  color: #f4b3c7;
+}
+html[data-theme="dark"] .pay-badge.部分支付,
+html[data-theme="dark"] .pay-badge.待结算 {
+  background: #473b28;
+  color: #f1d19d;
+}
 html[data-theme="dark"] .btn.danger,
 html[data-theme="dark"] .modal-error {
   background: #4b2d3a;
