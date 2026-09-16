@@ -7,3 +7,5 @@ data/
 *.db-shm
 .env
 backups/
+performance_report.json
+PERFORMANCE_REPORT.md
