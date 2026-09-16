@@ -796,9 +796,6 @@ const roleNav = [
   // DEV
   ["realtime", "chart", "实时监控", "charger.view"],
 
-  // LIM
-  ["pricing", "wallet", "价格管理", "pricing.manage"],
-
   // DEV
   ["agent", "help", "AI 智能助手", null],
 
@@ -812,7 +809,6 @@ const roleNav = [
   ["roles", "shield", "角色与权限", "role.manage"],
 
   // LIM
-  ["settings", "settings", "偏好设置", null],
   ["ops-center", "activity", "运营中心", "system.monitor"],
 ];
 
