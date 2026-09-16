@@ -48,6 +48,43 @@
       return tr0(text);
     }
 
+    const statusNames = {
+      pending: "Pending",
+      processing: "In progress",
+      resolved: "Resolved",
+      fault: "Fault",
+      maintenance: "Maintenance",
+      offline: "Offline",
+      idle: "Idle",
+      charging: "Charging",
+    };
+
+    let match;
+
+    match =
+      text.match(
+        /^更新故障\s*#?(\d+):\s*([a-z]+)$/i,
+      );
+
+    if (match) {
+      return (
+        `Updated fault #${match[1]}: ` +
+        `${statusNames[match[2]] || match[2]}`
+      );
+    }
+
+    match =
+      text.match(
+        /^电桩\s*#?(\d+):\s*([a-z]+)$/i,
+      );
+
+    if (match) {
+      return (
+        `Charger #${match[1]}: ` +
+        `${statusNames[match[2]] || match[2]}`
+      );
+    }
+
     const rules = [
       [/^创建数据库备份(?:\s+)?(.+)?$/, 'Created database backup'],
       [/^启用用户(?:\s+)?(.+)$/, 'Enabled user'],
@@ -94,7 +131,7 @@
   ) {
     const match =
       body.match(
-        /^(.*?) · (.*?) 当前状态：([a-z]+)。$/,
+        /^(.*) · ([^·]+) 当前状态：([a-z]+)。$/,
       );
 
     if (match) {
@@ -724,7 +761,9 @@
             <td>
               <b>
                 ${esc0(
-                  x.station_name
+                  tr0(
+                    x.station_name
+                  )
                 )}
               </b>
             </td>
@@ -1152,11 +1191,12 @@
 
               <b>
                 ${esc0(
-                  x.nickname ||
-                  (
-                    tr0('用户 #') +
-                    x.actor_id
-                  )
+                  x.nickname
+                    ? tr0(x.nickname)
+                    : (
+                        tr0("用户 #") +
+                        x.actor_id
+                      )
                 )}
               </b>
 
@@ -1252,6 +1292,11 @@
           <input
             id="ops-audit-from"
             type="date"
+            lang="${
+              window.NCSPreferences?.state?.language === "en"
+                ? "en"
+                : "zh-CN"
+            }"
           >
 
           <input
