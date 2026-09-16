@@ -67,6 +67,71 @@
     return tr0(text);
   };
 
+  function notificationCopy0(n) {
+  const title =
+    String(
+      n?.title || ""
+    );
+
+  const body =
+    String(
+      n?.body || ""
+    );
+
+  if (
+    window.NCSPreferences
+      ?.state
+      ?.language !== "en"
+  ) {
+    return {
+      title,
+      body,
+    };
+  }
+
+  if (
+    n?.kind === "fault"
+  ) {
+    const match =
+      body.match(
+        /^(.*?) · (.*?) 当前状态：([a-z]+)。$/,
+      );
+
+    if (match) {
+      const statusNames = {
+        pending: "Pending",
+        processing: "In progress",
+        resolved: "Resolved",
+        fault: "Fault",
+        maintenance: "Maintenance",
+        offline: "Offline",
+      };
+
+      return {
+        title:
+          "Device fault requires attention",
+
+        body:
+          `${tr0(match[1])} · ${match[2]} — ` +
+          `Status: ${
+            statusNames[
+              match[3]
+            ] ||
+            match[3]
+          }.`,
+      };
+    }
+  }
+
+  return {
+    title:
+      tr0(title),
+
+    body:
+      tr0(body),
+  };
+}
+
   const toast0 =
     window.toast ||
     (() => {});
@@ -589,7 +654,9 @@
             <td>
               <b>
                 ${esc0(
-                  x.station_name
+                  tr0(
+                    x.station_name
+                  )
                 )}
               </b>
             </td>
@@ -1170,12 +1237,16 @@
 
           <input
             id="ops-audit-q"
-            placeholder="搜索操作内容"
+            placeholder="${esc0(
+              tr0("搜索操作内容")
+            )}"
           >
 
           <input
             id="ops-audit-actor"
-            placeholder="操作人 ID"
+            placeholder="${esc0(
+              tr0("操作人 ID")
+            )}"
           >
 
           <input
@@ -1306,7 +1377,11 @@
 
         ${
           items.map(
-            n => `
+            n => {
+              const copy =
+                notificationCopy0(n);
+
+              return `
 
               <div class="ops-notify">
 
@@ -1323,7 +1398,7 @@
                   <div class="ops-notify-title">
 
                     ${esc0(
-                      tr0(n.title)
+                      copy.title
                     )}
 
                     ${
@@ -1340,7 +1415,7 @@
 
                   <div class="ops-notify-body">
                     ${esc0(
-                      tr0(n.body)
+                      copy.body
                     )}
                   </div>
 
@@ -1371,7 +1446,8 @@
 
               </div>
 
-            `
+            `;
+              }
           ).join('') ||
           `
             <div class="ops-empty">
@@ -1574,24 +1650,18 @@ async function renderOpsCenter(role){
     try{
 
       const [
-       health,
-       analytics,
-       notifications,
-        backups,
-       audit
+        health,
+        analytics,
+        notifications,
+        audit
       ] = await Promise.all([
 
-  renderHealth(),
+        renderHealth(),
+        renderAnalytics(),
+        renderNotifications(),
+        renderAudit(role)
 
-  renderAnalytics(),
-
-  renderNotifications(),
-
-  renderBackups(role),
-  
-  renderAudit(role)
-
-]);
+      ]);
 
       return `
 
@@ -1608,7 +1678,6 @@ async function renderOpsCenter(role){
 <p>
   ${tr0("系统健康")} ·
   ${tr0("设备利用率")} ·
-  ${tr0("数据备份")} ·
   ${tr0("通知中心")} ·
   ${tr0("操作审计")}
 </p>
@@ -1658,16 +1727,7 @@ async function renderOpsCenter(role){
 
           ${analytics}
 
-          <div
-            class="ops-grid"
-            style="grid-template-columns:1.2fr 1fr"
-          >
-
-            ${notifications}
-
-            ${backups}
-
-          </div>
+          ${notifications}
 
           ${audit}
 

@@ -62,7 +62,7 @@
       "",
     );
   }
-  const ready = fetch("/static/i18n/en.json?v=20260916stationusage")
+  const ready = fetch("/static/i18n/en.json?v=20260916i18n3")
     .then((response) => {
       if (!response.ok) throw new Error("Translation file unavailable");
       return response.json();

@@ -941,5 +941,22 @@
   "充电已完成，最终费用": "Charging completed. Final cost",
   "优惠券已到账": "Coupon added",
   "你已领取": "You claimed",
-  "有未完成的充电订单，请先处理": "You have an unfinished charging order. Please handle it first."
+  "有未完成的充电订单，请先处理": "You have an unfinished charging order. Please handle it first.",
+  "基础会员权益": "Basic membership benefits",
+  "每次充电享 2% 会员折扣，并获得 1.1 倍积分": "Enjoy 2% off each charging session and earn 1.1× points",
+  "每次充电享 5% 会员折扣，并获得 1.25 倍积分": "Enjoy 5% off each charging session and earn 1.25× points",
+  "每次充电享 8% 会员折扣，并获得 1.5 倍积分": "Enjoy 8% off each charging session and earn 1.5× points",
+  "500 积分兑换，满 30 元可用": "Redeem with 500 points; valid on orders of ¥30 or more",
+  "1000 积分兑换，满 80 元可用": "Redeem with 1000 points; valid on orders of ¥80 or more",
+
+  "已领取、可用于充电结算的优惠券": "Claimed coupons available for charging settlement",
+
+  "余额自动扣款成功": "Balance payment completed successfully",
+  "余额不足，待充值补缴": "Insufficient balance; top up to complete payment",
+  "结算状态已记录": "Settlement status recorded",
+
+  "进入电站运维": "Go to station maintenance",
+
+  "用户/权限": "Users / Permissions",
+  "设备故障待处理": "Device fault requires attention"
 }

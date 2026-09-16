@@ -615,11 +615,39 @@ def _refresh_notifications(db, user):
                 f["id"],
             )
 
-    # Persist a backup reminder if there has never been a backup.
     if user["role"] == "admin":
-        row = db.execute("SELECT value FROM ops_feature_kv WHERE `key`='last_backup' LIMIT 1").fetchone()
-        if not row:
-            _upsert_notification(db, uid, "backup", "建议建立首个数据库备份", "当前还没有检测到数据库备份，建议先建立一份可恢复备份。", "warning")
+
+        if _is_sqlite():
+            row = db.execute(
+                """
+                SELECT value
+                FROM ops_feature_kv
+                WHERE `key`='last_backup'
+                LIMIT 1
+                """
+            ).fetchone()
+
+            if not row:
+                _upsert_notification(
+                    db,
+                    uid,
+                    "backup",
+                    "建议建立首个数据库备份",
+                    "当前还没有检测到数据库备份，建议先建立一份可恢复备份。",
+                    "warning",
+                )
+
+        else:
+            # MySQL deployments use native database backup tools.
+            # Remove any old SQLite-backup reminders.
+            db.execute(
+                """
+                DELETE FROM notifications
+                WHERE user_id=?
+                AND kind='backup'
+                """,
+                (uid,),
+            )
 
 
 @ops_api.get("/notifications")
