@@ -2357,9 +2357,23 @@ function stationCard(s) {
 
         营业时间：
         ${esc(
-          s.business_hours,
+          s.business_hours, 
         )}
-      </div>
+
+        ${
+          can("station.manage")
+            ? `
+              <br>
+              ${tr("总充电次数")}：
+              <strong>
+                ${Number(
+                  s.usage || 0,
+                )}
+              </strong>
+            `
+            : ""
+        }
+        </div>
 
       <div class="station-footer">
 

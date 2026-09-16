@@ -91,6 +91,7 @@
   "充电桩编号": "Charger number",
   "充电桩编号无效": "Invalid charger ID",
   "充电次数": "Sessions",
+  "总充电次数": "Total charging sessions",
   "充电次数低到高": "Charging sessions: low to high",
   "充电次数最多": "Most charging sessions",
   "充电次数最少": "Fewest charging sessions",
