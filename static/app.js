@@ -3511,22 +3511,19 @@ async function stationsPage() {
         }
       </select>
 
-      <select
-        id="station-sort"
-        aria-label="排序方式"
-      >
-        ${
-          S.user.role === "user"
-            ? trHtml`
-                <option value="distance">${tr("按距离排序")}</option>
-                <option value="usage">${tr("充电次数最多")}</option>
-              `
-            : trHtml`
-                <option value="usage">${tr("充电次数最多")}</option>
-                <option value="usage_asc">${tr("充电次数最少")}</option>
-              `
-        }
-      </select>
+      ${
+        S.user.role === "user"
+          ? ""
+          : trHtml`
+              <select
+                id="station-sort"
+                aria-label="排序方式"
+              >
+              <option value="usage">${tr("充电次数最多")}</option>
+              <option value="usage_asc">${tr("充电次数最少")}</option>
+              </select>
+            `
+      }
 
       ${btn(
         tr(
@@ -4132,6 +4129,22 @@ async function stationDetail(
       <div class="toolbar">
 
         <select
+          id="charger-filter-sort"
+        >
+          <option value="number">
+            ${tr(
+              "按编号排序",
+            )}
+          </option>
+
+          <option value="usage">
+            ${tr(
+              "充电次数最多",
+            )}
+          </option>
+        </select>
+
+        <select
           id="charger-filter-status"
         >
           <option value="">
@@ -4164,22 +4177,6 @@ async function stationDetail(
           <input type="checkbox" id="charger-filter-slow">
           <span>${tr("慢充")}</span>
         </label>
-
-        <select
-          id="charger-filter-sort"
-        >
-          <option value="number">
-            ${tr(
-              "按编号排序",
-            )}
-          </option>
-
-          <option value="usage">
-            ${tr(
-              "充电次数最多",
-            )}
-          </option>
-        </select>
 
       </div>
 

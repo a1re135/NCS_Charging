@@ -1,0 +1,39 @@
+NCS Charging dev + jiaqi curated merge report
+===============================================
+merge kit version:   2.1-windows-utf8
+dev commit pinned:   e71e073423b8f3a51e9ad756a267cfd9149d8d45
+jiaqi commit pinned: f06e55d0f74a0f342086771862aa17a0f48932cb
+integration branch:  integration/dev-jiaqi-20260916-172805
+safety branch:       backup-before-dev-jiaqi-20260916-172805
+
+Preserved from dev:
+- all backend/database/agent code, including ncs/agent.py and ncs/llm_agent.py
+- newer dataText()/roleLabel() translation architecture
+- preferences and template changes
+- all other dev files not touched by Jiaqi
+
+Integrated from jiaqi:
+- user-side nearby-station sort dropdown removal
+- charger toolbar order: number sort -> status -> fast -> slow
+- missing English i18n keys (union merge; dev wins on existing-key differences)
+- payment badge style.css changes
+- dark-mode payment badge themes.css changes
+- VALIDATION.md round-6 validation notes
+
+English keys newly added from Jiaqi: 0
+
+Existing English keys with differing values kept from dev: 10
+  * 查看运营数据: dev='View operations data' | jiaqi='View operations'
+  * 角色与权限: dev='Roles & permissions' | jiaqi='Roles & Permissions'
+  * 待补缴: dev='Payment due' | jiaqi='To be repaid'
+  * 普通用户: dev='User' | jiaqi='Regular user'
+  * 系统管理员: dev='System administrator' | jiaqi='Administrator'
+  * 海淀 · 智慧充电站: dev='Haidian · Smart Charging Station' | jiaqi='Haidian Smart Charging Station'
+  * 城市中心 · 绿能站: dev='City Center · Green Energy Station' | jiaqi='City Center Green Energy Station'
+  * 朝阳 · 阳光充电站: dev='Chaoyang · Sunshine Charging Station' | jiaqi='Chaoyang Sunshine Charging Station'
+  * 丰台 · 花园充电站: dev='Fengtai · Garden Charging Station' | jiaqi='Fengtai Garden Charging Station'
+  * 石景山 · 星光充电站: dev='Shijingshan · Starlight Charging Station' | jiaqi='Shijingshan Starlight Charging Station'
+
+node --check static/app.js: PASS
+JSON parse: PASS
+Curated structural checks: PASS
