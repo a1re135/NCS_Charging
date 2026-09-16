@@ -751,5 +751,8 @@
   "＋ 添加价格时段": "＋ Add time period",
   "＋ 添加电桩": "＋ Add charger",
   "＋ 添加电站": "＋ Add station",
-  "＋ 登记故障": "＋ Report fault"
+  "＋ 登记故障": "＋ Report fault",
+  "距离最近": "Nearest first",
+  "价格最低": "Lowest price",
+  "价格最高": "Highest price"
 }

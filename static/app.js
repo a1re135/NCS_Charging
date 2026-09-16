@@ -3450,6 +3450,7 @@ async function stationsPage() {
 
   S.stationFilter = {
     status: "",
+    kind: "",
     sort: "distance",
   };
 
@@ -3513,14 +3514,32 @@ async function stationsPage() {
 
       ${
         S.user.role === "user"
-          ? ""
+          ? trHtml`
+              <select
+                id="station-kind"
+                aria-label="充电类型筛选"
+              >
+                <option value="">${tr("全部类型")}</option>
+                <option value="fast">${tr("快充")}</option>
+                <option value="slow">${tr("慢充")}</option>
+              </select>
+
+              <select
+                id="station-sort"
+                aria-label="排序方式"
+              >
+                <option value="distance">${tr("距离最近")}</option>
+                <option value="price">${tr("价格最低")}</option>
+                <option value="price_desc">${tr("价格最高")}</option>
+              </select>
+            `
           : trHtml`
               <select
                 id="station-sort"
                 aria-label="排序方式"
               >
-              <option value="usage">${tr("充电次数最多")}</option>
-              <option value="usage_asc">${tr("充电次数最少")}</option>
+                <option value="usage">${tr("充电次数最多")}</option>
+                <option value="usage_asc">${tr("充电次数最少")}</option>
               </select>
             `
       }
@@ -3603,6 +3622,13 @@ async function loadStations() {
     params.set(
       "status",
       filter.status,
+    );
+  }
+
+  if (filter.kind) {
+    params.set(
+      "kind",
+      filter.kind,
     );
   }
 
@@ -9667,6 +9693,16 @@ document.addEventListener(
         "station-status"
       ) {
         S.stationFilter.status =
+          e.target.value;
+
+        await loadStations();
+      }
+
+      if (
+        e.target.id ===
+        "station-kind"
+      ) {
+        S.stationFilter.kind =
           e.target.value;
 
         await loadStations();

@@ -1470,6 +1470,39 @@ class WorkflowTests(
             ),
         )
 
+        response = self.client.get(
+            "/api/stations?sort=price"
+        )
+
+        prices = [
+            station["current_price_cents"]
+            for station
+            in response.json
+        ]
+
+        self.assertEqual(
+            prices,
+            sorted(prices),
+        )
+
+        response = self.client.get(
+            "/api/stations?sort=price_desc"
+        )
+
+        prices = [
+            station["current_price_cents"]
+            for station
+            in response.json
+        ]
+
+        self.assertEqual(
+            prices,
+            sorted(
+                prices,
+                reverse=True,
+            ),
+        )
+
         for bad in (
             "status=bad",
             "kind=bad",

@@ -1296,3 +1296,44 @@ L1 功能与性能验证
   （`OperationalError 1044 Access denied`），与本次改动无关（本次未动后端）。
   如需恢复完整回归，需先处理 MySQL 测试库授权（建库或授权或调整 `.env`）。
 * 项目根无 `node_modules`，DOM 冒烟使用自建轻量桩（`_report_tmp/smoke_r6_i18n.js`）。
+
+---
+
+# 29. 第七轮改动验证记录（2026-09-16）
+
+本轮针对甲方需求中的用户端充电站筛选以及 Docker/CI 进行修复。
+
+## 改动内容
+
+* `Dockerfile`
+  * 修复多行 `ENV` 语法。
+  * 修复多行 `RUN pip install` / `useradd` 语法。
+  * 修复 `HEALTHCHECK` 多行语法。
+* `ncs/routes.py`
+  * 电站接口新增 `sort=price`（当前价格从低到高）。
+  * 电站接口新增 `sort=price_desc`（当前价格从高到低）。
+  * 保留原有 `distance` / `usage` / `usage_asc`。
+  * 原有 `kind=fast|slow` 继续作为服务端充电类型筛选。
+* `static/app.js`
+  * 普通用户附近电站新增充电类型筛选：全部 / 快充 / 慢充。
+  * 普通用户新增排序：距离最近 / 价格最低 / 价格最高。
+  * 运营人员 / 管理员继续使用充电次数最多 / 最少排序。
+  * `loadStations()` 将 `kind` 参数发送至后端。
+* `static/i18n/en.json`
+  * 新增上述筛选/排序项的英文文案。
+* `tests/test_workflows.py`
+  * 增加价格升序、降序接口回归检查。
+
+## 验证
+
+建议执行：
+
+```powershell
+node --check static/app.js
+.\.venv\Scripts\python.exe -m py_compile ncs\routes.py
+.\.venv\Scripts\python.exe -m py_compile tests\test_workflows.py
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+docker build -t ncs-charging-ci .
+```
+
+CI 中业务测试通过后，Docker build 也应能继续通过。

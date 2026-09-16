@@ -470,6 +470,8 @@ def stations():
 
     if sort not in (
         'distance',
+        'price',
+        'price_desc',
         'usage',
         'usage_asc',
     ):
@@ -884,7 +886,23 @@ def stations():
         # Sort result
         # -----------------------------
 
-        if sort == 'usage':
+        if sort == 'price':
+            result.sort(
+                key=lambda r: (
+                    r['current_price_cents'],
+                    r['distance'],
+                )
+            )
+
+        elif sort == 'price_desc':
+            result.sort(
+                key=lambda r: (
+                    -r['current_price_cents'],
+                    r['distance'],
+                )
+            )
+
+        elif sort == 'usage':
             result.sort(
                 key=lambda r: (
                     -r['usage'],
