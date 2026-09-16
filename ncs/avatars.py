@@ -9,13 +9,19 @@ from .services import BusinessError
 MAX_BYTES = 5 * 1024 * 1024
 MAX_PIXELS = 25_000_000
 
-def init_avatars(db, backend):
-    uid = 'BIGINT UNSIGNED' if backend == 'mysql' else 'INTEGER'
-    blob = 'MEDIUMBLOB' if backend == 'mysql' else 'BLOB'
-    db.execute(f'''CREATE TABLE IF NOT EXISTS user_avatars (
-        user_id {uid} PRIMARY KEY, image_data {blob} NOT NULL, version VARCHAR(32) NOT NULL,
-        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)''' +
-        (' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4' if backend == 'mysql' else ''))
+def init_avatars(db):
+    db.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS user_avatars (
+            user_id BIGINT UNSIGNED PRIMARY KEY,
+            image_data MEDIUMBLOB NOT NULL,
+            version VARCHAR(32) NOT NULL,
+            FOREIGN KEY(user_id)
+                REFERENCES users(id)
+                ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        '''
+    )
 
 def avatar_url(uid):
     row = get_db().execute('SELECT version FROM user_avatars WHERE user_id=?', (uid,)).fetchone()
@@ -45,12 +51,33 @@ def normalize_image(data):
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise BusinessError('无法读取图片，请选择完整有效的 JPG、PNG 或 WebP 图片')
 
-def store_avatar(uid, data, backend):
+def store_avatar(
+    uid,
+    data,
+):
     content = normalize_image(data)
     version = secrets.token_hex(16)
-    suffix = ('ON DUPLICATE KEY UPDATE image_data=VALUES(image_data),version=VALUES(version)'
-              if backend == 'mysql' else
-              'ON CONFLICT(user_id) DO UPDATE SET image_data=excluded.image_data,version=excluded.version')
-    get_db().execute('INSERT INTO user_avatars(user_id,image_data,version) VALUES(?,?,?) ' + suffix,
-                     (uid,content,version))
-    return '/api/profile/avatar?v=' + version
+
+    get_db().execute(
+        '''
+        INSERT INTO user_avatars(
+            user_id,
+            image_data,
+            version
+        )
+        VALUES(?,?,?)
+        ON DUPLICATE KEY UPDATE
+            image_data=VALUES(image_data),
+            version=VALUES(version)
+        ''',
+        (
+            uid,
+            content,
+            version,
+        ),
+    )
+
+    return (
+        "/api/profile/avatar?v="
+        + version
+    )

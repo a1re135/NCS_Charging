@@ -8,43 +8,195 @@ NEW_STATIONS = [
 ]
 VERSION = 'demo_ten_stations_ten_chargers_v1'
 
-def expand_network(db, backend):
+def expand_network(db):
     from .db import _add_default_pricing
-    db.execute('''CREATE TABLE IF NOT EXISTS ncs_data_migrations (
-        version VARCHAR(80) PRIMARY KEY, completed INTEGER NOT NULL DEFAULT 0)''' +
-        (' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4' if backend == 'mysql' else ''))
-    db.execute('INSERT OR IGNORE INTO ncs_data_migrations(version,completed) VALUES(?,0)', (VERSION,))
-    db.execute('BEGIN IMMEDIATE')
+
+    db.execute(
+        '''
+        CREATE TABLE IF NOT EXISTS ncs_data_migrations (
+            version VARCHAR(80) PRIMARY KEY,
+            completed INTEGER NOT NULL DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        '''
+    )
+
+    db.execute(
+        '''
+        INSERT IGNORE INTO ncs_data_migrations(
+            version,
+            completed
+        )
+        VALUES(?, 0)
+        ''',
+        (VERSION,),
+    )
+
+    db.begin()
+
     try:
-        row = db.execute('SELECT completed FROM ncs_data_migrations WHERE version=?' +
-                         (' FOR UPDATE' if backend == 'mysql' else ''), (VERSION,)).fetchone()
-        if row['completed']:
+        row = db.execute(
+            '''
+            SELECT completed
+            FROM ncs_data_migrations
+            WHERE version=?
+            FOR UPDATE
+            ''',
+            (VERSION,),
+        ).fetchone()
+
+        if row and row['completed']:
             db.commit()
             return
-        for name, address, city, lng, lat, price in NEW_STATIONS:
-            existing = db.execute('SELECT id FROM stations WHERE name=?', (name,)).fetchone()
+
+        # Add the extra demo stations if they do not exist yet.
+        for (
+            name,
+            address,
+            city,
+            lng,
+            lat,
+            price,
+        ) in NEW_STATIONS:
+
+            existing = db.execute(
+                '''
+                SELECT id
+                FROM stations
+                WHERE name=?
+                ''',
+                (name,),
+            ).fetchone()
+
             if existing:
                 continue
-            cur = db.execute('''INSERT INTO stations(name,address,city,business_hours,contact_phone,
-                operating_status,parking_info,lng,lat,price_cents) VALUES(?,?,?,'00:00-24:00',
-                '010-00000000','operating','演示站点，停车规则以现场公告为准',?,?,?)''',
-                (name,address,city,lng,lat,price))
-            _add_default_pricing(db, cur.lastrowid, price)
-        for station in db.execute('SELECT id FROM stations').fetchall():
+
+            cur = db.execute(
+                '''
+                INSERT INTO stations(
+                    name,
+                    address,
+                    city,
+                    business_hours,
+                    contact_phone,
+                    operating_status,
+                    parking_info,
+                    lng,
+                    lat,
+                    price_cents
+                )
+                VALUES(
+                    ?,
+                    ?,
+                    ?,
+                    '00:00-24:00',
+                    '010-00000000',
+                    'operating',
+                    '演示站点，停车规则以现场公告为准',
+                    ?,
+                    ?,
+                    ?
+                )
+                ''',
+                (
+                    name,
+                    address,
+                    city,
+                    lng,
+                    lat,
+                    price,
+                ),
+            )
+
+            _add_default_pricing(
+                db,
+                cur.lastrowid,
+                price,
+            )
+
+        # Ensure every station has at least 10 chargers.
+        for station in db.execute(
+            '''
+            SELECT id
+            FROM stations
+            '''
+        ).fetchall():
+
             sid = station['id']
-            count = db.execute('SELECT COUNT(*) AS n FROM chargers WHERE station_id=?', (sid,)).fetchone()['n']
+
+            count = db.execute(
+                '''
+                SELECT COUNT(*) AS n
+                FROM chargers
+                WHERE station_id=?
+                ''',
+                (sid,),
+            ).fetchone()['n']
+
             number_index = 1
+
             while count < 10:
-                number = f'NCS-{sid:02d}{number_index:02d}'
+                number = (
+                    f'NCS-{sid:02d}'
+                    f'{number_index:02d}'
+                )
+
                 number_index += 1
-                if db.execute('SELECT id FROM chargers WHERE number=?', (number,)).fetchone():
+
+                existing_charger = db.execute(
+                    '''
+                    SELECT id
+                    FROM chargers
+                    WHERE number=?
+                    ''',
+                    (number,),
+                ).fetchone()
+
+                if existing_charger:
                     continue
+
                 fast = count < 8
-                db.execute('INSERT INTO chargers(station_id,number,kind,power,status) VALUES(?,?,?,?,?)',
-                           (sid,number,'fast' if fast else 'slow',60 if fast else 7,'idle'))
+
+                db.execute(
+                    '''
+                    INSERT INTO chargers(
+                        station_id,
+                        number,
+                        kind,
+                        power,
+                        status
+                    )
+                    VALUES(?,?,?,?,?)
+                    ''',
+                    (
+                        sid,
+                        number,
+                        (
+                            'fast'
+                            if fast
+                            else 'slow'
+                        ),
+                        (
+                            60
+                            if fast
+                            else 7
+                        ),
+                        'idle',
+                    ),
+                )
+
                 count += 1
-        db.execute('UPDATE ncs_data_migrations SET completed=1 WHERE version=?', (VERSION,))
+
+        db.execute(
+            '''
+            UPDATE ncs_data_migrations
+            SET completed=1
+            WHERE version=?
+            ''',
+            (VERSION,),
+        )
+
         db.commit()
+
     except Exception:
         db.rollback()
         raise

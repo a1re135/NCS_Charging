@@ -1,37 +1,31 @@
 """Preference persistence, data preservation and localized responses."""
-import gc
-import tempfile
-import time
 import unittest
-from pathlib import Path
 from ncs import create_app
 from ncs.db import get_db
 
+from mysql_test_utils import (
+    mysql_test_app_config,
+    reset_mysql_test_database,
+)
+
 class PreferenceTests(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory()
-        self.config={'TESTING':True,'SECRET_KEY':'preference-tests','DATABASE':str(Path(self.tmp.name)/'prefs.db')}
-        self.app=create_app(self.config)
-        self.c,self.csrf=self.login()
-    def tearDown(self):
-        # Windows can briefly keep SQLite/WAL files open
-        # after the Flask test request has finished.
-        gc.collect()
+        reset_mysql_test_database()
 
-        for attempt in range(5):
-            try:
-                self.tmp.cleanup()
-                return
-            except OSError as exc:
-                if getattr(exc, "winerror", None) != 145:
-                    raise
+        self.config = (
+            mysql_test_app_config(
+                "preference-tests"
+            )
+        )
 
-                time.sleep(
-                    0.1 * (attempt + 1)
-                )
+        self.app = create_app(
+            self.config
+        )
 
-        # Show the real error if Windows still cannot release it.
-        self.tmp.cleanup()
+        self.c, self.csrf = (
+            self.login()
+        )
+        
     def login(self,phone='13800138000',password='User123456',app=None):
         c=(app or self.app).test_client();token=c.get('/api/session').json['csrf']
         r=c.post('/api/login',json={'phone':phone,'password':password},headers={'X-CSRF-Token':token})

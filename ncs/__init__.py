@@ -2,7 +2,6 @@
 
 import os
 import secrets
-import sqlite3
 from decimal import Decimal
 from pathlib import Path
 
@@ -58,11 +57,6 @@ def create_app(config=None):
             or secret.read_text().strip()
         ),
 
-        DB_BACKEND=os.getenv("DB_BACKEND", "mysql"),
-
-        # SQLite fallback / automated tests
-        DATABASE=os.getenv("NCS_DATABASE") or str(data / "ncs.db"),
-
         # MySQL
         MYSQL_HOST=os.getenv("MYSQL_HOST", "localhost"),
         MYSQL_PORT=int(os.getenv("MYSQL_PORT", "3306")),
@@ -87,28 +81,12 @@ def create_app(config=None):
     if config:
         app.config.update(config)
 
-    # Automated tests use temporary SQLite databases.
-    if (
-        app.config.get("TESTING")
-        and config
-        and "DB_BACKEND" not in config
-    ):
-        app.config["DB_BACKEND"] = "sqlite"
-
-    backend = app.config.get("DB_BACKEND", "sqlite")
-
-    if backend == "mysql":
-        print(
-            f"[Database] MySQL "
-            f"{app.config['MYSQL_HOST']}:"
-            f"{app.config['MYSQL_PORT']}/"
-            f"{app.config['MYSQL_DATABASE']}"
-        )
-    else:
-        print(
-            f"[Database] SQLite "
-            f"{app.config['DATABASE']}"
-        )
+    print(
+        f"[Database] MySQL "
+        f"{app.config['MYSQL_HOST']}:"
+        f"{app.config['MYSQL_PORT']}/"
+        f"{app.config['MYSQL_DATABASE']}"
+    )
 
     if app.config.get("TRUST_PROXY"):
         app.wsgi_app = ProxyFix(
@@ -161,8 +139,7 @@ def create_app(config=None):
             error=translate(e.message),
             **e.extra,
         ), e.status
-
-    @app.errorhandler(sqlite3.IntegrityError)
+    
     @app.errorhandler(pymysql.err.IntegrityError)
     def integrity_error(e):
         return jsonify(

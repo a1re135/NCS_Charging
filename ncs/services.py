@@ -16,27 +16,25 @@ class BusinessError(Exception):
 def transaction():
     db = get_db()
 
-    if current_app.config.get("DB_BACKEND") == "mysql":
-        db.begin()
-    else:
-        db.execute("BEGIN IMMEDIATE")
+    db.begin()
 
     try:
         yield db
         db.commit()
+
     except Exception:
         db.rollback()
         raise
 
 def lock_sql(sql):
     """
-    MySQL/InnoDB uses SELECT ... FOR UPDATE.
-    SQLite tests use the original SELECT statement.
+    MySQL/InnoDB row-level locking.
     """
-    if current_app.config.get("DB_BACKEND") == "mysql":
-        return sql.rstrip() + " FOR UPDATE"
 
-    return sql
+    return (
+        sql.rstrip()
+        + " FOR UPDATE"
+    )
 
 def money(value, maximum=100000, allow_zero=False):
     try:
@@ -88,10 +86,8 @@ def expire_reservations():
             FROM orders
             WHERE status='reserved'
             AND expires_at<=?
+            FOR UPDATE
         """
-
-        if current_app.config.get("DB_BACKEND") == "mysql":
-            sql += " FOR UPDATE"
 
         rows = db.execute(
             sql,

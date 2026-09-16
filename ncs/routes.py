@@ -328,7 +328,11 @@ def update_preferences():
     if not isinstance(theme, str) or theme not in ('light', 'dark', 'system'):
         raise BusinessError('外观设置无效')
     # The target user is always the authenticated user, never a client-supplied ID.
-    preferences = save_preferences(g.user['id'], language, theme, current_app.config['DB_BACKEND'])
+    preferences = save_preferences(
+        g.user['id'],
+        language,
+        theme,
+    )
     return jsonify(preferences=preferences)
 
 @api.get("/health")
@@ -791,7 +795,7 @@ def stations():
 
         for r in rows:
             # Normalize aggregate values so
-            # SQLite/MySQL NULL/Decimal values
+            # Normalize NULL/Decimal database values
             # do not break frontend math.
             numeric_fields = (
                 'total',
@@ -1141,16 +1145,27 @@ def trend():
     db=get_db()
     if station_id is not None and not db.execute('SELECT 1 FROM stations WHERE id=?',(station_id,)).fetchone():
         raise BusinessError('电站不存在',404)
-    if granularity=='day':
-        bucket="substr(o.created_at,1,10)"
-    elif granularity=='week':
-        if current_app.config.get('DB_BACKEND')=='mysql':
-            bucket="DATE(DATE_SUB(o.created_at, INTERVAL WEEKDAY(o.created_at) DAY))"
-        else:
-            bucket="date(o.created_at,'weekday 0','-6 days')"
+    if granularity == 'day':
+        bucket = "LEFT(o.created_at, 10)"
+
+    elif granularity == 'week':
+        bucket = (
+            "CAST("
+            "DATE_SUB("
+            "CAST(LEFT(o.created_at, 10) AS DATE), "
+            "INTERVAL WEEKDAY("
+            "CAST(LEFT(o.created_at, 10) AS DATE)"
+            ") DAY"
+            ") AS CHAR"
+            ")"
+        )
+
     else:
-        bucket="substr(o.created_at,1,7)"
-    conds=["substr(o.created_at,1,10)>=?"]
+        bucket = "LEFT(o.created_at, 7)"
+
+    conds = [
+        "LEFT(o.created_at, 10) >= ?"
+    ]
     params=[date_from.isoformat()]
     if station_id is not None:
         conds.append('c.station_id=?')
@@ -1168,11 +1183,24 @@ def trend():
     if granularity=='day':
         for i in range((today-date_from).days+1):
             points.append(pick((date_from+timedelta(days=i)).isoformat()))
-    elif granularity=='week':
-        cur=date_from-timedelta(days=date_from.weekday())
-        while cur<=today:
-            points.append(pick(cur.strftime('%Y-%W')))
-            cur+=timedelta(days=7)
+    elif granularity == 'week':
+        cur = (
+            date_from
+            - timedelta(
+                days=date_from.weekday()
+            )
+        )
+
+        while cur <= today:
+            points.append(
+                pick(
+                    cur.isoformat()
+                )
+            )
+
+            cur += timedelta(
+                days=7
+            )
     else:
         y,m=date_from.year,date_from.month
         while (y,m)<=(today.year,today.month):
@@ -1735,7 +1763,10 @@ def upload_avatar():
     image = request.files.get('image')
     if image is None:
         raise BusinessError('请选择头像图片')
-    url = store_avatar(g.user['id'], image.read(MAX_BYTES + 1), current_app.config['DB_BACKEND'])
+    url = store_avatar(
+        g.user['id'],
+        image.read(MAX_BYTES + 1),
+    )
     return jsonify(ok=True, avatar_url=url)
 
 @api.delete('/profile/avatar')

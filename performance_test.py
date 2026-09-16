@@ -1525,7 +1525,7 @@ def main():
                 "duration": stage_duration,
                 "results": sr,
             })
-            # Let SQLite/WAL and the web server recover before increasing load.
+            # Let the database and web server recover before increasing load.
             time.sleep(2)
 
     payload = {

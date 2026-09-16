@@ -1,40 +1,31 @@
 """Network upgrade, user ID consistency, avatar persistence and upload isolation."""
 import csv
-import gc
 import io
-import tempfile
-import time
 import unittest
-from pathlib import Path
 from PIL import Image
 from ncs import create_app
 from ncs.db import get_db
+from mysql_test_utils import (
+    mysql_test_app_config,
+    reset_mysql_test_database,
+)
 
 class ExpansionAvatarTests(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory()
-        self.config={'TESTING':True,'SECRET_KEY':'avatar-tests','DATABASE':str(Path(self.tmp.name)/'test.db')}
-        self.app=create_app(self.config)
-        self.c,self.token=self.login()
-    def tearDown(self):
-        # Windows may briefly keep SQLite/WAL files open
-        # after Flask finishes a test request.
-        gc.collect()
+        reset_mysql_test_database()
 
-        for attempt in range(5):
-            try:
-                self.tmp.cleanup()
-                return
-            except OSError as exc:
-                if getattr(exc, "winerror", None) != 145:
-                    raise
+        self.config = mysql_test_app_config(
+            "avatar-tests"
+        )
 
-                time.sleep(
-                    0.1 * (attempt + 1)
-                )
+        self.app = create_app(
+            self.config
+        )
 
-        # Final attempt so a real persistent problem is still reported.
-        self.tmp.cleanup()
+        self.c, self.token = (
+            self.login()
+        )
+        
     def login(self,phone='13800138000',password='User123456',app=None):
         c=(app or self.app).test_client();t=c.get('/api/session').json['csrf']
         r=c.post('/api/login',json={'phone':phone,'password':password},headers={'X-CSRF-Token':t})

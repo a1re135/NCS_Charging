@@ -1,8 +1,7 @@
 """
 Prepare or clean deterministic L1 load-test users.
 
-This version uses the application's configured database,
-so it works with both MySQL and SQLite.
+This project uses MySQL only.
 
 Usage:
 
@@ -35,12 +34,22 @@ def prepare():
     with app.app_context():
         db = get_db()
 
+        # =================================================
+        # Verify L1 demo network
+        # =================================================
+
         stations = db.execute(
-            "SELECT COUNT(*) AS n FROM stations"
+            """
+            SELECT COUNT(*) AS n
+            FROM stations
+            """
         ).fetchone()["n"]
 
         chargers = db.execute(
-            "SELECT COUNT(*) AS n FROM chargers"
+            """
+            SELECT COUNT(*) AS n
+            FROM chargers
+            """
         ).fetchone()["n"]
 
         if stations < 10:
@@ -58,6 +67,10 @@ def prepare():
         created = 0
         updated = 0
 
+        # =================================================
+        # Create / reset deterministic load-test users
+        # =================================================
+
         for i in range(
             1,
             USERS + 1,
@@ -70,7 +83,9 @@ def prepare():
                 FROM users
                 WHERE phone=?
                 """,
-                (phone,),
+                (
+                    phone,
+                ),
             ).fetchone()
 
             if existing:
@@ -103,8 +118,13 @@ def prepare():
                         created_at
                     )
                     VALUES(
-                        ?, ?, ?, 'user',
-                        ?, 1, ?
+                        ?,
+                        ?,
+                        ?,
+                        'user',
+                        ?,
+                        1,
+                        ?
                     )
                     """,
                     (
@@ -120,9 +140,9 @@ def prepare():
 
                 created += 1
 
-        # L1 performance-test fixture:
-        # clear active orders owned by the load-test users
-        # so all benchmark chargers can start from idle.
+        # =================================================
+        # Get all load-test user IDs
+        # =================================================
 
         load_users = db.execute(
             """
@@ -139,6 +159,10 @@ def prepare():
             row["id"]
             for row in load_users
         ]
+
+        # =================================================
+        # Clear active orders belonging to test users
+        # =================================================
 
         if load_user_ids:
             marks = ",".join(
@@ -164,8 +188,14 @@ def prepare():
                 ),
             )
 
-        # The first 100 chargers are the deterministic
-        # L1 write-test fixtures.
+        # =================================================
+        # Reset benchmark chargers
+        # =================================================
+        #
+        # The first 100 chargers are deterministic
+        # fixtures used by the L1 write tests.
+        # =================================================
+
         db.execute(
             """
             UPDATE chargers
@@ -175,6 +205,10 @@ def prepare():
         )
 
         db.commit()
+
+        # =================================================
+        # Verify load-test users
+        # =================================================
 
         count = db.execute(
             """
@@ -188,10 +222,15 @@ def prepare():
         ).fetchone()["n"]
 
         print()
+
         print(
-            "Database backend:",
+            "Database backend: MySQL"
+        )
+
+        print(
+            "Database:",
             app.config[
-                "DB_BACKEND"
+                "MYSQL_DATABASE"
             ],
         )
 
@@ -218,6 +257,10 @@ def cleanup():
 
     with app.app_context():
         db = get_db()
+
+        # =================================================
+        # Find load-test users
+        # =================================================
 
         rows = db.execute(
             """
@@ -246,7 +289,10 @@ def cleanup():
             for _ in ids
         )
 
-        # Close active test orders first.
+        # =================================================
+        # Close active load-test orders
+        # =================================================
+
         db.execute(
             f"""
             UPDATE orders
@@ -265,6 +311,10 @@ def cleanup():
             ),
         )
 
+        # =================================================
+        # Remove dependent load-test data
+        # =================================================
+
         db.execute(
             f"""
             DELETE FROM wallet_log
@@ -281,6 +331,25 @@ def cleanup():
             tuple(ids),
         )
 
+        # User preferences may have been created
+        # while testing the UI.
+        db.execute(
+            f"""
+            DELETE FROM user_preferences
+            WHERE user_id IN ({marks})
+            """,
+            tuple(ids),
+        )
+
+        # Uploaded avatars may also reference users.
+        db.execute(
+            f"""
+            DELETE FROM user_avatars
+            WHERE user_id IN ({marks})
+            """,
+            tuple(ids),
+        )
+
         db.execute(
             f"""
             DELETE FROM users
@@ -288,6 +357,10 @@ def cleanup():
             """,
             tuple(ids),
         )
+
+        # =================================================
+        # Restore benchmark charger state
+        # =================================================
 
         db.execute(
             """
@@ -312,13 +385,29 @@ def cleanup():
         db.commit()
 
         print(
+            "Database backend: MySQL"
+        )
+
+        print(
+            "Database:",
+            app.config[
+                "MYSQL_DATABASE"
+            ],
+        )
+
+        print(
             f"Cleaned {len(ids)} "
             "L1 load-test users."
         )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Prepare or clean MySQL data "
+            "for the NCS L1 load test."
+        )
+    )
 
     group = (
         parser
@@ -330,16 +419,25 @@ if __name__ == "__main__":
     group.add_argument(
         "--prepare",
         action="store_true",
+        help=(
+            "Create/reset deterministic "
+            "L1 load-test users."
+        ),
     )
 
     group.add_argument(
         "--cleanup",
         action="store_true",
+        help=(
+            "Remove L1 load-test users "
+            "and their generated data."
+        ),
     )
 
     args = parser.parse_args()
 
     if args.prepare:
         prepare()
+
     else:
         cleanup()

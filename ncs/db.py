@@ -1,6 +1,4 @@
-"""SQLite schema, lightweight migrations, and reproducible course-demo seed data."""
 import random
-import sqlite3
 import threading
 
 import pymysql
@@ -8,73 +6,15 @@ from pymysql.cursors import DictCursor
 from .mysql_schema import MYSQL_SCHEMA
 from dbutils.pooled_db import PooledDB
 from datetime import datetime, timedelta
-from pathlib import Path
 from flask import current_app, g
 from werkzeug.security import generate_password_hash
-
-SCHEMA = '''
-CREATE TABLE IF NOT EXISTS users(
- id INTEGER PRIMARY KEY, phone TEXT UNIQUE NOT NULL, nickname TEXT NOT NULL,
- password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user',
- balance_cents INTEGER NOT NULL DEFAULT 0 CHECK(balance_cents>=0),
- avatar TEXT NOT NULL DEFAULT 'lavender', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS roles(
- key TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT NOT NULL, level INTEGER NOT NULL);
-CREATE TABLE IF NOT EXISTS permissions(
- key TEXT PRIMARY KEY, name TEXT NOT NULL, module TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS role_permissions(
- role_key TEXT NOT NULL REFERENCES roles(key) ON DELETE CASCADE,
- permission_key TEXT NOT NULL REFERENCES permissions(key) ON DELETE CASCADE,
- PRIMARY KEY(role_key,permission_key));
-CREATE TABLE IF NOT EXISTS stations(
- id INTEGER PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL,
- city TEXT NOT NULL DEFAULT '北京市', business_hours TEXT NOT NULL DEFAULT '00:00-24:00',
- contact_phone TEXT NOT NULL DEFAULT '010-00000000', operating_status TEXT NOT NULL DEFAULT 'operating',
- parking_info TEXT NOT NULL DEFAULT '以现场停车规定为准',
- lng REAL NOT NULL, lat REAL NOT NULL, price_cents INTEGER NOT NULL CHECK(price_cents>0));
-CREATE TABLE IF NOT EXISTS chargers(
- id INTEGER PRIMARY KEY, station_id INTEGER NOT NULL REFERENCES stations(id),
- number TEXT UNIQUE NOT NULL, kind TEXT NOT NULL, power REAL NOT NULL CHECK(power>0),
- status TEXT NOT NULL DEFAULT 'idle', total_count INTEGER NOT NULL DEFAULT 0, total_minutes INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS orders(
- id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id),
- charger_id INTEGER NOT NULL REFERENCES chargers(id), status TEXT NOT NULL,
- created_at TEXT NOT NULL, expires_at TEXT, started_at TEXT, ended_at TEXT,
- price_cents INTEGER NOT NULL, electricity_fee_cents INTEGER NOT NULL DEFAULT 0,
- service_fee_cents INTEGER NOT NULL DEFAULT 0, power REAL NOT NULL, time_scale INTEGER NOT NULL,
- energy REAL NOT NULL DEFAULT 0, amount_cents INTEGER NOT NULL DEFAULT 0,
- paid_cents INTEGER NOT NULL DEFAULT 0, debt_cents INTEGER NOT NULL DEFAULT 0,
- balance_after INTEGER, simulated_seconds INTEGER NOT NULL DEFAULT 0);
-CREATE UNIQUE INDEX IF NOT EXISTS one_active_user ON orders(user_id) WHERE status IN ('reserved','charging');
-CREATE UNIQUE INDEX IF NOT EXISTS one_active_charger ON orders(charger_id) WHERE status IN ('reserved','charging');
-CREATE TABLE IF NOT EXISTS pricing_rules(
- id INTEGER PRIMARY KEY, station_id INTEGER NOT NULL REFERENCES stations(id) ON DELETE CASCADE,
- start_minute INTEGER NOT NULL CHECK(start_minute>=0 AND start_minute<1440),
- end_minute INTEGER NOT NULL CHECK(end_minute>0 AND end_minute<=1440 AND end_minute>start_minute),
- electricity_fee_cents INTEGER NOT NULL CHECK(electricity_fee_cents>=0),
- service_fee_cents INTEGER NOT NULL CHECK(service_fee_cents>=0));
-CREATE INDEX IF NOT EXISTS pricing_station ON pricing_rules(station_id,start_minute);
-CREATE TABLE IF NOT EXISTS fault_records(
- id INTEGER PRIMARY KEY, charger_id INTEGER NOT NULL REFERENCES chargers(id),
- fault_type TEXT NOT NULL, description TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
- reported_at TEXT NOT NULL, handled_at TEXT, resolution TEXT,
- reporter_id INTEGER REFERENCES users(id), handler_id INTEGER REFERENCES users(id));
-CREATE UNIQUE INDEX IF NOT EXISTS one_open_fault ON fault_records(charger_id) WHERE status IN ('pending','processing');
-CREATE INDEX IF NOT EXISTS fault_charger ON fault_records(charger_id,reported_at);
-CREATE TABLE IF NOT EXISTS wallet_log(
- id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL REFERENCES users(id),
- amount_cents INTEGER NOT NULL,kind TEXT NOT NULL,created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS ops_log(
- id INTEGER PRIMARY KEY,actor_id INTEGER REFERENCES users(id),operation TEXT NOT NULL,created_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS order_user ON orders(user_id,created_at);
-'''
 
 def now():
     return datetime.now().isoformat(timespec='seconds')
 
 class CompatRow(dict):
     """
-    Behaves like sqlite3.Row:
+    Provides dictionary-style row access:
     row["id"] works
     row[0] also works
     """
@@ -201,10 +141,10 @@ class MySQLDatabase:
         if upper == "BEGIN IMMEDIATE":
             return None
 
-        # SQLite placeholders -> PyMySQL placeholders
+        # Application placeholders -> PyMySQL placeholders
         sql = sql.replace("?", "%s")
 
-        # Common SQLite syntax compatibility
+        # Normalize application SQL for MySQL
         sql = sql.replace(
             "INSERT OR IGNORE",
             "INSERT IGNORE"
@@ -238,25 +178,13 @@ class MySQLDatabase:
 
 def get_db():
     if "db" not in g:
+        pool = get_mysql_pool()
 
-        backend = current_app.config.get("DB_BACKEND", "mysql")
+        connection = pool.connection()
 
-        if backend == "mysql":
-            pool = get_mysql_pool()
-            connection = (pool.connection())
-            g.db = MySQLDatabase(connection)
-
-        else:
-            connection = sqlite3.connect(
-                current_app.config["DATABASE"],
-                timeout=15,
-                isolation_level=None,
-            )
-
-            connection.row_factory = sqlite3.Row
-            connection.execute("PRAGMA foreign_keys=ON")
-
-            g.db = connection
+        g.db = MySQLDatabase(
+            connection
+        )
 
     return g.db
 
@@ -264,13 +192,6 @@ def close_db(_=None):
     db = g.pop('db', None)
     if db is not None:
         db.close()
-
-def _columns(db, table):
-    return {r['name'] for r in db.execute(f'PRAGMA table_info({table})')}
-
-def _ensure_column(db, table, name, definition):
-    if name not in _columns(db, table):
-        db.execute(f'ALTER TABLE {table} ADD COLUMN {name} {definition}')
 
 def _add_default_pricing(db, station_id, base_price):
     """Three demo time periods around the old station price; total fee stays easy to understand."""
@@ -280,31 +201,6 @@ def _add_default_pricing(db, station_id, base_price):
     for start, end, total in periods:
         db.execute('''INSERT INTO pricing_rules(station_id,start_minute,end_minute,electricity_fee_cents,service_fee_cents)
                       VALUES(?,?,?,?,?)''', (station_id, start, end, max(0, total-service), service))
-
-def migrate_db(db):
-    """Keep existing local ncs.db files usable after pulling newer source code."""
-    for name, definition in [
-        ('city', "TEXT NOT NULL DEFAULT '北京市'"),
-        ('business_hours', "TEXT NOT NULL DEFAULT '00:00-24:00'"),
-        ('contact_phone', "TEXT NOT NULL DEFAULT '010-00000000'"),
-        ('operating_status', "TEXT NOT NULL DEFAULT 'operating'"),
-        ('parking_info', "TEXT NOT NULL DEFAULT '以现场停车规定为准'")]:
-        _ensure_column(db, 'stations', name, definition)
-    _ensure_column(db, 'orders', 'electricity_fee_cents', 'INTEGER NOT NULL DEFAULT 0')
-    _ensure_column(db, 'orders', 'service_fee_cents', 'INTEGER NOT NULL DEFAULT 0')
-    db.execute('''UPDATE orders SET electricity_fee_cents=CASE WHEN price_cents>=30 THEN price_cents-30 ELSE price_cents END,
-                  service_fee_cents=CASE WHEN price_cents>=30 THEN 30 ELSE 0 END
-                  WHERE electricity_fee_cents=0 AND service_fee_cents=0''')
-    # Existing projects used a single station price. Convert it into three editable time periods once.
-    for s in db.execute('SELECT id,price_cents FROM stations').fetchall():
-        if not db.execute('SELECT 1 FROM pricing_rules WHERE station_id=? LIMIT 1', (s['id'],)).fetchone():
-            _add_default_pricing(db, s['id'], s['price_cents'])
-    # Existing chargers that were already marked fault should also appear in fault management.
-    for c in db.execute("SELECT id FROM chargers WHERE status='fault'").fetchall():
-        if not db.execute("SELECT 1 FROM fault_records WHERE charger_id=? AND status IN ('pending','processing')", (c['id'],)).fetchone():
-            db.execute('''INSERT INTO fault_records(charger_id,fault_type,description,status,reported_at)
-                          VALUES(?,?,'由旧版设备故障状态自动迁移','pending',?)''', (c['id'], '设备异常', now()))
-
 
 ROLE_DEFINITIONS = [
     ('user','普通用户','查询、充电、订单与个人账户',1),
@@ -365,7 +261,6 @@ def _ensure_rbac_schema(db, backend):
         ]
         for statement in statements:
             db.execute(statement)
-    # SQLite tables are already part of SCHEMA.
 
 def _ensure_rbac(db):
     for key,name,description,level in ROLE_DEFINITIONS:
@@ -405,92 +300,379 @@ def _ensure_rbac(db):
 
 
 def init_db():
-    backend = current_app.config.get("DB_BACKEND", "mysql")
-
     db = get_db()
 
-    if backend == "mysql":
+    # =====================================================
+    # 1. Create MySQL tables
+    # =====================================================
+    for statement in MYSQL_SCHEMA:
+        db.execute(statement)
 
-        for statement in MYSQL_SCHEMA:
-            db.execute(statement)
+    # =====================================================
+    # 2. Create preferences table
+    # =====================================================
+    from .preferences import MYSQL_SCHEMA as PREF_MYSQL
 
-    else:
+    db.execute(PREF_MYSQL)
 
-        Path(
-            current_app.config["DATABASE"]
-        ).parent.mkdir(
-            parents=True,
-            exist_ok=True
-        )
+    # =====================================================
+    # 3. Initialize RBAC tables
+    # =====================================================
+    _ensure_rbac_schema(
+        db,
+        "mysql",
+    )
 
-        db.execute(
-            "PRAGMA journal_mode=WAL"
-        )
+    # =====================================================
+    # 4. Initialize avatar table
+    # =====================================================
+    from .avatars import init_avatars
+    from .expansion import expand_network
 
-        db.executescript(SCHEMA)
+    init_avatars(db)
 
-        migrate_db(db)
-    from .preferences import SQLITE_SCHEMA as PREF_SQLITE, MYSQL_SCHEMA as PREF_MYSQL
-    db.execute(PREF_MYSQL if backend == 'mysql' else PREF_SQLITE)
-    _ensure_rbac_schema(db, backend)
-
+    # =====================================================
+    # 5. Check whether demo data already exists
+    # =====================================================
     count = db.execute(
         "SELECT COUNT(*) AS count FROM users"
     ).fetchone()
 
-    from .avatars import init_avatars
-    from .expansion import expand_network
-    init_avatars(db, backend)
+    # Existing database:
+    # only ensure newer demo expansion / RBAC data exists.
     if count["count"] > 0:
-        expand_network(db, backend)
+        expand_network(db)
+
         _ensure_rbac(db)
+
         return
 
-    if backend == "mysql":
-        db.begin()
-    else:
-        db.execute("BEGIN IMMEDIATE")
+    # =====================================================
+    # 6. First-time database initialization
+    # =====================================================
+    db.begin()
+
     try:
-        for phone, name, role, balance, password in [
-            ('13800138000','小林','user',28800,'User123456'),
-            ('admin','管理员','admin',0,'Admin123456'),
-            ('13900139000','小明','user',16800,'User123456')]:
-            db.execute('INSERT INTO users(phone,nickname,password_hash,role,balance_cents,created_at) VALUES(?,?,?,?,?,?)',
-                       (phone,name,generate_password_hash(password),role,balance,now()))
+        # -------------------------------------------------
+        # Demo users
+        # -------------------------------------------------
+        users = [
+            (
+                "13800138000",
+                "小林",
+                "user",
+                28800,
+                "User123456",
+            ),
+            (
+                "admin",
+                "管理员",
+                "admin",
+                0,
+                "Admin123456",
+            ),
+            (
+                "13900139000",
+                "小明",
+                "user",
+                16800,
+                "User123456",
+            ),
+        ]
+
+        for (
+            phone,
+            name,
+            role,
+            balance,
+            password,
+        ) in users:
+            db.execute(
+                """
+                INSERT INTO users(
+                    phone,
+                    nickname,
+                    password_hash,
+                    role,
+                    balance_cents,
+                    created_at
+                )
+                VALUES(?,?,?,?,?,?)
+                """,
+                (
+                    phone,
+                    name,
+                    generate_password_hash(
+                        password
+                    ),
+                    role,
+                    balance,
+                    now(),
+                ),
+            )
+
+        # -------------------------------------------------
+        # Demo stations
+        # -------------------------------------------------
         stations = [
-            ('海淀 · 智慧充电站','北京市海淀区中关村大街','北京市海淀区','00:00-24:00','010-62500001','operating','停车前 30 分钟免费，之后按停车场标准收费',116.2981,39.9593,160),
-            ('城市中心 · 绿能站','北京市东城区中心区域','北京市东城区','06:00-23:00','010-65200002','operating','充电车辆前 2 小时免停车费',116.4074,39.9042,150),
-            ('朝阳 · 阳光充电站','北京市朝阳区朝阳公园南路','北京市朝阳区','00:00-24:00','010-65000003','operating','地下停车场 B2 层，按场内标准收费',116.4435,39.9219,155),
-            ('丰台 · 花园充电站','北京市丰台区丰台北路','北京市丰台区','07:00-22:00','010-63800004','operating','充电期间停车优惠以现场公告为准',116.2869,39.8584,145),
-            ('石景山 · 星光充电站','北京市石景山区石景山路','北京市石景山区','00:00-24:00','010-68800005','operating','地面停车位，充电车辆优先',116.2229,39.9062,150)]
-        for sid, item in enumerate(stations,1):
-            db.execute('''INSERT INTO stations(id,name,address,city,business_hours,contact_phone,operating_status,parking_info,lng,lat,price_cents)
-                          VALUES(?,?,?,?,?,?,?,?,?,?,?)''', (sid,*item))
-            _add_default_pricing(db, sid, item[-1])
-            for j in range(1,7):
-                status = 'idle'
+            (
+                "海淀 · 智慧充电站",
+                "北京市海淀区中关村大街",
+                "北京市海淀区",
+                "00:00-24:00",
+                "010-62500001",
+                "operating",
+                "停车前 30 分钟免费，之后按停车场标准收费",
+                116.2981,
+                39.9593,
+                160,
+            ),
+            (
+                "城市中心 · 绿能站",
+                "北京市东城区中心区域",
+                "北京市东城区",
+                "06:00-23:00",
+                "010-65200002",
+                "operating",
+                "充电车辆前 2 小时免停车费",
+                116.4074,
+                39.9042,
+                150,
+            ),
+            (
+                "朝阳 · 阳光充电站",
+                "北京市朝阳区朝阳公园南路",
+                "北京市朝阳区",
+                "00:00-24:00",
+                "010-65000003",
+                "operating",
+                "地下停车场 B2 层，按场内标准收费",
+                116.4435,
+                39.9219,
+                155,
+            ),
+            (
+                "丰台 · 花园充电站",
+                "北京市丰台区丰台北路",
+                "北京市丰台区",
+                "07:00-22:00",
+                "010-63800004",
+                "operating",
+                "充电期间停车优惠以现场公告为准",
+                116.2869,
+                39.8584,
+                145,
+            ),
+            (
+                "石景山 · 星光充电站",
+                "北京市石景山区石景山路",
+                "北京市石景山区",
+                "00:00-24:00",
+                "010-68800005",
+                "operating",
+                "地面停车位，充电车辆优先",
+                116.2229,
+                39.9062,
+                150,
+            ),
+        ]
+
+        for sid, item in enumerate(
+            stations,
+            1,
+        ):
+            db.execute(
+                """
+                INSERT INTO stations(
+                    id,
+                    name,
+                    address,
+                    city,
+                    business_hours,
+                    contact_phone,
+                    operating_status,
+                    parking_info,
+                    lng,
+                    lat,
+                    price_cents
+                )
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    sid,
+                    *item,
+                ),
+            )
+
+            _add_default_pricing(
+                db,
+                sid,
+                item[-1],
+            )
+
+            # ---------------------------------------------
+            # Create 6 chargers for initial demo stations
+            # ---------------------------------------------
+            for j in range(
+                1,
+                7,
+            ):
+                status = "idle"
 
                 if j == 6:
                     status = {
-                        2: 'maintenance',
-                        3: 'fault',
-                        4: 'offline',
-                    }.get(sid, 'idle')
+                        2: "maintenance",
+                        3: "fault",
+                        4: "offline",
+                    }.get(
+                        sid,
+                        "idle",
+                    )
 
-                cur=db.execute('INSERT INTO chargers(station_id,number,kind,power,status) VALUES(?,?,?,?,?)',
-                    (sid,f'NCS-{sid:02d}{j:02d}','fast' if j<5 else 'slow',60 if j<5 else 7,status))
-                if status=='fault':
-                    db.execute('''INSERT INTO fault_records(charger_id,fault_type,description,status,reported_at,reporter_id)
-                                  VALUES(?,?,'演示数据：设备通信异常','pending',?,2)''', (cur.lastrowid, '通信故障', now()))
+                cur = db.execute(
+                    """
+                    INSERT INTO chargers(
+                        station_id,
+                        number,
+                        kind,
+                        power,
+                        status
+                    )
+                    VALUES(?,?,?,?,?)
+                    """,
+                    (
+                        sid,
+                        f"NCS-{sid:02d}{j:02d}",
+                        (
+                            "fast"
+                            if j < 5
+                            else "slow"
+                        ),
+                        (
+                            60
+                            if j < 5
+                            else 7
+                        ),
+                        status,
+                    ),
+                )
+
+                # Create an example fault record.
+                if status == "fault":
+                    db.execute(
+                        """
+                        INSERT INTO fault_records(
+                            charger_id,
+                            fault_type,
+                            description,
+                            status,
+                            reported_at,
+                            reporter_id
+                        )
+                        VALUES(
+                            ?,
+                            ?,
+                            '演示数据：设备通信异常',
+                            'pending',
+                            ?,
+                            2
+                        )
+                        """,
+                        (
+                            cur.lastrowid,
+                            "通信故障",
+                            now(),
+                        ),
+                    )
+
+        # =================================================
+        # 7. Generate demo historical orders
+        # =================================================
         rng = random.Random(26)
-        for days in range(28,0,-1):
-            for k in range(rng.randint(3,7)):
-                cid=rng.randint(1,30)
-                c=db.execute('SELECT c.*,s.price_cents FROM chargers c JOIN stations s ON s.id=c.station_id WHERE c.id=?',(cid,)).fetchone()
-                start=(datetime.now()-timedelta(days=days)).replace(hour=rng.choice([8,9,12,15,18,19,20]),minute=rng.randint(0,59),second=0,microsecond=0)
-                minutes=rng.randint(18,70); energy=round(c['power']*minutes/60,3); amount=round(energy*c['price_cents'])
-                uid = 1 if k == 0 else 3
 
+        for days in range(
+            28,
+            0,
+            -1,
+        ):
+            for k in range(
+                rng.randint(
+                    3,
+                    7,
+                )
+            ):
+                cid = rng.randint(
+                    1,
+                    30,
+                )
+
+                charger = db.execute(
+                    """
+                    SELECT
+                        c.*,
+                        s.price_cents
+                    FROM chargers c
+                    JOIN stations s
+                        ON s.id = c.station_id
+                    WHERE c.id=?
+                    """,
+                    (
+                        cid,
+                    ),
+                ).fetchone()
+
+                start = (
+                    datetime.now()
+                    - timedelta(
+                        days=days
+                    )
+                ).replace(
+                    hour=rng.choice(
+                        [
+                            8,
+                            9,
+                            12,
+                            15,
+                            18,
+                            19,
+                            20,
+                        ]
+                    ),
+                    minute=rng.randint(
+                        0,
+                        59,
+                    ),
+                    second=0,
+                    microsecond=0,
+                )
+
+                minutes = rng.randint(
+                    18,
+                    70,
+                )
+
+                energy = round(
+                    charger["power"]
+                    * minutes
+                    / 60,
+                    3,
+                )
+
+                amount = round(
+                    energy
+                    * charger[
+                        "price_cents"
+                    ]
+                )
+
+                uid = (
+                    1
+                    if k == 0
+                    else 3
+                )
+
+                # Give demo user 3 one unpaid order
+                # from yesterday.
                 paid = (
                     0
                     if (
@@ -500,9 +682,24 @@ def init_db():
                     )
                     else amount
                 )
-                electricity=max(0,c['price_cents']-30); service=c['price_cents']-electricity
+
+                electricity = max(
+                    0,
+                    charger[
+                        "price_cents"
+                    ]
+                    - 30,
+                )
+
+                service = (
+                    charger[
+                        "price_cents"
+                    ]
+                    - electricity
+                )
+
                 db.execute(
-                    '''
+                    """
                     INSERT INTO orders(
                         user_id,
                         charger_id,
@@ -522,13 +719,24 @@ def init_db():
                         simulated_seconds
                     )
                     VALUES(
-                        ?, ?,
+                        ?,
+                        ?,
                         'completed',
-                        ?, ?, ?, ?, ?, ?, ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
                         1,
-                        ?, ?, ?, ?, ?
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?
                     )
-                    ''',
+                    """,
                     (
                         uid,
                         cid,
@@ -536,23 +744,55 @@ def init_db():
                         start.isoformat(),
                         (
                             start
-                            + timedelta(minutes=minutes)
+                            + timedelta(
+                                minutes=minutes
+                            )
                         ).isoformat(),
-                        c['price_cents'],
+                        charger[
+                            "price_cents"
+                        ],
                         electricity,
                         service,
-                        c['power'],
+                        charger["power"],
                         energy,
                         amount,
                         paid,
                         amount - paid,
                         minutes * 60,
-                    )
+                    ),
                 )
-                db.execute('UPDATE chargers SET total_count=total_count+1,total_minutes=total_minutes+? WHERE id=?',(minutes,cid))
-        db.commit()
-    except Exception:
-        db.rollback(); raise
 
-    expand_network(db, backend)
+                db.execute(
+                    """
+                    UPDATE chargers
+                    SET
+                        total_count =
+                            total_count + 1,
+                        total_minutes =
+                            total_minutes + ?
+                    WHERE id=?
+                    """,
+                    (
+                        minutes,
+                        cid,
+                    ),
+                )
+
+        # =================================================
+        # 8. Commit initial seed data
+        # =================================================
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    # =====================================================
+    # 9. Expand demo network to latest project version
+    # =====================================================
+    expand_network(db)
+
+    # =====================================================
+    # 10. Create/update RBAC demo roles and permissions
+    # =====================================================
     _ensure_rbac(db)
