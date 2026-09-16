@@ -551,3 +551,130 @@ html[data-theme="light"] .wallet .btn.white:hover {
 #avatar-editor .actions { flex-wrap: wrap; margin-top: 18px; }
 #avatar-editor [hidden] { display: none !important; }
 @media(max-width: 700px) { .avatar-profile { align-items: flex-start; flex-wrap: wrap; } }
+
+
+/* Member Center — keep the same NCS appearance system in dark mode. */
+html[data-theme="dark"] .member-v2-hero {
+  background:
+    radial-gradient(
+      circle at 88% 15%,
+      rgba(179, 156, 245, 0.18),
+      transparent 34%
+    ),
+    var(--hero-bg);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="dark"] .member-v2-hero h1 {
+  color: var(--hero-text);
+}
+
+html[data-theme="dark"] .member-v2-hero-sub,
+html[data-theme="dark"] .member-v2-progress-foot {
+  color: var(--hero-muted);
+}
+
+html[data-theme="dark"] .member-v2-eyebrow {
+  color: var(--accent-text);
+}
+
+html[data-theme="dark"] .member-v2-tier-pill,
+html[data-theme="dark"] .member-v2-metric,
+html[data-theme="dark"] .member-v2-section,
+html[data-theme="dark"] .member-v2-coupon,
+html[data-theme="dark"] .member-v2-owned-coupon {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .member-v2-tier-pill {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .member-v2-metric-top,
+html[data-theme="dark"] .member-v2-section-head p,
+html[data-theme="dark"] .member-v2-coupon-main p,
+html[data-theme="dark"] .member-v2-owned-value small,
+html[data-theme="dark"] .member-v2-progress-foot,
+html[data-theme="dark"] .member-v2-owned-info span {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .member-v2-metric strong,
+html[data-theme="dark"] .member-v2-section-head h2,
+html[data-theme="dark"] .member-v2-coupon-main h3,
+html[data-theme="dark"] .member-v2-owned-info strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .member-v2-metric-icon,
+html[data-theme="dark"] .member-v2-owned-icon,
+html[data-theme="dark"] .member-v2-coupon-meta span,
+html[data-theme="dark"] .member-v2-section-badge,
+html[data-theme="dark"] .member-v2-point-icon {
+  background: var(--surface-raised);
+  color: var(--accent-text);
+}
+
+html[data-theme="dark"] .member-v2-coupon-divider {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .member-v2-coupon-value,
+html[data-theme="dark"] .member-v2-owned-value strong,
+html[data-theme="dark"] .member-v2-points-total strong {
+  color: var(--accent-text);
+}
+
+html[data-theme="dark"] .member-v2-progress {
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .member-v2-progress-fill {
+  background: var(--purple);
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .member-v2-points-total {
+  background: var(--hero-bg);
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .member-v2-points-total span,
+html[data-theme="dark"] .member-v2-points-total small {
+  color: var(--hero-muted);
+}
+
+html[data-theme="dark"] .member-v2-point-list {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .member-v2-point-row {
+  border-color: var(--line);
+}
+
+html[data-theme="dark"] .member-v2-point-info strong {
+  color: var(--ink);
+}
+
+html[data-theme="dark"] .member-v2-empty,
+html[data-theme="dark"] .member-v2-disabled {
+  color: var(--muted);
+  background: var(--surface-raised);
+}
+
+html[data-theme="dark"] .member-v2-status {
+  background: #253e35;
+  color: #b0e3c7;
+}
+
+html[data-theme="dark"] .member-v2-point-amount.positive {
+  color: var(--green);
+}
+
+html[data-theme="dark"] .member-v2-point-amount.negative {
+  color: #f0b8c9;
+}

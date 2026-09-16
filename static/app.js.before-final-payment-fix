@@ -117,7 +117,7 @@ const can = (permission) =>
 const paymentBadge = (status) =>
   `<span class="pay-badge ${esc(String(status || "").replaceAll(" ", "-"))}">
     <i class="dot"></i>
-    ${esc(tr(paymentNames[status] || status || "?"))}
+    ${esc(paymentNames[status] || status || "—")}
   </span>`;
 
 const paths = {
@@ -131,10 +131,6 @@ const paths = {
   user:
     "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 21v-3a8 8 0 0 1 16 0v3",
   chart: "M4 3v18h17 M8 16v-5 M13 16V6 M18 16v-8",
-  trend: "M4 17l5-5 4 3 7-9 M17 6h3v3",
-  shield: "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z M9 12l2 2 4-4",
-  clipboard: "M9 4h6a2 2 0 0 1 2 2v15H7V6a2 2 0 0 1 2-2z M10 4V3h4v1 M10 9h4 M10 13h4 M10 17h3",
-  settings: "M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5.6 5.6l2.1 2.1 M16.3 16.3l2.1 2.1 M18.4 5.6l-2.1 2.1 M7.7 16.3l-2.1 2.1 M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z",
   grid:
     "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   logout: "M9 4H3v16h6 M9 12h12m-5-5 5 5-5 5",
@@ -144,8 +140,6 @@ const paths = {
   help:
     "M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
   menu: "M3 6h18M3 12h18M3 18h18",
-  activity:
-    "M3 12h4l2.5-7 5 14 2.5-7H21",
 };
 
 const ic = (n) =>
@@ -696,11 +690,11 @@ const roleNav = [
   ["users", "user", "用户管理", "user.manage"],
   ["orders", "orders", "订单管理", "order.view_all"],
   ["revenue", "chart", "营收统计", "analytics.view"],
-  ["prediction", "trend", "负荷预测", "prediction.view"],
-  ["roles", "shield", "角色与权限", "role.manage"],
-  ["logs", "clipboard", "操作日志", "log.view"],
-  ["settings", "settings", "偏好设置", null],
-  ['ops-center','activity','运营中心','system.monitor']
+  ["prediction", "chart", "负荷预测", "prediction.view"],
+  ["roles", "grid", "角色与权限", "role.manage"],
+  ["logs", "orders", "操作日志", "log.view"],
+  ["settings", "grid", "偏好设置", null],
+  ['ops-center','grid','运营中心','system.monitor']
 ];
 
 function currentNav() {
@@ -3053,7 +3047,7 @@ async function finishOrderModal(orderId) {
               ${tr("\u672c\u6b21\u5145\u7535")}
             </strong>
             <div class="muted" style="margin-top:4px">
-              ${tr("\u5f53\u524d\u8d39\u7528")} \u00A5 ${yuan(order.amount_cents)}
+              ${tr("\u5f53\u524d\u8d39\u7528")} ? ?${yuan(order.amount_cents)}
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 const $ = (q, r = document) => r.querySelector(q);
 
@@ -18,7 +18,7 @@ const esc = (v) =>
 const yuan = (c) => (Number(c || 0) / 100).toFixed(2);
 
 const time = (s) =>
-  s ? s.replace("T", " ").slice(0, 19) : "—";
+  s ? s.replace("T", " ").slice(0, 19) : "鈥?;
 
 const fmtDate = (d) => {
   const y = d.getFullYear();
@@ -44,7 +44,7 @@ const S = {
 
   lat: 39.9593,
   lng: 116.2981,
-  location: "海淀区",
+  location: "娴锋穩鍖?,
 
   timer: null,
   version: 0,
@@ -57,20 +57,20 @@ const S = {
 
 const names = new Proxy(
   {
-    idle: "空闲",
-    reserved: "已预约",
-    charging: "充电中",
-    fault: "故障",
-    offline: "离线",
-    maintenance: "维修中",
-    completed: "已结算",
-    cancelled: "已取消",
-    expired: "已过期",
-    operating: "运营中",
-    paused: "暂停运营",
-    pending: "待处理",
-    processing: "处理中",
-    resolved: "已解决",
+    idle: "绌洪棽",
+    reserved: "宸查绾?,
+    charging: "鍏呯數涓?,
+    fault: "鏁呴殰",
+    offline: "绂荤嚎",
+    maintenance: "缁翠慨涓?,
+    completed: "宸茬粨绠?,
+    cancelled: "宸插彇娑?,
+    expired: "宸茶繃鏈?,
+    operating: "杩愯惀涓?,
+    paused: "鏆傚仠杩愯惀",
+    pending: "寰呭鐞?,
+    processing: "澶勭悊涓?,
+    resolved: "宸茶В鍐?,
   },
   {
     get: (target, key) =>
@@ -80,24 +80,24 @@ const names = new Proxy(
 
 
 const paymentNames = {
-  "待结算": "待结算",
-  "已支付": "已支付",
-  "待补缴": "待补缴",
-  "部分支付": "部分支付",
-  "支付失败": "支付失败",
-  "无需支付": "无需支付",
+  "寰呯粨绠?: "寰呯粨绠?,
+  "宸叉敮浠?: "宸叉敮浠?,
+  "寰呰ˉ缂?: "寰呰ˉ缂?,
+  "閮ㄥ垎鏀粯": "閮ㄥ垎鏀粯",
+  "鏀粯澶辫触": "鏀粯澶辫触",
+  "鏃犻渶鏀粯": "鏃犻渶鏀粯",
 };
 
 const roleNames = {
-  user: "普通用户",
-  operator: "运营人员",
-  technician: "运维人员",
-  admin: "系统管理员",
+  user: "鏅€氱敤鎴?,
+  operator: "杩愯惀浜哄憳",
+  technician: "杩愮淮浜哄憳",
+  admin: "绯荤粺绠＄悊鍛?,
 };
 
 const translateOperation = (value) => {
   const text = String(value ?? "");
-  const prefix = "创建数据库备份";
+  const prefix = "鍒涘缓鏁版嵁搴撳浠?;
 
   if (text === prefix) {
     return tr(prefix);
@@ -117,7 +117,7 @@ const can = (permission) =>
 const paymentBadge = (status) =>
   `<span class="pay-badge ${esc(String(status || "").replaceAll(" ", "-"))}">
     <i class="dot"></i>
-    ${esc(tr(paymentNames[status] || status || "?"))}
+    ${esc(paymentNames[status] || status || "鈥?)}
   </span>`;
 
 const paths = {
@@ -131,10 +131,6 @@ const paths = {
   user:
     "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 21v-3a8 8 0 0 1 16 0v3",
   chart: "M4 3v18h17 M8 16v-5 M13 16V6 M18 16v-8",
-  trend: "M4 17l5-5 4 3 7-9 M17 6h3v3",
-  shield: "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z M9 12l2 2 4-4",
-  clipboard: "M9 4h6a2 2 0 0 1 2 2v15H7V6a2 2 0 0 1 2-2z M10 4V3h4v1 M10 9h4 M10 13h4 M10 17h3",
-  settings: "M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5.6 5.6l2.1 2.1 M16.3 16.3l2.1 2.1 M18.4 5.6l-2.1 2.1 M7.7 16.3l-2.1 2.1 M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z",
   grid:
     "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   logout: "M9 4H3v16h6 M9 12h12m-5-5 5 5-5 5",
@@ -144,8 +140,6 @@ const paths = {
   help:
     "M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
   menu: "M3 6h18M3 12h18M3 18h18",
-  activity:
-    "M3 12h4l2.5-7 5 14 2.5-7H21",
 };
 
 const ic = (n) =>
@@ -265,7 +259,7 @@ const table = (
           rs.join("") ||
           `<tr>
              <td colspan="${hs.length}">
-               ${empty(tr("暂无数据"))}
+               ${empty(tr("鏆傛棤鏁版嵁"))}
              </td>
            </tr>`
         }
@@ -343,7 +337,7 @@ async function api(
   } catch {
     throw Error(
       tr(
-        "服务器响应异常，请检查 VS Code 终端",
+        "鏈嶅姟鍣ㄥ搷搴斿紓甯革紝璇锋鏌?VS Code 缁堢",
       ),
     );
   }
@@ -351,7 +345,7 @@ async function api(
   if (!r.ok) {
     const e = Error(
       j.error ||
-        tr("请求失败"),
+        tr("璇锋眰澶辫触"),
     );
 
     Object.assign(
@@ -379,9 +373,9 @@ function modal(
 
         <button
           data-action="close"
-          aria-label="关闭"
+          aria-label="鍏抽棴"
         >
-          ×
+          脳
         </button>
       </div>
 
@@ -455,18 +449,18 @@ function loginView(
           </div>
 
           <h1>
-            让每次出发，<br>
-            都充满能量。
+            璁╂瘡娆″嚭鍙戯紝<br>
+            閮藉厖婊¤兘閲忋€?
           </h1>
 
           <p>
-            连接城市的绿色脉动，让充电成为生活中<br>
-            轻松、美好的一部分。
+            杩炴帴鍩庡競鐨勭豢鑹茶剦鍔紝璁╁厖鐢垫垚涓虹敓娲讳腑<br>
+            杞绘澗銆佺編濂界殑涓€閮ㄥ垎銆?
           </p>
 
           <img
             src="/static/hero.svg"
-            alt="两位同事在充电站旁协作的插画"
+            alt="涓や綅鍚屼簨鍦ㄥ厖鐢电珯鏃佸崗浣滅殑鎻掔敾"
           >
         </section>
 
@@ -481,10 +475,10 @@ function loginView(
             ${
               register
                 ? tr(
-                    "开启绿色旅程",
+                    "寮€鍚豢鑹叉梾绋?,
                   )
                 : tr(
-                    "欢迎回来",
+                    "娆㈣繋鍥炴潵",
                   )
             }
           </h2>
@@ -494,14 +488,14 @@ function loginView(
               S.scanNumber &&
               !register
                 ? tr(
-                    "登录后继续扫码充电",
+                    "鐧诲綍鍚庣户缁壂鐮佸厖鐢?,
                   )
                 : register
                   ? tr(
-                      "创建你的 NCS 账号",
+                      "鍒涘缓浣犵殑 NCS 璐﹀彿",
                     )
                   : tr(
-                      "登录 NCS，发现身边的美好与能量",
+                      "鐧诲綍 NCS锛屽彂鐜拌韩杈圭殑缇庡ソ涓庤兘閲?,
                     )
             }
           </p>
@@ -515,7 +509,7 @@ function loginView(
                   : "selected"
               }"
             >
-              账号登录
+              璐﹀彿鐧诲綍
             </button>
 
             <button
@@ -526,7 +520,7 @@ function loginView(
                   : ""
               }"
             >
-              注册账号
+              娉ㄥ唽璐﹀彿
             </button>
           </div>
 
@@ -537,20 +531,20 @@ function loginView(
 
             ${field(
               tr(
-                "手机号 / 管理员账号",
+                "鎵嬫満鍙?/ 绠＄悊鍛樿处鍙?,
               ),
               "phone",
               "",
               "text",
               tr(
-                'required autocomplete="username" placeholder="请输入账号"',
+                'required autocomplete="username" placeholder="璇疯緭鍏ヨ处鍙?',
               ),
             )}
 
             ${
               register
                 ? field(
-                    tr("昵称"),
+                    tr("鏄电О"),
                     "nickname",
                     "",
                     "text",
@@ -560,7 +554,7 @@ function loginView(
             }
 
             ${field(
-              tr("密码"),
+              tr("瀵嗙爜"),
               "password",
               "",
               "password",
@@ -573,7 +567,7 @@ function loginView(
                 }"
                 minlength="8"
                 maxlength="128"
-                placeholder="至少 8 位密码"
+                placeholder="鑷冲皯 8 浣嶅瘑鐮?
               `,
             )}
 
@@ -588,8 +582,8 @@ function loginView(
             >
               ${
                 register
-                  ? tr("创建账号")
-                  : tr("登录")
+                  ? tr("鍒涘缓璐﹀彿")
+                  : tr("鐧诲綍")
               }
 
               ${ic("arrow")}
@@ -597,13 +591,13 @@ function loginView(
           </form>
 
           <div class="demo-accounts">
-            课程演示账号（点击填入）
+            璇剧▼婕旂ず璐﹀彿锛堢偣鍑诲～鍏ワ級
             <br>
 
             <button
               data-action="demo-user"
             >
-              用户：
+              鐢ㄦ埛锛?
               13800138000 /
               User123456
             </button>
@@ -613,7 +607,7 @@ function loginView(
             <button
               data-action="demo-admin"
             >
-              管理：
+              绠＄悊锛?
               admin /
               Admin123456
             </button>
@@ -623,7 +617,7 @@ function loginView(
             <button
               data-action="demo-operator"
             >
-              运营：
+              杩愯惀锛?
               operator /
               Operator123456
             </button>
@@ -633,16 +627,16 @@ function loginView(
             <button
               data-action="demo-tech"
             >
-              运维：
+              杩愮淮锛?
               tech /
               Tech123456
             </button>
           </div>
 
           <p class="footer-note">
-            本地课程演示 ·
-            模拟充值与充电 ·
-            数据自动保存
+            鏈湴璇剧▼婕旂ず 路
+            妯℃嫙鍏呭€间笌鍏呯數 路
+            鏁版嵁鑷姩淇濆瓨
           </p>
 
         </section>
@@ -654,53 +648,53 @@ const userNav = [
   [
     "dashboard",
     "home",
-    "总览",
+    "鎬昏",
   ],
   [
     "stations",
     "pin",
-    "附近电站",
+    "闄勮繎鐢电珯",
   ],
   [
     "charging",
     "bolt",
-    "我的充电",
+    "鎴戠殑鍏呯數",
   ],
   [
     "orders",
     "orders",
-    "我的订单",
+    "鎴戠殑璁㈠崟",
   ],
   [
     "wallet",
     "wallet",
-    "我的钱包",
+    "鎴戠殑閽卞寘",
   ],
   [
     "member",
     "gift",
-    "会员中心",
+    "浼氬憳涓績",
   ],
   [
     "profile",
     "user",
-    "个人中心",
+    "涓汉涓績",
   ],
 ];
 const roleNav = [
-  ["dashboard", "home", "运营总览", null],
-  ["stations", "pin", "电站管理", "station.view"],
-  ["chargers", "bolt", "电桩管理", "charger.view"],
-  ["pricing", "wallet", "价格管理", "pricing.manage"],
-  ["faults", "help", "故障管理", "fault.manage"],
-  ["users", "user", "用户管理", "user.manage"],
-  ["orders", "orders", "订单管理", "order.view_all"],
-  ["revenue", "chart", "营收统计", "analytics.view"],
-  ["prediction", "trend", "负荷预测", "prediction.view"],
-  ["roles", "shield", "角色与权限", "role.manage"],
-  ["logs", "clipboard", "操作日志", "log.view"],
-  ["settings", "settings", "偏好设置", null],
-  ['ops-center','activity','运营中心','system.monitor']
+  ["dashboard", "home", "杩愯惀鎬昏", null],
+  ["stations", "pin", "鐢电珯绠＄悊", "station.view"],
+  ["chargers", "bolt", "鐢垫々绠＄悊", "charger.view"],
+  ["pricing", "wallet", "浠锋牸绠＄悊", "pricing.manage"],
+  ["faults", "help", "鏁呴殰绠＄悊", "fault.manage"],
+  ["users", "user", "鐢ㄦ埛绠＄悊", "user.manage"],
+  ["orders", "orders", "璁㈠崟绠＄悊", "order.view_all"],
+  ["revenue", "chart", "钀ユ敹缁熻", "analytics.view"],
+  ["prediction", "chart", "璐熻嵎棰勬祴", "prediction.view"],
+  ["roles", "grid", "瑙掕壊涓庢潈闄?, "role.manage"],
+  ["logs", "orders", "鎿嶄綔鏃ュ織", "log.view"],
+  ["settings", "grid", "鍋忓ソ璁剧疆", null],
+  ['ops-center','grid','杩愯惀涓績','system.monitor']
 ];
 
 function currentNav() {
@@ -719,21 +713,21 @@ if (
   S.user.role === "technician" &&
   copy[0] === "dashboard"
 ) {
-  copy[2] = "运维总览";
+  copy[2] = "杩愮淮鎬昏";
 }
 
 if (
   S.user.role === "technician" &&
   copy[0] === "stations"
 ) {
-  copy[2] = "电站运维";
+  copy[2] = "鐢电珯杩愮淮";
 }
 
 if (
   S.user.role === "technician" &&
   copy[0] === "chargers"
 ) {
-  copy[2] = "设备运维";
+  copy[2] = "璁惧杩愮淮";
 }
 
       return copy;
@@ -796,12 +790,12 @@ function shell() {
               </div>
 
               <h3>
-                一点能量，一份美好
+                涓€鐐硅兘閲忥紝涓€浠界編濂?
               </h3>
 
               <p>
-                每一次绿色出行<br>
-                都是给城市的温柔回应
+                姣忎竴娆＄豢鑹插嚭琛?br>
+                閮芥槸缁欏煄甯傜殑娓╂煍鍥炲簲
               </p>
             </div>
 
@@ -834,7 +828,7 @@ function shell() {
 
               <button
                 data-action="logout"
-                title="退出登录"
+                title="閫€鍑虹櫥褰?
               >
                 ${ic("logout")}
               </button>
@@ -853,7 +847,7 @@ function shell() {
                 mobile-menu
               "
               data-action="menu"
-              aria-label="展开导航"
+              aria-label="灞曞紑瀵艰埅"
             >
               ${ic("menu")}
             </button>
@@ -872,10 +866,10 @@ function shell() {
                     S.page ===
                     "scan"
                       ? tr(
-                          "扫码充电",
+                          "鎵爜鍏呯數",
                         )
                       : tr(
-                          "电站详情",
+                          "鐢电珯璇︽儏",
                         )
                   )
                 }
@@ -885,10 +879,10 @@ function shell() {
                 ${
                   ops
                     ? tr(
-                        "从每一度电，看见城市的绿色未来。",
+                        "浠庢瘡涓€搴︾數锛岀湅瑙佸煄甯傜殑缁胯壊鏈潵銆?,
                       )
                     : tr(
-                        "新的一天，为你的下一站充满能量。",
+                        "鏂扮殑涓€澶╋紝涓轰綘鐨勪笅涓€绔欏厖婊¤兘閲忋€?,
                       )
                 }
               </p>
@@ -936,7 +930,7 @@ function shell() {
               <button
                 class="circle-btn"
                 data-action="help"
-                aria-label="使用帮助"
+                aria-label="浣跨敤甯姪"
               >
                 ${ic("help")}
               </button>
@@ -950,10 +944,10 @@ function shell() {
           </div>
 
           <p class="footer-note">
-            NCS SMART CHARGING ·
-            课程演示版 ·
-            充电按 ${S.scale}
-            倍时间模拟
+            NCS SMART CHARGING 路
+            璇剧▼婕旂ず鐗?路
+            鍏呯數鎸?${S.scale}
+            鍊嶆椂闂存ā鎷?
           </p>
 
         </main>
@@ -1014,11 +1008,11 @@ function chart(
       viewBox="0 0 600 150"
       preserveAspectRatio="none"
       role="img"
-      aria-label="最近七天${
+      aria-label="鏈€杩戜竷澶?{
         key === "energy"
-          ? tr("电量")
-          : tr("实收金额")
-      }趋势"
+          ? tr("鐢甸噺")
+          : tr("瀹炴敹閲戦")
+      }瓒嬪娍"
     >
 
       <defs>
@@ -1090,14 +1084,14 @@ function chart(
                stroke-width="2"
              >
                <title>
-                 ${ds[i].day}：
+                 ${ds[i].day}锛?
                  ${
                    key ===
                    "cents"
                      ? yuan(
                          vs[i],
                        ) +
-                       tr(" 元")
+                       tr(" 鍏?)
                      : vs[
                          i
                        ].toFixed(
@@ -1178,22 +1172,22 @@ function stationCard(s) {
 
         ${ic("pin")}
 
-        距离
+        璺濈
         ${s.distance.toFixed(1)}
-        km ·
+        km 路
 
         ${s.fast_count || 0}
-        快充 /
+        蹇厖 /
 
         ${s.slow_count || 0}
-        慢充 ·
+        鎱㈠厖 路
 
         ${s.free || 0}
-        空闲
+        绌洪棽
 
         <br>
 
-        营业时间：
+        钀ヤ笟鏃堕棿锛?
         ${esc(
           s.business_hours,
         )}
@@ -1202,22 +1196,22 @@ function stationCard(s) {
       <div class="station-footer">
 
         <div class="price">
-          ¥
+          楼
           ${yuan(
             s.current_price_cents,
           )}
 
           <small>
-            / 度（当前）
+            / 搴︼紙褰撳墠锛?
           </small>
         </div>
 
         ${btn(
           can("station.manage")
-            ? tr("管理电站")
+            ? tr("绠＄悊鐢电珯")
             : S.user.role === "technician"
-              ? tr("进入运维")
-              : tr("查看电站"),
+              ? tr("杩涘叆杩愮淮")
+              : tr("鏌ョ湅鐢电珯"),
 
           "station",
 
@@ -1258,44 +1252,44 @@ async function dashboard() {
         <section class="hero">
           <div class="hero-text">
             <div class="eyebrow">MAINTENANCE CONTROL</div>
-            <h2>${tr("让每一台设备，")}<br>${tr("都保持在最佳状态。")}</h2>
+            <h2>${tr("璁╂瘡涓€鍙拌澶囷紝")}<br>${tr("閮戒繚鎸佸湪鏈€浣崇姸鎬併€?)}</h2>
             <p>
-              ${tr("统一查看电站健康度、设备状态与异常情况，")}<br>
-              ${tr("直接从电站进入设备运维。")}
+              ${tr("缁熶竴鏌ョ湅鐢电珯鍋ュ悍搴︺€佽澶囩姸鎬佷笌寮傚父鎯呭喌锛?)}<br>
+              ${tr("鐩存帴浠庣數绔欒繘鍏ヨ澶囪繍缁淬€?)}
             </p>
             ${pageBtn(
               "stations",
-              tr("进入电站运维") + " " + ic("arrow"),
+              tr("杩涘叆鐢电珯杩愮淮") + " " + ic("arrow"),
               "",
             )}
           </div>
           <div class="hero-badge">
             ${m.total || 0}
             <br>
-            <small>${tr("设备")}</small>
+            <small>${tr("璁惧")}</small>
           </div>
         </section>
 
         <div class="metric-grid">
-          ${metric("pin", tr("管理电站"), d.stations, tr("座"))}
-          ${metric("bolt", tr("设备总数"), m.total || 0, tr("台"))}
-          ${metric("grid", tr("故障设备"), m.fault || 0, tr("台"))}
+          ${metric("pin", tr("绠＄悊鐢电珯"), d.stations, tr("搴?))}
+          ${metric("bolt", tr("璁惧鎬绘暟"), m.total || 0, tr("鍙?))}
+          ${metric("grid", tr("鏁呴殰璁惧"), m.fault || 0, tr("鍙?))}
           ${metric(
             "bolt",
-            tr("运行中"),
+            tr("杩愯涓?),
             (m.charging || 0) + (m.reserved || 0),
-            tr("台"),
+            tr("鍙?),
           )}
         </div>
 
         <section class="card">
           <div class="section-head">
-            <h2>运维工作台</h2>
-            <small>授权操作</small>
+            <h2>杩愮淮宸ヤ綔鍙?/h2>
+            <small>鎺堟潈鎿嶄綔</small>
           </div>
           <div class="actions" style="margin-top:18px">
-            ${pageBtn("stations", tr("查看全部电站"), "secondary")}
-            ${pageBtn("chargers", tr("查看全部设备"), "secondary")}
+            ${pageBtn("stations", tr("鏌ョ湅鍏ㄩ儴鐢电珯"), "secondary")}
+            ${pageBtn("chargers", tr("鏌ョ湅鍏ㄩ儴璁惧"), "secondary")}
           </div>
         </section>
       </div>
@@ -1350,16 +1344,16 @@ async function dashboard() {
               ${
                 a
                   ? tr(
-                      "让绿色能量，<br>流向城市每一站。",
+                      "璁╃豢鑹茶兘閲忥紝<br>娴佸悜鍩庡競姣忎竴绔欍€?,
                     )
                   : trHtml`
-                      你好，
+                      浣犲ソ锛?
                       ${esc(
                         S.user
                           .nickname,
                       )}
                       <br>
-                      今天也要满电出发。
+                      浠婂ぉ涔熻婊＄數鍑哄彂銆?
                     `
               }
             </h2>
@@ -1368,10 +1362,10 @@ async function dashboard() {
               ${
                 a
                   ? tr(
-                      "在这里掌握电站运营动态，<br>让每一份能量，都有更好的去处。",
+                      "鍦ㄨ繖閲屾帉鎻＄數绔欒繍钀ュ姩鎬侊紝<br>璁╂瘡涓€浠借兘閲忥紝閮芥湁鏇村ソ鐨勫幓澶勩€?,
                     )
                   : tr(
-                      "附近的充电站已为你准备就绪，<br>给爱车充电，也给生活一点留白。",
+                      "闄勮繎鐨勫厖鐢电珯宸蹭负浣犲噯澶囧氨缁紝<br>缁欑埍杞﹀厖鐢碉紝涔熺粰鐢熸椿涓€鐐圭暀鐧姐€?,
                     )
               }
             </p>
@@ -1384,10 +1378,10 @@ async function dashboard() {
               (
                 a
                   ? tr(
-                      "查看运营数据",
+                      "鏌ョ湅杩愯惀鏁版嵁",
                     )
                   : tr(
-                      "寻找充电站",
+                      "瀵绘壘鍏呯數绔?,
                     )
               ) +
                 " " +
@@ -1400,7 +1394,7 @@ async function dashboard() {
 
           <img
             src="/static/hero.svg"
-            alt="绿色充电设施"
+            alt="缁胯壊鍏呯數璁炬柦"
           >
 
         </section>
@@ -1417,7 +1411,7 @@ async function dashboard() {
                         d.active[0]
                           .status,
                       )}
-                      你有一个未完成订单
+                      浣犳湁涓€涓湭瀹屾垚璁㈠崟
                     </strong>
 
                     <small>
@@ -1431,7 +1425,7 @@ async function dashboard() {
                   ${pageBtn(
                     "charging",
                     tr(
-                      "去处理",
+                      "鍘诲鐞?,
                     ),
                     "small",
                   )}
@@ -1447,10 +1441,10 @@ async function dashboard() {
 
             a
               ? tr(
-                  "累计服务电量",
+                  "绱鏈嶅姟鐢甸噺",
                 )
               : tr(
-                  "累计充电量",
+                  "绱鍏呯數閲?,
                 ),
 
             d.totals.energy.toFixed(
@@ -1465,15 +1459,15 @@ async function dashboard() {
 
             a
               ? tr(
-                  "已结算订单",
+                  "宸茬粨绠楄鍗?,
                 )
               : tr(
-                  "已完成订单",
+                  "宸插畬鎴愯鍗?,
                 ),
 
             d.totals.orders,
 
-            tr("笔"),
+            tr("绗?),
           )}
 
           ${metric(
@@ -1483,10 +1477,10 @@ async function dashboard() {
 
             a
               ? tr(
-                  "接入电站",
+                  "鎺ュ叆鐢电珯",
                 )
               : tr(
-                  "累计充电消费",
+                  "绱鍏呯數娑堣垂",
                 ),
 
             a
@@ -1497,8 +1491,8 @@ async function dashboard() {
                 ),
 
             a
-              ? tr("座")
-              : tr("元"),
+              ? tr("搴?)
+              : tr("鍏?),
           )}
 
         </div>
@@ -1511,21 +1505,21 @@ async function dashboard() {
               ${
                 a
                   ? tr(
-                      "营收趋势",
+                      "钀ユ敹瓒嬪娍",
                     )
                   : tr(
-                      "我的充电趋势",
+                      "鎴戠殑鍏呯數瓒嬪娍",
                     )
               }
             </h2>
 
             <span class="legend">
               <i class="dot"></i>
-              最近 7 天 ·
+              鏈€杩?7 澶?路
               ${
                 a
-                  ? tr("实收")
-                  : tr("电量")
+                  ? tr("瀹炴敹")
+                  : tr("鐢甸噺")
               }
             </span>
           </div>
@@ -1533,7 +1527,7 @@ async function dashboard() {
           <div class="chart-summary">
             ${
               a
-                ? "¥ " +
+                ? "楼 " +
                   yuan(sum)
                 : sum.toFixed(
                     1,
@@ -1544,10 +1538,10 @@ async function dashboard() {
               ${
                 a
                   ? tr(
-                      "实收金额",
+                      "瀹炴敹閲戦",
                     )
                   : tr(
-                      "kWh / 最近 7 天",
+                      "kWh / 鏈€杩?7 澶?,
                     )
               }
             </small>
@@ -1570,10 +1564,10 @@ async function dashboard() {
               ${
                 a
                   ? tr(
-                      "电站概览",
+                      "鐢电珯姒傝",
                     )
                   : tr(
-                      "附近的充电站",
+                      "闄勮繎鐨勫厖鐢电珯",
                     )
               }
             </h2>
@@ -1582,7 +1576,7 @@ async function dashboard() {
               class="text-btn"
               data-page="stations"
             >
-              查看全部 →
+              鏌ョ湅鍏ㄩ儴 鈫?
             </button>
           </div>
 
@@ -1604,7 +1598,7 @@ async function dashboard() {
                 .join("") ||
               empty(
                 tr(
-                  "暂无电站",
+                  "鏆傛棤鐢电珯",
                 ),
               )
             }
@@ -1627,10 +1621,10 @@ async function dashboard() {
             ${
               a
                 ? tr(
-                    "累计实收营收",
+                    "绱瀹炴敹钀ユ敹",
                   )
                 : tr(
-                    "我的钱包",
+                    "鎴戠殑閽卞寘",
                   )
             }
 
@@ -1640,7 +1634,7 @@ async function dashboard() {
           </h3>
 
           <div class="balance">
-            ¥
+            楼
             ${yuan(
               a
                 ? d.totals
@@ -1654,14 +1648,14 @@ async function dashboard() {
             ${
               a
                 ? trHtml`
-                    注册用户
+                    娉ㄥ唽鐢ㄦ埛
                     ${d.users}
-                    ·
-                    未解决故障
+                    路
+                    鏈В鍐虫晠闅?
                     ${d.open_faults}
                   `
                 : tr(
-                    "可用余额 · 模拟账户",
+                    "鍙敤浣欓 路 妯℃嫙璐︽埛",
                   )
             }
           </small>
@@ -1682,13 +1676,13 @@ async function dashboard() {
                 ? pageBtn(
                     "revenue",
                     tr(
-                      "营收详情 ↗",
+                      "钀ユ敹璇︽儏 鈫?,
                     ),
                     "white small",
                   )
                 : btn(
                     tr(
-                      "＋ 充值",
+                      "锛?鍏呭€?,
                     ),
                     "recharge",
                     "white small",
@@ -1702,7 +1696,7 @@ async function dashboard() {
           <div class="section-head">
 
             <h3>
-              电桩实时状态
+              鐢垫々瀹炴椂鐘舵€?
             </h3>
 
             ${ic("grid")}
@@ -1742,7 +1736,7 @@ async function dashboard() {
               ${free}
 
               <small>
-                空闲充电桩 /
+                绌洪棽鍏呯數妗?/
                 ${total}
               </small>
             </span>
@@ -1771,7 +1765,7 @@ async function dashboard() {
                         ] ||
                         0
                       }
-                      个
+                      涓?
                     </b>
                   </div>
                 `,
@@ -1785,14 +1779,14 @@ async function dashboard() {
           <div class="section-head">
 
             <h3>
-              最近订单
+              鏈€杩戣鍗?
             </h3>
 
             <button
               class="text-btn"
               data-page="orders"
             >
-              全部
+              鍏ㄩ儴
             </button>
 
           </div>
@@ -1825,7 +1819,7 @@ async function dashboard() {
                           5,
                           16,
                         )}
-                        ·
+                        路
                         ${names[
                           x.status
                         ]}
@@ -1836,7 +1830,7 @@ async function dashboard() {
               .join("") ||
             empty(
               tr(
-                "还没有订单",
+                "杩樻病鏈夎鍗?,
               ),
             )
           }
@@ -1860,21 +1854,21 @@ async function stationsPage() {
 
       <input
         id="station-search"
-        placeholder="搜索电站名称或地址"
-        aria-label="搜索电站"
+        placeholder="鎼滅储鐢电珯鍚嶇О鎴栧湴鍧€"
+        aria-label="鎼滅储鐢电珯"
       >
 
       <select
         id="region"
-        aria-label="当前位置"
+        aria-label="褰撳墠浣嶇疆"
       >
         ${[
-          "海淀区",
-          "东城区",
-          "朝阳区",
-          "丰台区",
-          "石景山区",
-          "自定义位置",
+          "娴锋穩鍖?,
+          "涓滃煄鍖?,
+          "鏈濋槼鍖?,
+          "涓板彴鍖?,
+          "鐭虫櫙灞卞尯",
+          "鑷畾涔変綅缃?,
         ]
           .map(
             (v) =>
@@ -1889,53 +1883,53 @@ async function stationsPage() {
 
       <select
         id="station-status"
-        aria-label="充电状态筛选"
+        aria-label="鍏呯數鐘舵€佺瓫閫?
       >
         <option value="">
-          ${tr("全部状态")}
+          ${tr("鍏ㄩ儴鐘舵€?)}
         </option>
 
         ${opt(
           "idle",
-          tr("有空闲桩"),
+          tr("鏈夌┖闂叉々"),
         )}
 
         ${opt(
           "fault",
-          tr("有故障桩"),
+          tr("鏈夋晠闅滄々"),
         )}
 
         ${opt(
           "maintenance",
-          tr("有维修中桩"),
+          tr("鏈夌淮淇腑妗?),
         )}
 
         ${opt(
           "offline",
-          tr("有离线桩"),
+          tr("鏈夌绾挎々"),
         )}
       </select>
 
       <select
         id="station-sort"
-        aria-label="排序方式"
+        aria-label="鎺掑簭鏂瑰紡"
       >
         <option value="distance">
           ${tr(
-            "按距离排序",
+            "鎸夎窛绂绘帓搴?,
           )}
         </option>
 
         <option value="usage">
           ${tr(
-            "充电次数最多",
+            "鍏呯數娆℃暟鏈€澶?,
           )}
         </option>
       </select>
 
       ${btn(
         tr(
-          "使用我的位置",
+          "浣跨敤鎴戠殑浣嶇疆",
         ),
         "locate",
       )}
@@ -1944,7 +1938,7 @@ async function stationsPage() {
         can("station.manage")
           ? btn(
               tr(
-                "＋ 添加电站",
+                "锛?娣诲姞鐢电珯",
               ),
               "edit-station",
               "",
@@ -1960,15 +1954,15 @@ async function stationsPage() {
     >
       ${ic("pin")}
 
-      ${tr("当前位置")}：
+      ${tr("褰撳墠浣嶇疆")}锛?
       ${esc(
         tr(S.location),
       )}
 
-      （
+      锛?
       ${S.lat.toFixed(4)},
       ${S.lng.toFixed(4)}
-      ）
+      锛?
     </p>
 
     <div
@@ -1983,7 +1977,7 @@ async function stationsPage() {
           .join("") ||
         empty(
           tr(
-            "暂无充电站数据",
+            "鏆傛棤鍏呯數绔欐暟鎹?,
           ),
         )
       }
@@ -2046,7 +2040,7 @@ async function loadStations() {
         .join("") ||
       empty(
         tr(
-          "没有匹配的电站",
+          "娌℃湁鍖归厤鐨勭數绔?,
         ),
       );
   }
@@ -2060,11 +2054,11 @@ function stationChargersTable(
 
   return table(
     [
-      tr("充电桩"),
-      tr("类型 / 功率"),
-      tr("状态"),
-      tr("累计次数"),
-      tr("操作"),
+      tr("鍏呯數妗?),
+      tr("绫诲瀷 / 鍔熺巼"),
+      tr("鐘舵€?),
+      tr("绱娆℃暟"),
+      tr("鎿嶄綔"),
     ],
 
     chargers.map(
@@ -2080,15 +2074,15 @@ function stationChargersTable(
         ) {
           actions =
             btn(
-              tr("二维码"),
+              tr("浜岀淮鐮?),
               "qr",
               "secondary small",
               `data-id="${c.id}"`,
             ) +
             btn(
               c.status === "idle"
-                ? tr("故障")
-                : tr("恢复"),
+                ? tr("鏁呴殰")
+                : tr("鎭㈠"),
               "charger-action",
               "secondary small",
               `data-id="${c.id}" data-op="${
@@ -2098,7 +2092,7 @@ function stationChargersTable(
               }"`,
             ) +
             btn(
-              tr("重启"),
+              tr("閲嶅惎"),
               "charger-action",
               "secondary small",
               `data-id="${c.id}" data-op="restart"`,
@@ -2110,30 +2104,30 @@ function stationChargersTable(
         ) {
           actions =
             btn(
-              tr("预约"),
+              tr("棰勭害"),
               "reserve",
               "secondary small",
               `data-id="${c.id}"`,
             ) +
             btn(
-              tr("开始充电"),
+              tr("寮€濮嬪厖鐢?),
               "start-charge",
               "small",
               `data-id="${c.id}"`,
             );
         } else {
           actions =
-            `<small>${tr("仅查看")}</small>`;
+            `<small>${tr("浠呮煡鐪?)}</small>`;
         }
 
         return `<tr>
           <td><b>${esc(c.number)}</b></td>
           <td>
-            ${c.kind === "fast" ? tr("快充") : tr("慢充")}
+            ${c.kind === "fast" ? tr("蹇厖") : tr("鎱㈠厖")}
             / ${c.power} kW
           </td>
           <td>${badge(c.status)}</td>
-          <td>${c.total_count} ${tr("次")}</td>
+          <td>${c.total_count} ${tr("娆?)}</td>
           <td>${actions}</td>
         </tr>`;
       },
@@ -2233,21 +2227,21 @@ async function stationDetail(
       <div>
         ${line(
           tr(
-            "所属城市",
+            "鎵€灞炲煄甯?,
           ),
           s.city,
         )}
 
         ${line(
           tr(
-            "营业时间",
+            "钀ヤ笟鏃堕棿",
           ),
           s.business_hours,
         )}
 
         ${line(
           tr(
-            "联系电话",
+            "鑱旂郴鐢佃瘽",
           ),
           s.contact_phone,
         )}
@@ -2256,7 +2250,7 @@ async function stationDetail(
       <div>
         ${line(
           tr(
-            "运营状态",
+            "杩愯惀鐘舵€?,
           ),
           names[
             s.operating_status
@@ -2266,21 +2260,21 @@ async function stationDetail(
 
         ${line(
           tr(
-            "停车说明",
+            "鍋滆溅璇存槑",
           ),
           s.parking_info,
         )}
 
         ${line(
           tr(
-            "当前价格",
+            "褰撳墠浠锋牸",
           ),
-          "¥ " +
+          "楼 " +
             yuan(
               s.current_price_cents,
             ) +
             tr(
-              " / 度",
+              " / 搴?,
             ),
         )}
       </div>
@@ -2290,10 +2284,10 @@ async function stationDetail(
   const tariff =
     table(
       [
-        tr("时段"),
-        tr("电费"),
-        tr("服务费"),
-        tr("合计"),
+        tr("鏃舵"),
+        tr("鐢佃垂"),
+        tr("鏈嶅姟璐?),
+        tr("鍚堣"),
       ],
 
       pricing.map(
@@ -2307,14 +2301,14 @@ async function stationDetail(
             </td>
 
             <td>
-              ¥
+              楼
               ${yuan(
                 p.electricity_fee_cents,
               )}
             </td>
 
             <td>
-              ¥
+              楼
               ${yuan(
                 p.service_fee_cents,
               )}
@@ -2322,7 +2316,7 @@ async function stationDetail(
 
             <td>
               <b>
-                ¥
+                楼
                 ${yuan(
                   p.price_cents,
                 )}
@@ -2342,7 +2336,7 @@ async function stationDetail(
 
         <p class="sub">
           ${esc(s.address)}
-          ·
+          路
           ${badge(
             s.operating_status,
           )}
@@ -2352,7 +2346,7 @@ async function stationDetail(
       ${pageBtn(
         "stations",
         tr(
-          "返回列表",
+          "杩斿洖鍒楄〃",
         ),
       )}
 
@@ -2367,7 +2361,7 @@ async function stationDetail(
 
         <h3>
           ${tr(
-            "电站信息",
+            "鐢电珯淇℃伅",
           )}
         </h3>
 
@@ -2375,7 +2369,7 @@ async function stationDetail(
 
           ${btn(
             tr(
-              "路线导航",
+              "璺嚎瀵艰埅",
             ),
             "map",
             "secondary",
@@ -2386,7 +2380,7 @@ async function stationDetail(
             a
               ? btn(
                   tr(
-                    "编辑电站",
+                    "缂栬緫鐢电珯",
                   ),
                   "edit-station",
                   "secondary",
@@ -2394,7 +2388,7 @@ async function stationDetail(
                 ) +
                 btn(
                   tr(
-                    "删除",
+                    "鍒犻櫎",
                   ),
                   "delete-station",
                   "danger",
@@ -2415,7 +2409,7 @@ async function stationDetail(
         "
       >
         ${tr(
-          "分时收费标准",
+          "鍒嗘椂鏀惰垂鏍囧噯",
         )}
       </h3>
 
@@ -2429,7 +2423,7 @@ async function stationDetail(
 
         <h3>
           ${tr(
-            "选择你的充电桩",
+            "閫夋嫨浣犵殑鍏呯數妗?,
           )}
         </h3>
 
@@ -2443,7 +2437,7 @@ async function stationDetail(
           }
 
           ${tr(
-            "个空闲",
+            "涓┖闂?,
           )}
         </small>
 
@@ -2456,7 +2450,7 @@ async function stationDetail(
         >
           <option value="">
             ${tr(
-              "全部状态",
+              "鍏ㄩ儴鐘舵€?,
             )}
           </option>
 
@@ -2483,18 +2477,18 @@ async function stationDetail(
         >
           <option value="">
             ${tr(
-              "全部类型",
+              "鍏ㄩ儴绫诲瀷",
             )}
           </option>
 
           ${opt(
             "fast",
-            tr("快充"),
+            tr("蹇厖"),
           )}
 
           ${opt(
             "slow",
-            tr("慢充"),
+            tr("鎱㈠厖"),
           )}
         </select>
 
@@ -2503,13 +2497,13 @@ async function stationDetail(
         >
           <option value="number">
             ${tr(
-              "按编号排序",
+              "鎸夌紪鍙锋帓搴?,
             )}
           </option>
 
           <option value="usage">
             ${tr(
-              "充电次数最多",
+              "鍏呯數娆℃暟鏈€澶?,
             )}
           </option>
         </select>
@@ -2524,7 +2518,7 @@ async function stationDetail(
 
       <div class="note">
         ${tr(
-          "预约后保留 15 分钟。收费按照开始充电时所在的分时时段锁定电费和服务费，订单结束后仍保留该价格快照。",
+          "棰勭害鍚庝繚鐣?15 鍒嗛挓銆傛敹璐规寜鐓у紑濮嬪厖鐢垫椂鎵€鍦ㄧ殑鍒嗘椂鏃舵閿佸畾鐢佃垂鍜屾湇鍔¤垂锛岃鍗曠粨鏉熷悗浠嶄繚鐣欒浠锋牸蹇収銆?,
         )}
       </div>
 
@@ -2553,7 +2547,7 @@ async function scanPage(
         <div class="section-head">
 
           <h2>
-            已识别充电桩
+            宸茶瘑鍒厖鐢垫々
           </h2>
 
           ${badge(c.status)}
@@ -2580,35 +2574,35 @@ async function scanPage(
 
         ${[
           [
-            tr("电站地址"),
+            tr("鐢电珯鍦板潃"),
             c.address,
           ],
           [
-            tr("所属城市"),
+            tr("鎵€灞炲煄甯?),
             c.city,
           ],
           [
-            tr("营业时间"),
+            tr("钀ヤ笟鏃堕棿"),
             c.business_hours,
           ],
           [
-            tr("充电类型"),
+            tr("鍏呯數绫诲瀷"),
             c.kind ===
             "fast"
               ? tr(
-                  "快充",
+                  "蹇厖",
                 )
               : tr(
-                  "慢充",
+                  "鎱㈠厖",
                 ),
           ],
           [
-            tr("额定功率"),
+            tr("棰濆畾鍔熺巼"),
             c.power +
               " kW",
           ],
           [
-            tr("设备状态"),
+            tr("璁惧鐘舵€?),
             names[c.status] ||
               c.status,
           ],
@@ -2632,20 +2626,20 @@ async function scanPage(
               "operating"
               ? btn(
                   tr(
-                    "开始充电",
+                    "寮€濮嬪厖鐢?,
                   ),
                   "start-charge",
                   "",
                   `data-id="${c.id}"`,
                 )
               : tr(
-                  '<span class="note">当前设备暂不能开始充电</span>',
+                  '<span class="note">褰撳墠璁惧鏆備笉鑳藉紑濮嬪厖鐢?/span>',
                 )
           }
 
           ${btn(
             tr(
-              "查看电站",
+              "鏌ョ湅鐢电珯",
             ),
             "station",
             "secondary",
@@ -2658,17 +2652,17 @@ async function scanPage(
       <div class="card">
 
         <h3>
-          扫码充电说明
+          鎵爜鍏呯數璇存槑
         </h3>
 
         <div class="note">
-          二维码绑定唯一充电桩编号。
-          系统会先检查电站运营状态和设备状态，
-          只有空闲设备才能创建充电订单。
+          浜岀淮鐮佺粦瀹氬敮涓€鍏呯數妗╃紪鍙枫€?
+          绯荤粺浼氬厛妫€鏌ョ數绔欒繍钀ョ姸鎬佸拰璁惧鐘舵€侊紝
+          鍙湁绌洪棽璁惧鎵嶈兘鍒涘缓鍏呯數璁㈠崟銆?
         </div>
 
         <p class="sub">
-          停车说明：
+          鍋滆溅璇存槑锛?
           ${esc(
             c.parking_info,
           )}
@@ -2683,23 +2677,23 @@ async function scanPage(
 function ordersTable(os) {
   return table(
     [
-      tr("订单号"),
+      tr("璁㈠崟鍙?),
 
       ...(
         can("order.view_all")
           ? [
-              tr("用户"),
+              tr("鐢ㄦ埛"),
             ]
           : []
       ),
 
-      tr("电站 / 电桩"),
-      tr("状态"),
-      tr("支付状态"),
-      tr("电量"),
-      tr("金额"),
-      tr("创建时间"),
-      tr("操作"),
+      tr("鐢电珯 / 鐢垫々"),
+      tr("鐘舵€?),
+      tr("鏀粯鐘舵€?),
+      tr("鐢甸噺"),
+      tr("閲戦"),
+      tr("鍒涘缓鏃堕棿"),
+      tr("鎿嶄綔"),
     ],
 
     os.map(
@@ -2758,7 +2752,7 @@ function ordersTable(os) {
           </td>
 
           <td>
-            ¥
+            楼
             ${yuan(
               o.amount_cents,
             )}
@@ -2773,7 +2767,7 @@ function ordersTable(os) {
                         color:#c67588
                       "
                     >
-                      欠费 ¥
+                      娆犺垂 楼
                       ${yuan(
                         o.debt_cents,
                       )}
@@ -2794,7 +2788,7 @@ function ordersTable(os) {
 
           <td>
             ${btn(
-              tr("详情"),
+              tr("璇︽儏"),
               "receipt",
               "secondary small",
               `data-id="${o.id}"`,
@@ -2817,17 +2811,17 @@ async function ordersPage() {
 
       <input
         id="order-search"
-        placeholder="搜索订单号、电站或用户"
-        aria-label="搜索订单"
+        placeholder="鎼滅储璁㈠崟鍙枫€佺數绔欐垨鐢ㄦ埛"
+        aria-label="鎼滅储璁㈠崟"
       >
 
       <select
         id="order-status"
-        aria-label="筛选状态"
+        aria-label="绛涢€夌姸鎬?
       >
         <option value="">
           ${tr(
-            "全部状态",
+            "鍏ㄩ儴鐘舵€?,
           )}
         </option>
 
@@ -2852,45 +2846,45 @@ async function ordersPage() {
         type="date"
         id="order-from"
         title="${tr(
-          "开始日期",
+          "寮€濮嬫棩鏈?,
         )}"
       >
 
       <span class="muted">
-        ${tr("至")}
+        ${tr("鑷?)}
       </span>
 
       <input
         type="date"
         id="order-to"
         title="${tr(
-          "结束日期",
+          "缁撴潫鏃ユ湡",
         )}"
       >
 
       ${btn(
-        tr("今天"),
+        tr("浠婂ぉ"),
         "order-range",
         "secondary small",
         'data-days="1"',
       )}
 
       ${btn(
-        tr("近 7 天"),
+        tr("杩?7 澶?),
         "order-range",
         "secondary small",
         'data-days="7"',
       )}
 
       ${btn(
-        tr("近 30 天"),
+        tr("杩?30 澶?),
         "order-range",
         "secondary small",
         'data-days="30"',
       )}
 
       ${btn(
-        tr("全部"),
+        tr("鍏ㄩ儴"),
         "order-range",
         "secondary small",
         'data-days="0"',
@@ -2904,7 +2898,7 @@ async function ordersPage() {
                 id="order-export"
                 href="/api/admin/export?lang=${NCSPreferences.state.language}"
               >
-                导出 CSV
+                瀵煎嚭 CSV
               </a>
             `
           : ""
@@ -2923,7 +2917,7 @@ async function ordersPage() {
       "
     >
       ${tr(
-        "按订单创建日期筛选",
+        "鎸夎鍗曞垱寤烘棩鏈熺瓫閫?,
       )}
     </p>
 
@@ -3008,148 +3002,21 @@ async function loadOrders() {
     info.textContent =
       S.orderFrom ||
       S.orderTo
-        ? `${tr("日期")}：${
+        ? `${tr("鏃ユ湡")}锛?{
             S.orderFrom ||
-            "…"
-          } ${tr("至")} ${
+            "鈥?
+          } ${tr("鑷?)} ${
             S.orderTo ||
-            "…"
-          } · ${
+            "鈥?
+          } 路 ${
             orders.length
-          } ${tr("条")}`
+          } ${tr("鏉?)}`
         : `${tr(
-            "全部日期",
-          )} · ${
+            "鍏ㄩ儴鏃ユ湡",
+          )} 路 ${
             orders.length
-          } ${tr("条")}`;
+          } ${tr("鏉?)}`;
   }
-}
-
-async function finishOrderModal(orderId) {
-  const [order, coupons] = await Promise.all([
-    api(`/orders/${orderId}/receipt`),
-    api("/member/coupons"),
-  ]);
-
-  const owned = (coupons.owned || []).filter(
-    (coupon) =>
-      coupon.status === undefined ||
-      coupon.status === "available",
-  );
-
-  const eligible = owned.filter(
-    (coupon) =>
-      Number(order.amount_cents || 0) >=
-      Number(coupon.min_spend_cents || 0),
-  );
-
-  modal(
-    tr("\u7ed3\u675f\u5145\u7535\u5e76\u7ed3\u7b97"),
-    trHtml`
-      <div style="margin-bottom:18px">
-        <div class="section-head">
-          <div>
-            <strong style="font-size:16px">
-              ${tr("\u672c\u6b21\u5145\u7535")}
-            </strong>
-            <div class="muted" style="margin-top:4px">
-              ${tr("\u5f53\u524d\u8d39\u7528")} \u00A5 ${yuan(order.amount_cents)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div
-        style="
-          border:1px solid var(--line);
-          border-radius:16px;
-          padding:14px;
-          margin-bottom:16px;
-        "
-      >
-        <label
-          for="finish-coupon"
-          style="
-            display:block;
-            font-weight:700;
-            margin-bottom:8px;
-          "
-        >
-          ${tr("\u4f18\u60e0\u5238")}
-        </label>
-
-        <select
-          id="finish-coupon"
-          style="
-            width:100%;
-            padding:12px 14px;
-            border:1px solid var(--line);
-            border-radius:12px;
-            background:var(--surface);
-            color:var(--ink);
-          "
-        >
-          <option value="">
-            ${tr("\u4e0d\u4f7f\u7528\u4f18\u60e0\u5238")}
-          </option>
-
-          ${eligible
-            .map(
-              (coupon) => `
-                <option value="${coupon.id}">
-                  ${esc(tr(coupon.name))}
-                  ?
-                  ${esc(tr(coupon.description))}
-                </option>
-              `,
-            )
-            .join("")}
-        </select>
-
-        <div
-          class="muted"
-          style="margin-top:8px;font-size:12px"
-        >
-          ${
-            eligible.length
-              ? tr("\u9009\u62e9\u4e00\u5f20\u4f18\u60e0\u5238\u540e\uff0c\u5c06\u5728\u7ed3\u7b97\u65f6\u81ea\u52a8\u62b5\u6263\u3002")
-              : tr("\u5f53\u524d\u6ca1\u6709\u7b26\u5408\u672c\u6b21\u8ba2\u5355\u6761\u4ef6\u7684\u53ef\u7528\u4f18\u60e0\u5238\u3002")
-          }
-        </div>
-      </div>
-
-      <div
-        style="
-          display:flex;
-          justify-content:space-between;
-          align-items:center;
-          padding:14px 0;
-          border-top:1px solid var(--line);
-        "
-      >
-        <span class="muted">
-          ${tr("\u4f1a\u5458\u6743\u76ca")}
-        </span>
-        <strong>
-          ${tr("\u4f1a\u5458\u6298\u6263\u5c06\u81ea\u52a8\u8ba1\u7b97")}
-        </strong>
-      </div>
-
-      <div class="actions" style="margin-top:18px">
-        ${btn(
-          tr("\u53d6\u6d88"),
-          "close",
-        )}
-
-        ${btn(
-          tr("\u786e\u8ba4\u7ed3\u7b97"),
-          "finish-submit",
-          "",
-          `data-id="${orderId}"`,
-        )}
-      </div>
-    `,
-  );
 }
 
 async function chargingPage() {
@@ -3167,7 +3034,7 @@ async function chargingPage() {
 
         ${empty(
           tr(
-            "当前没有未完成订单<br>选一个附近电站，为爱车补充能量。",
+            "褰撳墠娌℃湁鏈畬鎴愯鍗?br>閫変竴涓檮杩戠數绔欙紝涓虹埍杞﹁ˉ鍏呰兘閲忋€?,
           ),
         )}
 
@@ -3179,7 +3046,7 @@ async function chargingPage() {
           ${pageBtn(
             "stations",
             tr(
-              "寻找充电站 ",
+              "瀵绘壘鍏呯數绔?",
             ) +
               ic(
                 "arrow",
@@ -3202,7 +3069,7 @@ async function chargingPage() {
         <div class="section-head">
 
           <h2>
-            订单 #${o.id}
+            璁㈠崟 #${o.id}
           </h2>
 
           ${badge(
@@ -3224,15 +3091,15 @@ async function chargingPage() {
           </div>
 
           <p class="muted">
-            kWh ·
+            kWh 路
             ${
               o.status ===
               "charging"
                 ? tr(
-                    "正在为你的下一程蓄能",
+                    "姝ｅ湪涓轰綘鐨勪笅涓€绋嬭搫鑳?,
                   )
                 : tr(
-                    "充电桩已为你保留",
+                    "鍏呯數妗╁凡涓轰綘淇濈暀",
                   )
             }
           </p>
@@ -3242,13 +3109,13 @@ async function chargingPage() {
 
           <div>
             <small>
-              当前费用
+              褰撳墠璐圭敤
             </small>
 
             <b
               id="live-amount"
             >
-              ¥
+              楼
               ${yuan(
                 o.amount_cents,
               )}
@@ -3257,7 +3124,7 @@ async function chargingPage() {
 
           <div>
             <small>
-              模拟充电时长
+              妯℃嫙鍏呯數鏃堕暱
             </small>
 
             <b
@@ -3267,7 +3134,7 @@ async function chargingPage() {
                 o.simulated_seconds /
                   60,
               )}
-              分钟
+              鍒嗛挓
             </b>
           </div>
         </div>
@@ -3279,7 +3146,7 @@ async function chargingPage() {
             "reserved"
               ? btn(
                   tr(
-                    "开始充电",
+                    "寮€濮嬪厖鐢?,
                   ),
                   "order-start",
                   "",
@@ -3287,7 +3154,7 @@ async function chargingPage() {
                 ) +
                 btn(
                   tr(
-                    "取消预约",
+                    "鍙栨秷棰勭害",
                   ),
                   "order-cancel",
                   "danger",
@@ -3295,7 +3162,7 @@ async function chargingPage() {
                 )
               : btn(
                   tr(
-                    "结束充电并结算",
+                    "缁撴潫鍏呯數骞剁粨绠?,
                   ),
                   "order-finish",
                   "",
@@ -3309,27 +3176,27 @@ async function chargingPage() {
             o.status ===
             "reserved"
               ? tr(
-                  "预约到期时间：",
+                  "棰勭害鍒版湡鏃堕棿锛?,
                 ) +
                 time(
                   o.expires_at,
                 )
               : trHtml`
-                  模拟速度
-                  ${o.time_scale}×
-                  ·
-                  本次价格快照：
-                  电费 ¥
+                  妯℃嫙閫熷害
+                  ${o.time_scale}脳
+                  路
+                  鏈浠锋牸蹇収锛?
+                  鐢佃垂 楼
                   ${yuan(
                     o.electricity_fee_cents,
                   )}
                   +
-                  服务费 ¥
+                  鏈嶅姟璐?楼
                   ${yuan(
                     o.service_fee_cents,
                   )}
                   /
-                  度。
+                  搴︺€?
                 `
           }
         </div>
@@ -3341,68 +3208,68 @@ async function chargingPage() {
         <div class="card">
 
           <h3>
-            充电信息
+            鍏呯數淇℃伅
           </h3>
 
           ${[
             [
               tr(
-                "电站",
+                "鐢电珯",
               ),
               o.station_name,
             ],
             [
               tr(
-                "电桩",
+                "鐢垫々",
               ),
               o.charger_number,
             ],
             [
               tr(
-                "功率",
+                "鍔熺巼",
               ),
               o.power +
                 " kW",
             ],
             [
               tr(
-                "电费",
+                "鐢佃垂",
               ),
-              "¥ " +
+              "楼 " +
                 yuan(
                   o.electricity_fee_cents,
                 ) +
                 tr(
-                  " / 度",
+                  " / 搴?,
                 ),
             ],
             [
               tr(
-                "服务费",
+                "鏈嶅姟璐?,
               ),
-              "¥ " +
+              "楼 " +
                 yuan(
                   o.service_fee_cents,
                 ) +
                 tr(
-                  " / 度",
+                  " / 搴?,
                 ),
             ],
             [
               tr(
-                "合计单价",
+                "鍚堣鍗曚环",
               ),
-              "¥ " +
+              "楼 " +
                 yuan(
                   o.price_cents,
                 ) +
                 tr(
-                  " / 度",
+                  " / 搴?,
                 ),
             ],
             [
               tr(
-                "开始时间",
+                "寮€濮嬫椂闂?,
               ),
               time(
                 o.started_at,
@@ -3420,11 +3287,11 @@ async function chargingPage() {
         <div class="card wallet">
 
           <h3>
-            钱包余额
+            閽卞寘浣欓
           </h3>
 
           <div class="balance">
-            ¥
+            楼
             ${yuan(
               S.user
                 .balance_cents,
@@ -3433,7 +3300,7 @@ async function chargingPage() {
 
           ${btn(
             tr(
-              "模拟充值",
+              "妯℃嫙鍏呭€?,
             ),
             "recharge",
             "white small",
@@ -3454,7 +3321,7 @@ async function receipt(id) {
 
   modal(
     tr(
-      "订单详情 · #",
+      "璁㈠崟璇︽儏 路 #",
     ) + id,
 
     trHtml`
@@ -3468,12 +3335,12 @@ async function receipt(id) {
         <span>
           ${
             o.payment_status ===
-            "已支付"
-              ? tr("余额自动扣款成功")
+            "宸叉敮浠?
+              ? tr("浣欓鑷姩鎵ｆ鎴愬姛")
               : o.payment_status ===
-                  "待补缴"
-                ? tr("余额不足，待充值补缴")
-                : tr("结算状态已记录")
+                  "寰呰ˉ缂?
+                ? tr("浣欓涓嶈冻锛屽緟鍏呭€艰ˉ缂?)
+                : tr("缁撶畻鐘舵€佸凡璁板綍")
           }
         </span>
       </div>
@@ -3482,7 +3349,7 @@ async function receipt(id) {
 
         <div>
           <small>
-            充电电量
+            鍏呯數鐢甸噺
           </small>
 
           <b>
@@ -3495,11 +3362,11 @@ async function receipt(id) {
 
         <div>
           <small>
-            订单金额
+            璁㈠崟閲戦
           </small>
 
           <b>
-            ¥
+            楼
             ${yuan(
               o.amount_cents,
             )}
@@ -3511,55 +3378,55 @@ async function receipt(id) {
       ${[
         [
           tr(
-            "电站",
+            "鐢电珯",
           ),
           o.station_name,
         ],
         [
           tr(
-            "电桩",
+            "鐢垫々",
           ),
           o.charger_number,
         ],
         [
           tr(
-            "电费",
+            "鐢佃垂",
           ),
-          "¥ " +
+          "楼 " +
             yuan(
               o.electricity_fee_cents,
             ) +
             tr(
-              " / 度",
+              " / 搴?,
             ),
         ],
         [
           tr(
-            "服务费",
+            "鏈嶅姟璐?,
           ),
-          "¥ " +
+          "楼 " +
             yuan(
               o.service_fee_cents,
             ) +
             tr(
-              " / 度",
+              " / 搴?,
             ),
         ],
         [
           tr(
-            "计费单价",
+            "璁¤垂鍗曚环",
           ),
-          "¥ " +
+          "楼 " +
             yuan(
               o.price_cents,
             ) +
             tr(
-              " / 度",
+              " / 搴?,
             ),
         ],
         [
           tr(
-            "开始时间",
+            "寮€濮嬫椂闂?,
           ),
           time(
             o.started_at,
@@ -3567,7 +3434,7 @@ async function receipt(id) {
         ],
         [
           tr(
-            "结束时间",
+            "缁撴潫鏃堕棿",
           ),
           time(
             o.ended_at,
@@ -3575,18 +3442,18 @@ async function receipt(id) {
         ],
         [
           tr(
-            "已支付",
+            "宸叉敮浠?,
           ),
-          "¥ " +
+          "楼 " +
             yuan(
               o.paid_cents,
             ),
         ],
         [
           tr(
-            "欠费",
+            "娆犺垂",
           ),
-          "¥ " +
+          "楼 " +
             yuan(
               o.debt_cents,
             ),
@@ -3605,7 +3472,7 @@ async function receipt(id) {
 
         ${btn(
           tr(
-            "打印小票",
+            "鎵撳嵃灏忕エ",
           ),
           "print",
         )}
@@ -3616,7 +3483,7 @@ async function receipt(id) {
           o.debt_cents
             ? btn(
                 tr(
-                  "补缴欠费",
+                  "琛ョ即娆犺垂",
                 ),
                 "order-pay",
                 "",
@@ -3637,7 +3504,7 @@ async function receipt(id) {
             ? pageBtn(
                 "charging",
                 tr(
-                  "去处理",
+                  "鍘诲鐞?,
                 ),
                 "",
               )
@@ -3669,20 +3536,20 @@ async function walletPage() {
         <div class="section-head">
 
           <h2>
-            资金明细
+            璧勯噾鏄庣粏
           </h2>
 
           <small>
-            最近 100 笔
+            鏈€杩?100 绗?
           </small>
 
         </div>
 
         ${table(
           [
-            tr("类型"),
-            tr("金额"),
-            tr("时间"),
+            tr("绫诲瀷"),
+            tr("閲戦"),
+            tr("鏃堕棿"),
           ],
 
           ls.map(
@@ -3709,7 +3576,7 @@ async function walletPage() {
                     ${yuan(
                       l.amount_cents,
                     )}
-                    元
+                    鍏?
                   </td>
 
                   <td>
@@ -3730,11 +3597,11 @@ async function walletPage() {
         <section class="card wallet">
 
           <h3>
-            可用余额
+            鍙敤浣欓
           </h3>
 
           <div class="balance">
-            ¥
+            楼
             ${yuan(
               S.user
                 .balance_cents,
@@ -3743,7 +3610,7 @@ async function walletPage() {
 
           ${btn(
             tr(
-              "＋ 充值",
+              "锛?鍏呭€?,
             ),
             "recharge",
             "white small",
@@ -3754,14 +3621,14 @@ async function walletPage() {
         <div class="card">
 
           <h3>
-            待补缴金额
+            寰呰ˉ缂撮噾棰?
           </h3>
 
           <div
             class="chart-summary"
             style="margin-top:20px"
           >
-            ¥
+            楼
             ${yuan(
               d.totals
                 .debt_cents,
@@ -3771,7 +3638,7 @@ async function walletPage() {
           ${pageBtn(
             "orders",
             tr(
-              "查看欠费订单",
+              "鏌ョ湅娆犺垂璁㈠崟",
             ),
           )}
 
@@ -3793,7 +3660,7 @@ function profilePage() {
         <h2
           style="margin-bottom:25px"
         >
-          个人资料
+          涓汉璧勬枡
         </h2>
 
         <form id="profile-form">
@@ -3842,7 +3709,7 @@ function profilePage() {
 
           ${field(
             tr(
-              "昵称",
+              "鏄电О",
             ),
             "nickname",
             S.user.nickname,
@@ -3852,7 +3719,7 @@ function profilePage() {
 
           ${field(
             tr(
-              "登录账号",
+              "鐧诲綍璐﹀彿",
             ),
             "phone",
             S.user.phone,
@@ -3864,7 +3731,7 @@ function profilePage() {
             class="btn"
             type="submit"
           >
-            保存资料
+            淇濆瓨璧勬枡
           </button>
 
         </form>
@@ -3875,14 +3742,14 @@ function profilePage() {
         <h2
           style="margin-bottom:25px"
         >
-          修改密码
+          淇敼瀵嗙爜
         </h2>
 
         <form id="password-form">
 
           ${field(
             tr(
-              "原密码",
+              "鍘熷瘑鐮?,
             ),
             "old_password",
             "",
@@ -3892,7 +3759,7 @@ function profilePage() {
 
           ${field(
             tr(
-              "新密码",
+              "鏂板瘑鐮?,
             ),
             "new_password",
             "",
@@ -3904,7 +3771,7 @@ function profilePage() {
             class="btn secondary"
             type="submit"
           >
-            更新密码
+            鏇存柊瀵嗙爜
           </button>
 
         </form>
@@ -3920,18 +3787,18 @@ function chargersTable(cs) {
 
   return table(
     [
-      tr("编号"),
-      tr("所属电站"),
-      tr("类型 / 功率"),
-      tr("状态"),
-      tr("充电次数"),
-      tr("操作"),
+      tr("缂栧彿"),
+      tr("鎵€灞炵數绔?),
+      tr("绫诲瀷 / 鍔熺巼"),
+      tr("鐘舵€?),
+      tr("鍏呯數娆℃暟"),
+      tr("鎿嶄綔"),
     ],
 
     cs.map(
       (c) => {
         let actions =
-          `<small>${tr("仅查看")}</small>`;
+          `<small>${tr("浠呮煡鐪?)}</small>`;
 
         if (
           canEdit &&
@@ -3942,21 +3809,21 @@ function chargersTable(cs) {
         ) {
           actions =
             btn(
-              tr("二维码"),
+              tr("浜岀淮鐮?),
               "qr",
               "secondary small",
               `data-id="${c.id}"`,
             ) +
             btn(
-              tr("编辑"),
+              tr("缂栬緫"),
               "edit-charger",
               "secondary small",
               `data-id="${c.id}"`,
             ) +
             btn(
               c.status === "idle"
-                ? tr("故障")
-                : tr("恢复"),
+                ? tr("鏁呴殰")
+                : tr("鎭㈠"),
               "charger-action",
               "secondary small",
               `data-id="${c.id}" data-op="${
@@ -3966,25 +3833,25 @@ function chargersTable(cs) {
               }"`,
             ) +
             btn(
-              tr("离线"),
+              tr("绂荤嚎"),
               "charger-action",
               "secondary small",
               `data-id="${c.id}" data-op="offline"`,
             ) +
             btn(
-              tr("维修"),
+              tr("缁翠慨"),
               "charger-action",
               "secondary small",
               `data-id="${c.id}" data-op="maintenance"`,
             ) +
             btn(
-              tr("重启"),
+              tr("閲嶅惎"),
               "charger-action",
               "secondary small",
               `data-id="${c.id}" data-op="restart"`,
             ) +
             btn(
-              tr("删除"),
+              tr("鍒犻櫎"),
               "charger-action",
               "danger small",
               `data-id="${c.id}" data-op="delete"`,
@@ -3996,14 +3863,14 @@ function chargersTable(cs) {
           ].includes(c.status)
         ) {
           actions =
-            `<small>${tr("订单处理中")}</small>`;
+            `<small>${tr("璁㈠崟澶勭悊涓?)}</small>`;
         }
 
         return `<tr>
           <td><b>${esc(c.number)}</b></td>
           <td>${esc(c.station_name)}</td>
           <td>
-            ${c.kind === "fast" ? tr("快充") : tr("慢充")}
+            ${c.kind === "fast" ? tr("蹇厖") : tr("鎱㈠厖")}
             / ${c.power} kW
           </td>
           <td>${badge(c.status)}</td>
@@ -4035,8 +3902,8 @@ async function chargersPage() {
 
       <input
         id="charger-search"
-        placeholder="搜索电桩编号或站名"
-        aria-label="搜索电桩"
+        placeholder="鎼滅储鐢垫々缂栧彿鎴栫珯鍚?
+        aria-label="鎼滅储鐢垫々"
       >
 
       <select
@@ -4044,7 +3911,7 @@ async function chargersPage() {
       >
         <option value="">
           ${tr(
-            "全部电站",
+            "鍏ㄩ儴鐢电珯",
           )}
         </option>
 
@@ -4064,28 +3931,28 @@ async function chargersPage() {
       >
         <option value="">
           ${tr(
-            "全部类型",
+            "鍏ㄩ儴绫诲瀷",
           )}
         </option>
 
         ${opt(
           "fast",
-          tr("快充"),
+          tr("蹇厖"),
         )}
 
         ${opt(
           "slow",
-          tr("慢充"),
+          tr("鎱㈠厖"),
         )}
       </select>
 
       <select
         id="charger-status"
-        aria-label="状态筛选"
+        aria-label="鐘舵€佺瓫閫?
       >
         <option value="">
           ${tr(
-            "全部状态",
+            "鍏ㄩ儴鐘舵€?,
           )}
         </option>
 
@@ -4112,19 +3979,19 @@ async function chargersPage() {
       >
         <option value="number_asc">
           ${tr(
-            "按编号排序",
+            "鎸夌紪鍙锋帓搴?,
           )}
         </option>
 
         <option value="count_desc">
           ${tr(
-            "充电次数高到低",
+            "鍏呯數娆℃暟楂樺埌浣?,
           )}
         </option>
 
         <option value="count_asc">
           ${tr(
-            "充电次数低到高",
+            "鍏呯數娆℃暟浣庡埌楂?,
           )}
         </option>
       </select>
@@ -4133,7 +4000,7 @@ async function chargersPage() {
         can("charger.manage")
           ? btn(
               tr(
-                "＋ 添加电桩",
+                "锛?娣诲姞鐢垫々",
               ),
               "edit-charger",
               "",
@@ -4169,7 +4036,7 @@ async function pricingPage() {
       <div class="card">
         ${empty(
           tr(
-            "请先添加电站",
+            "璇峰厛娣诲姞鐢电珯",
           ),
         )}
       </div>
@@ -4205,7 +4072,7 @@ async function pricingPage() {
 
       ${btn(
         tr(
-          "＋ 添加价格时段",
+          "锛?娣诲姞浠锋牸鏃舵",
         ),
         "edit-pricing",
         "",
@@ -4218,24 +4085,24 @@ async function pricingPage() {
       <div class="section-head">
 
         <h2>
-          ${tr("分时计价")}
+          ${tr("鍒嗘椂璁′环")}
         </h2>
 
         <small>
-          ${tr("电费 + 服务费 = 用户实际单价")}
+          ${tr("鐢佃垂 + 鏈嶅姟璐?= 鐢ㄦ埛瀹為檯鍗曚环")}
         </small>
 
       </div>
 
       ${table(
         [
-          tr("时段"),
-          tr("电费 / 度"),
+          tr("鏃舵"),
+          tr("鐢佃垂 / 搴?),
           tr(
-            "服务费 / 度",
+            "鏈嶅姟璐?/ 搴?,
           ),
-          tr("合计 / 度"),
-          tr("操作"),
+          tr("鍚堣 / 搴?),
+          tr("鎿嶄綔"),
         ],
 
         S.pricing.map(
@@ -4249,14 +4116,14 @@ async function pricingPage() {
               </td>
 
               <td>
-                ¥
+                楼
                 ${yuan(
                   p.electricity_fee_cents,
                 )}
               </td>
 
               <td>
-                ¥
+                楼
                 ${yuan(
                   p.service_fee_cents,
                 )}
@@ -4264,7 +4131,7 @@ async function pricingPage() {
 
               <td>
                 <b>
-                  ¥
+                  楼
                   ${yuan(
                     p.price_cents,
                   )}
@@ -4274,7 +4141,7 @@ async function pricingPage() {
               <td>
                 ${btn(
                   tr(
-                    "编辑",
+                    "缂栬緫",
                   ),
                   "edit-pricing",
                   "secondary small",
@@ -4283,7 +4150,7 @@ async function pricingPage() {
 
                 ${btn(
                   tr(
-                    "删除",
+                    "鍒犻櫎",
                   ),
                   "delete-pricing",
                   "danger small",
@@ -4296,7 +4163,7 @@ async function pricingPage() {
       )}
 
       <div class="note">
-        ${tr("时段不能重叠。若需要跨午夜，请拆成 18:00-24:00 和 00:00-08:00 两条规则。")}
+        ${tr("鏃舵涓嶈兘閲嶅彔銆傝嫢闇€瑕佽法鍗堝锛岃鎷嗘垚 18:00-24:00 鍜?00:00-08:00 涓ゆ潯瑙勫垯銆?)}
       </div>
 
     </div>
@@ -4306,14 +4173,14 @@ async function pricingPage() {
 function faultsTable(fs) {
   return table(
     [
-      tr("编号"),
-      tr("电站 / 电桩"),
-      tr("故障类型"),
-      tr("故障描述"),
-      tr("状态"),
-      tr("故障时间"),
-      tr("处理结果"),
-      tr("操作"),
+      tr("缂栧彿"),
+      tr("鐢电珯 / 鐢垫々"),
+      tr("鏁呴殰绫诲瀷"),
+      tr("鏁呴殰鎻忚堪"),
+      tr("鐘舵€?),
+      tr("鏁呴殰鏃堕棿"),
+      tr("澶勭悊缁撴灉"),
+      tr("鎿嶄綔"),
     ],
 
     fs.map(
@@ -4365,7 +4232,7 @@ function faultsTable(fs) {
           <td>
             ${esc(
               f.resolution ||
-                "—",
+                "鈥?,
             )}
           </td>
 
@@ -4375,14 +4242,14 @@ function faultsTable(fs) {
               "resolved"
                 ? btn(
                     tr(
-                      "处理",
+                      "澶勭悊",
                     ),
                     "process-fault",
                     "secondary small",
                     `data-id="${f.id}"`,
                   )
                 : tr(
-                    "<small>已完成</small>",
+                    "<small>宸插畬鎴?/small>",
                   )
             }
           </td>
@@ -4412,7 +4279,7 @@ async function faultsPage() {
 
       ${btn(
         tr(
-          "＋ 登记故障",
+          "锛?鐧昏鏁呴殰",
         ),
         "new-fault",
         "",
@@ -4425,7 +4292,7 @@ async function faultsPage() {
       <div class="section-head">
 
         <h2>
-          设备故障记录
+          璁惧鏁呴殰璁板綍
         </h2>
 
         <small>
@@ -4437,7 +4304,7 @@ async function faultsPage() {
             ).length
           }
 
-          条待处理/处理中
+          鏉″緟澶勭悊/澶勭悊涓?
         </small>
 
       </div>
@@ -4469,11 +4336,11 @@ function userState(u) {
 function userBadge(u) {
   const labels = {
     normal:
-      tr("正常"),
+      tr("姝ｅ父"),
     debt:
-      tr("欠费"),
+      tr("娆犺垂"),
     frozen:
-      tr("冻结"),
+      tr("鍐荤粨"),
   };
 
   const state =
@@ -4491,14 +4358,14 @@ function userBadge(u) {
 function usersTable(users) {
   return table(
     [
-      tr("用户"),
-      tr("手机号"),
-      tr("角色"),
-      tr("余额"),
-      tr("欠费"),
-      tr("状态"),
-      tr("注册时间"),
-      tr("操作"),
+      tr("鐢ㄦ埛"),
+      tr("鎵嬫満鍙?),
+      tr("瑙掕壊"),
+      tr("浣欓"),
+      tr("娆犺垂"),
+      tr("鐘舵€?),
+      tr("娉ㄥ唽鏃堕棿"),
+      tr("鎿嶄綔"),
     ],
 
     users.map(
@@ -4510,10 +4377,10 @@ function usersTable(users) {
             ${
               can("role.manage")
                 ? `<select class="role-select" data-user-id="${u.id}">
-                     ${opt("user", tr("普通用户"), u.role)}
-                     ${opt("operator", tr("运营人员"), u.role)}
-                     ${opt("technician", tr("运维人员"), u.role)}
-                     ${opt("admin", tr("系统管理员"), u.role)}
+                     ${opt("user", tr("鏅€氱敤鎴?), u.role)}
+                     ${opt("operator", tr("杩愯惀浜哄憳"), u.role)}
+                     ${opt("technician", tr("杩愮淮浜哄憳"), u.role)}
+                     ${opt("admin", tr("绯荤粺绠＄悊鍛?), u.role)}
                    </select>`
                 : `<span class="role-chip compact">
                      ${esc(
@@ -4526,12 +4393,12 @@ function usersTable(users) {
                    </span>`
             }
           </td>
-          <td>¥ ${yuan(u.balance_cents)}</td>
+          <td>楼 ${yuan(u.balance_cents)}</td>
           <td>
             ${
               Number(u.debt_cents) > 0
-                ? "¥ " + yuan(u.debt_cents)
-                : "—"
+                ? "楼 " + yuan(u.debt_cents)
+                : "鈥?
             }
           </td>
           <td>${userBadge(u)}</td>
@@ -4540,14 +4407,14 @@ function usersTable(users) {
             ${
               can("user.manage")
                 ? btn(
-                    u.active ? tr("冻结") : tr("启用"),
+                    u.active ? tr("鍐荤粨") : tr("鍚敤"),
                     "user-toggle",
                     u.active
                       ? "danger small"
                       : "secondary small",
                     `data-id="${u.id}" data-active="${!u.active}"`,
                   )
-                : `<small>${tr("仅查看")}</small>`
+                : `<small>${tr("浠呮煡鐪?)}</small>`
             }
           </td>
         </tr>`,
@@ -4569,10 +4436,10 @@ async function usersPage() {
     <div class="stack">
       <section class="card role-banner">
         <div>
-          <div class="eyebrow">RBAC · ACCESS CONTROL</div>
-          <h2>${tr("四种角色统一管理")}</h2>
+          <div class="eyebrow">RBAC 路 ACCESS CONTROL</div>
+          <h2>${tr("鍥涚瑙掕壊缁熶竴绠＄悊")}</h2>
           <p class="sub">
-            ${tr("权限在服务端强制校验，页面只展示当前角色可用的功能。")}
+            ${tr("鏉冮檺鍦ㄦ湇鍔＄寮哄埗鏍￠獙锛岄〉闈㈠彧灞曠ず褰撳墠瑙掕壊鍙敤鐨勫姛鑳姐€?)}
           </p>
         </div>
 
@@ -4580,7 +4447,7 @@ async function usersPage() {
           can("role.manage")
             ? pageBtn(
                 "roles",
-                tr("查看权限矩阵"),
+                tr("鏌ョ湅鏉冮檺鐭╅樀"),
                 "secondary",
               )
             : ""
@@ -4589,43 +4456,43 @@ async function usersPage() {
 
       <div class="toolbar">
         <select id="user-status">
-          <option value="">${tr("全部状态")}</option>
-          ${opt("normal", tr("正常"))}
-          ${opt("debt", tr("欠费"))}
-          ${opt("frozen", tr("冻结"))}
+          <option value="">${tr("鍏ㄩ儴鐘舵€?)}</option>
+          ${opt("normal", tr("姝ｅ父"))}
+          ${opt("debt", tr("娆犺垂"))}
+          ${opt("frozen", tr("鍐荤粨"))}
         </select>
 
         <input
           type="date"
           id="user-from"
-          title="${tr("开始日期")}"
+          title="${tr("寮€濮嬫棩鏈?)}"
         >
 
-        <span class="muted">${tr("至")}</span>
+        <span class="muted">${tr("鑷?)}</span>
 
         <input
           type="date"
           id="user-to"
-          title="${tr("结束日期")}"
+          title="${tr("缁撴潫鏃ユ湡")}"
         >
 
         ${btn(
-          tr("近 30 天"),
+          tr("杩?30 澶?),
           "user-range",
           "secondary small",
           'data-days="30"',
         )}
 
         ${btn(
-          tr("全部"),
+          tr("鍏ㄩ儴"),
           "user-range",
           "secondary small",
           'data-days="0"',
         )}
 
         <select id="user-sort">
-          <option value="newest">${tr("最新注册")}</option>
-          <option value="oldest">${tr("最早注册")}</option>
+          <option value="newest">${tr("鏈€鏂版敞鍐?)}</option>
+          <option value="oldest">${tr("鏈€鏃╂敞鍐?)}</option>
         </select>
       </div>
 
@@ -4634,14 +4501,14 @@ async function usersPage() {
         id="user-filter-info"
         style="margin:-8px 0 20px"
       >
-        ${tr("按用户状态和注册日期筛选")}
+        ${tr("鎸夌敤鎴风姸鎬佸拰娉ㄥ唽鏃ユ湡绛涢€?)}
       </p>
 
       <div class="card">
         <div class="section-head">
-          <h2>${tr("账号与角色")}</h2>
+          <h2>${tr("璐﹀彿涓庤鑹?)}</h2>
           <small id="users-count">
-            ${(S.users || []).length} ${tr("个账号")}
+            ${(S.users || []).length} ${tr("涓处鍙?)}
           </small>
         </div>
 
@@ -4721,7 +4588,7 @@ async function loadUsers() {
   if (count) {
     count.textContent =
       `${users.length} ${tr(
-        "个账号",
+        "涓处鍙?,
       )}`;
   }
 
@@ -4731,9 +4598,9 @@ async function loadUsers() {
   if (info) {
     info.textContent =
       `${tr(
-        "筛选结果",
-      )}：${users.length} ${tr(
-        "个账号",
+        "绛涢€夌粨鏋?,
+      )}锛?{users.length} ${tr(
+        "涓处鍙?,
       )}`;
   }
 }
@@ -4758,10 +4625,10 @@ async function rolesPage() {
     <div class="stack">
       <section class="card role-banner">
         <div>
-          <div class="eyebrow">RBAC · PERMISSIONS</div>
-          <h2>${tr("角色与权限")}</h2>
+          <div class="eyebrow">RBAC 路 PERMISSIONS</div>
+          <h2>${tr("瑙掕壊涓庢潈闄?)}</h2>
           <p class="sub">
-            ${tr("后端按权限强制校验；这里显示四种业务角色的权限矩阵。")}
+            ${tr("鍚庣鎸夋潈闄愬己鍒舵牎楠岋紱杩欓噷鏄剧ず鍥涚涓氬姟瑙掕壊鐨勬潈闄愮煩闃点€?)}
           </p>
         </div>
       </section>
@@ -4822,9 +4689,9 @@ async function revenuePage() {
         ${metric(
           "wallet",
           tr(
-            "累计实收",
+            "绱瀹炴敹",
           ),
-          "¥ " +
+          "楼 " +
             yuan(
               d.totals
                 .paid_cents,
@@ -4834,18 +4701,18 @@ async function revenuePage() {
         ${metric(
           "orders",
           tr(
-            "已结算订单",
+            "宸茬粨绠楄鍗?,
           ),
           d.totals.orders,
-          tr("笔"),
+          tr("绗?),
         )}
 
         ${metric(
           "wallet",
           tr(
-            "待补缴金额",
+            "寰呰ˉ缂撮噾棰?,
           ),
-          "¥ " +
+          "楼 " +
             yuan(
               d.totals
                 .debt_cents,
@@ -4859,14 +4726,14 @@ async function revenuePage() {
         <div class="section-head">
 
           <h2>
-            最近 7 天营收
+            鏈€杩?7 澶╄惀鏀?
           </h2>
 
           <a
             class="btn secondary"
             href="/api/admin/export?lang=${NCSPreferences.state.language}"
           >
-            导出全部订单 CSV
+            瀵煎嚭鍏ㄩ儴璁㈠崟 CSV
           </a>
 
         </div>
@@ -4878,13 +4745,13 @@ async function revenuePage() {
 
         ${table(
           [
-            tr("日期"),
-            tr("订单数"),
+            tr("鏃ユ湡"),
+            tr("璁㈠崟鏁?),
             tr(
-              "充电电量",
+              "鍏呯數鐢甸噺",
             ),
             tr(
-              "实收金额",
+              "瀹炴敹閲戦",
             ),
           ],
 
@@ -4908,7 +4775,7 @@ async function revenuePage() {
                 </td>
 
                 <td>
-                  ¥
+                  楼
                   ${yuan(
                     x.cents,
                   )}
@@ -4938,7 +4805,7 @@ async function predictionPage() {
       <div class="card">
         ${empty(
           tr(
-            "请先添加电站",
+            "璇峰厛娣诲姞鐢电珯",
           ),
         )}
       </div>
@@ -4979,9 +4846,9 @@ async function predictionPage() {
       </select>
 
       <small>
-        未来 12 小时 ·
+        鏈潵 12 灏忔椂 路
         ${p.sample_count}
-        条历史样本
+        鏉″巻鍙叉牱鏈?
       </small>
 
     </div>
@@ -4989,7 +4856,7 @@ async function predictionPage() {
     <div class="card">
 
       <h2>
-        电站负荷参考
+        鐢电珯璐熻嵎鍙傝€?
       </h2>
 
       <div class="note">
@@ -5042,16 +4909,16 @@ async function predictionPage() {
             ${table(
               [
                 tr(
-                  "目标时间",
+                  "鐩爣鏃堕棿",
                 ),
                 tr(
-                  "参考平均负荷",
+                  "鍙傝€冨钩鍧囪礋鑽?,
                 ),
                 tr(
-                  "预计空闲桩",
+                  "棰勮绌洪棽妗?,
                 ),
                 tr(
-                  "高峰标记",
+                  "楂樺嘲鏍囪",
                 ),
               ],
 
@@ -5076,17 +4943,17 @@ async function predictionPage() {
 
                       <td>
                         ${x.free}
-                        个
+                        涓?
                       </td>
 
                       <td>
                         ${
                           x.peak
                             ? tr(
-                                "高峰",
+                                "楂樺嘲",
                               )
                             : tr(
-                                "平稳",
+                                "骞崇ǔ",
                               )
                         }
                       </td>
@@ -5098,7 +4965,7 @@ async function predictionPage() {
           `
           : empty(
               tr(
-                "暂无足够历史数据",
+                "鏆傛棤瓒冲鍘嗗彶鏁版嵁",
               ),
             )
       }
@@ -5119,17 +4986,17 @@ async function logsPage() {
       <h2
         style="margin-bottom:22px"
       >
-        ${tr("最近操作")}
+        ${tr("鏈€杩戞搷浣?)}
       </h2>
 
       ${table(
         [
-          tr("编号"),
-          tr("操作内容"),
+          tr("缂栧彿"),
+          tr("鎿嶄綔鍐呭"),
           tr(
-            "操作人 ID",
+            "鎿嶄綔浜?ID",
           ),
-          tr("时间"),
+          tr("鏃堕棿"),
         ],
 
         ls.map(
@@ -5187,7 +5054,7 @@ async function memberPage() {
   const pointItems = pointData.items || [];
 
   const moneyText = (cents) =>
-    `¥${(Number(cents || 0) / 100).toFixed(2)}`;
+    `楼${(Number(cents || 0) / 100).toFixed(2)}`;
 
   const tier = summary.tier || {};
   const nextTier = summary.next_tier || null;
@@ -5246,7 +5113,7 @@ async function memberPage() {
       ) > 0
         ? `
           <span>
-            ${tr("最高可减")}
+            ${tr("鏈€楂樺彲鍑?)}
             ${moneyText(
               coupon.max_discount_cents,
             )}
@@ -5264,8 +5131,8 @@ async function memberPage() {
           <div class="member-v2-coupon-label">
             ${
               isPercent
-                ? tr("充电折扣券")
-                : tr("充电优惠券")
+                ? tr("鍏呯數鎶樻墸鍒?)
+                : tr("鍏呯數浼樻儬鍒?)
             }
           </div>
         </div>
@@ -5278,7 +5145,7 @@ async function memberPage() {
               ${esc(
                 tr(
                   coupon.name ||
-                    "充电优惠券",
+                    "鍏呯數浼樻儬鍒?,
                 ),
               )}
             </h3>
@@ -5295,7 +5162,7 @@ async function memberPage() {
 
           <div class="member-v2-coupon-meta">
             <span>
-              ${tr("满")}
+              ${tr("婊?)}
               ${moneyText(
                 coupon.min_spend_cents,
               )}
@@ -5310,12 +5177,12 @@ async function memberPage() {
                 ? `
                   <span>
                     ${coupon.points_cost}
-                    ${tr("积分")}
+                    ${tr("绉垎")}
                   </span>
                 `
                 : `
                   <span>
-                    ${tr("免费领取")}
+                    ${tr("鍏嶈垂棰嗗彇")}
                   </span>
                 `
             }
@@ -5332,14 +5199,14 @@ async function memberPage() {
           ${
             coupon.affordable
               ? btn(
-                  tr("立即领取"),
+                  tr("绔嬪嵆棰嗗彇"),
                   "member-claim-coupon",
                   "primary",
                   `data-id="${coupon.id}"`,
                 )
               : `
                 <span class="member-v2-disabled">
-                  ${tr("积分不足")}
+                  ${tr("绉垎涓嶈冻")}
                 </span>
               `
           }
@@ -5360,7 +5227,7 @@ async function memberPage() {
             ${esc(
               tr(
                 coupon.name ||
-                  "充电优惠券",
+                  "鍏呯數浼樻儬鍒?,
               ),
             )}
           </strong>
@@ -5378,12 +5245,12 @@ async function memberPage() {
           </strong>
 
           <small>
-            ${tr("可用于充电结算")}
+            ${tr("鍙敤浜庡厖鐢电粨绠?)}
           </small>
         </div>
 
         <span class="member-v2-status">
-          ${tr("可用")}
+          ${tr("鍙敤")}
         </span>
       </article>
     `;
@@ -5411,7 +5278,7 @@ async function memberPage() {
               tr(
                 item.note ||
                   item.kind ||
-                  "积分变动",
+                  "绉垎鍙樺姩",
               ),
             )}
           </strong>
@@ -6094,7 +5961,7 @@ async function memberPage() {
               ${esc(
                 tr(
                   tier.name ||
-                    "青铜会员",
+                    "闈掗摐浼氬憳",
                 ),
               )}
             </h1>
@@ -6103,7 +5970,7 @@ async function memberPage() {
               ${esc(
                 tr(
                   tier.description ||
-                    "享受专属充电权益和积分奖励",
+                    "浜彈涓撳睘鍏呯數鏉冪泭鍜岀Н鍒嗗鍔?,
                 ),
               )}
             </p>
@@ -6111,7 +5978,7 @@ async function memberPage() {
 
           <div class="member-v2-tier-pill">
             <span class="member-v2-tier-dot"></span>
-            ${tr("当前会员等级")}
+            ${tr("褰撳墠浼氬憳绛夌骇")}
           </div>
 
         </div>
@@ -6133,7 +6000,7 @@ async function memberPage() {
                           "",
                       ),
                     )}
-                    →
+                    鈫?
                     ${esc(
                       tr(
                         nextTier.name ||
@@ -6163,16 +6030,16 @@ async function memberPage() {
                 >
                   <span>
                     ${lifetimePoints}
-                    ${tr("积分")}
+                    ${tr("绉垎")}
                   </span>
 
                   <span>
-                    ${tr("升级需要")}
+                    ${tr("鍗囩骇闇€瑕?)}
                     ${Number(
                       nextTier.min_points ||
                         0,
                     )}
-                    ${tr("积分")}
+                    ${tr("绉垎")}
                   </span>
                 </div>
               `
@@ -6183,7 +6050,7 @@ async function memberPage() {
                   "
                 >
                   ${ic("leaf")}
-                  ${tr("您已达到最高会员等级")}
+                  ${tr("鎮ㄥ凡杈惧埌鏈€楂樹細鍛樼瓑绾?)}
                 </div>
               `
           }
@@ -6195,7 +6062,7 @@ async function memberPage() {
 
         <div class="member-v2-metric">
           <div class="member-v2-metric-top">
-            <span>${tr("可用积分")}</span>
+            <span>${tr("鍙敤绉垎")}</span>
             <div class="member-v2-metric-icon">
               ${ic("bolt")}
             </div>
@@ -6208,7 +6075,7 @@ async function memberPage() {
 
         <div class="member-v2-metric">
           <div class="member-v2-metric-top">
-            <span>${tr("会员折扣")}</span>
+            <span>${tr("浼氬憳鎶樻墸")}</span>
             <div class="member-v2-metric-icon">
               ${ic("leaf")}
             </div>
@@ -6221,20 +6088,20 @@ async function memberPage() {
 
         <div class="member-v2-metric">
           <div class="member-v2-metric-top">
-            <span>${tr("积分倍率")}</span>
+            <span>${tr("绉垎鍊嶇巼")}</span>
             <div class="member-v2-metric-icon">
               ${ic("chart")}
             </div>
           </div>
 
           <strong>
-            ${multiplier}×
+            ${multiplier}脳
           </strong>
         </div>
 
         <div class="member-v2-metric">
           <div class="member-v2-metric-top">
-            <span>${tr("我的优惠券")}</span>
+            <span>${tr("鎴戠殑浼樻儬鍒?)}</span>
             <div class="member-v2-metric-icon">
               ${ic("wallet")}
             </div>
@@ -6251,17 +6118,17 @@ async function memberPage() {
 
         <div class="member-v2-section-head">
           <div>
-            <h2>${tr("优惠券")}</h2>
+            <h2>${tr("浼樻儬鍒?)}</h2>
             <p>
               ${tr(
-                "领取优惠，让每一次充电都更划算",
+                "棰嗗彇浼樻儬锛岃姣忎竴娆″厖鐢甸兘鏇村垝绠?,
               )}
             </p>
           </div>
 
           <span class="member-v2-section-badge">
             ${availableCoupons.length}
-            ${tr("张可领取")}
+            ${tr("寮犲彲棰嗗彇")}
           </span>
         </div>
 
@@ -6277,7 +6144,7 @@ async function memberPage() {
               : `
                 <div class="member-v2-empty">
                   ${tr(
-                    "暂无可领取优惠券",
+                    "鏆傛棤鍙鍙栦紭鎯犲埜",
                   )}
                 </div>
               `
@@ -6291,12 +6158,12 @@ async function memberPage() {
         <div class="member-v2-section-head">
           <div>
             <h2>
-              ${tr("我的优惠券")}
+              ${tr("鎴戠殑浼樻儬鍒?)}
             </h2>
 
             <p>
               ${tr(
-                "已领取、可用于充电结算的优惠券",
+                "宸查鍙栥€佸彲鐢ㄤ簬鍏呯數缁撶畻鐨勪紭鎯犲埜",
               )}
             </p>
           </div>
@@ -6317,7 +6184,7 @@ async function memberPage() {
                   style="grid-column:1/-1"
                 >
                   ${tr(
-                    "暂无可用优惠券",
+                    "鏆傛棤鍙敤浼樻儬鍒?,
                   )}
                 </div>
               `
@@ -6331,12 +6198,12 @@ async function memberPage() {
         <div class="member-v2-section-head">
           <div>
             <h2>
-              ${tr("积分明细")}
+              ${tr("绉垎鏄庣粏")}
             </h2>
 
             <p>
               ${tr(
-                "查看积分获得与兑换记录",
+                "鏌ョ湅绉垎鑾峰緱涓庡厬鎹㈣褰?,
               )}
             </p>
           </div>
@@ -6354,7 +6221,7 @@ async function memberPage() {
                 : `
                   <div class="member-v2-empty">
                     ${tr(
-                      "暂无积分记录",
+                      "鏆傛棤绉垎璁板綍",
                     )}
                   </div>
                 `
@@ -6364,7 +6231,7 @@ async function memberPage() {
 
           <div class="member-v2-points-total">
             <span>
-              ${tr("当前积分余额")}
+              ${tr("褰撳墠绉垎浣欓")}
             </span>
 
             <strong>
@@ -6372,9 +6239,9 @@ async function memberPage() {
             </strong>
 
             <small>
-              ${tr("累计获得")}
+              ${tr("绱鑾峰緱")}
               ${lifetimePoints.toLocaleString()}
-              ${tr("积分")}
+              ${tr("绉垎")}
             </small>
           </div>
 
@@ -6464,7 +6331,7 @@ async function go(
 
   $("#content").innerHTML =
     tr(
-      '<div class="loading">正在加载…</div>',
+      '<div class="loading">姝ｅ湪鍔犺浇鈥?/div>',
     );
 
   try {
@@ -6475,7 +6342,7 @@ async function go(
         ]?.(id) ||
         empty(
           tr(
-            "页面不存在",
+            "椤甸潰涓嶅瓨鍦?,
           ),
         )
       );
@@ -6537,7 +6404,7 @@ async function go(
 
               $("#live-amount")
                 .textContent =
-                  "¥ " +
+                  "楼 " +
                   yuan(
                     o.amount_cents,
                   );
@@ -6549,7 +6416,7 @@ async function go(
                       60,
                   ) +
                   tr(
-                    " 分钟",
+                    " 鍒嗛挓",
                   );
             } catch (e) {
               clearInterval(
@@ -6609,7 +6476,7 @@ async function refresh() {
 
     throw Error(
       tr(
-        "请重新登录",
+        "璇烽噸鏂扮櫥褰?,
       ),
     );
   }
@@ -6637,14 +6504,14 @@ async function afterLogin() {
 function rechargeModal() {
   modal(
     tr(
-      "给钱包充点能量",
+      "缁欓挶鍖呭厖鐐硅兘閲?,
     ),
 
     trHtml`
       <p class="sub">
-        模拟充值，
-        仅用于课程演示，
-        不产生真实付款。
+        妯℃嫙鍏呭€硷紝
+        浠呯敤浜庤绋嬫紨绀猴紝
+        涓嶄骇鐢熺湡瀹炰粯娆俱€?
       </p>
 
       <div
@@ -6660,7 +6527,7 @@ function rechargeModal() {
           .map(
             (n) =>
               btn(
-                "¥ " +
+                "楼 " +
                   n,
                 "preset",
                 "secondary",
@@ -6674,7 +6541,7 @@ function rechargeModal() {
 
         ${field(
           tr(
-            "充值金额（元）",
+            "鍏呭€奸噾棰濓紙鍏冿級",
           ),
           "amount",
           50,
@@ -6686,7 +6553,7 @@ function rechargeModal() {
           class="btn"
           type="submit"
         >
-          确认模拟充值
+          纭妯℃嫙鍏呭€?
         </button>
 
       </form>
@@ -6708,10 +6575,10 @@ function editStation(id) {
   modal(
     id
       ? tr(
-          "编辑电站",
+          "缂栬緫鐢电珯",
         )
       : tr(
-          "添加电站",
+          "娣诲姞鐢电珯",
         ),
 
     trHtml`
@@ -6722,7 +6589,7 @@ function editStation(id) {
 
         ${field(
           tr(
-            "电站名称",
+            "鐢电珯鍚嶇О",
           ),
           "name",
           s.name ||
@@ -6733,7 +6600,7 @@ function editStation(id) {
 
         ${field(
           tr(
-            "详细地址",
+            "璇︾粏鍦板潃",
           ),
           "address",
           s.address ||
@@ -6744,31 +6611,31 @@ function editStation(id) {
 
         ${field(
           tr(
-            "所属城市",
+            "鎵€灞炲煄甯?,
           ),
           "city",
           s.city ||
-            "北京市",
+            "鍖椾含甯?,
           "text",
           'required maxlength="60"',
         )}
 
         ${field(
           tr(
-            "营业时间",
+            "钀ヤ笟鏃堕棿",
           ),
           "business_hours",
           s.business_hours ||
             "00:00-24:00",
           "text",
           tr(
-            'required maxlength="60" placeholder="例如 06:00-23:00"',
+            'required maxlength="60" placeholder="渚嬪 06:00-23:00"',
           ),
         )}
 
         ${field(
           tr(
-            "联系方式",
+            "鑱旂郴鏂瑰紡",
           ),
           "contact_phone",
           s.contact_phone ||
@@ -6780,7 +6647,7 @@ function editStation(id) {
         <div class="field">
 
           <label for="f-operating_status">
-            运营状态
+            杩愯惀鐘舵€?
           </label>
 
           <select
@@ -6790,7 +6657,7 @@ function editStation(id) {
             ${opt(
               "operating",
               tr(
-                "运营中",
+                "杩愯惀涓?,
               ),
               s.operating_status ||
                 "operating",
@@ -6799,7 +6666,7 @@ function editStation(id) {
             ${opt(
               "paused",
               tr(
-                "暂停运营",
+                "鏆傚仠杩愯惀",
               ),
               s.operating_status,
             )}
@@ -6807,7 +6674,7 @@ function editStation(id) {
             ${opt(
               "maintenance",
               tr(
-                "维护中",
+                "缁存姢涓?,
               ),
               s.operating_status,
             )}
@@ -6817,11 +6684,11 @@ function editStation(id) {
 
         ${field(
           tr(
-            "停车说明",
+            "鍋滆溅璇存槑",
           ),
           "parking_info",
           s.parking_info ||
-            "以现场停车规定为准",
+            "浠ョ幇鍦哄仠杞﹁瀹氫负鍑?,
           "text",
           'required maxlength="240"',
         )}
@@ -6830,7 +6697,7 @@ function editStation(id) {
 
           ${field(
             tr(
-              "经度",
+              "缁忓害",
             ),
             "lng",
             s.lng ??
@@ -6841,7 +6708,7 @@ function editStation(id) {
 
           ${field(
             tr(
-              "纬度",
+              "绾害",
             ),
             "lat",
             s.lat ??
@@ -6857,7 +6724,7 @@ function editStation(id) {
         >
           ${field(
             tr(
-              "基础单价（元/度）",
+              "鍩虹鍗曚环锛堝厓/搴︼級",
             ),
             "price",
             s.price_cents
@@ -6871,15 +6738,15 @@ function editStation(id) {
         </div>
 
         <div class="note">
-          新增电站时会自动生成早/日间/晚三个分时价格；
-          之后请到“价格管理”单独调整。
+          鏂板鐢电珯鏃朵細鑷姩鐢熸垚鏃?鏃ラ棿/鏅氫笁涓垎鏃朵环鏍硷紱
+          涔嬪悗璇峰埌鈥滀环鏍肩鐞嗏€濆崟鐙皟鏁淬€?
         </div>
 
         <button
           class="btn"
           type="submit"
         >
-          保存电站
+          淇濆瓨鐢电珯
         </button>
 
       </form>
@@ -6900,10 +6767,10 @@ function editCharger(id) {
   modal(
     id
       ? tr(
-          "编辑充电桩",
+          "缂栬緫鍏呯數妗?,
         )
       : tr(
-          "添加充电桩",
+          "娣诲姞鍏呯數妗?,
         ),
 
     trHtml`
@@ -6915,7 +6782,7 @@ function editCharger(id) {
         <div class="field">
 
           <label for="f-station_id">
-            所属电站
+            鎵€灞炵數绔?
           </label>
 
           <select
@@ -6939,7 +6806,7 @@ function editCharger(id) {
 
         ${field(
           tr(
-            "充电桩编号",
+            "鍏呯數妗╃紪鍙?,
           ),
           "number",
           c.number ||
@@ -6951,7 +6818,7 @@ function editCharger(id) {
         <div class="field">
 
           <label for="f-kind">
-            类型
+            绫诲瀷
           </label>
 
           <select
@@ -6960,14 +6827,14 @@ function editCharger(id) {
           >
             ${opt(
               "fast",
-              tr("快充"),
+              tr("蹇厖"),
               c.kind ||
                 "fast",
             )}
 
             ${opt(
               "slow",
-              tr("慢充"),
+              tr("鎱㈠厖"),
               c.kind,
             )}
           </select>
@@ -6976,7 +6843,7 @@ function editCharger(id) {
 
         ${field(
           tr(
-            "额定功率（kW）",
+            "棰濆畾鍔熺巼锛坘W锛?,
           ),
           "power",
           c.power ||
@@ -6989,7 +6856,7 @@ function editCharger(id) {
           class="btn"
           type="submit"
         >
-          保存充电桩
+          淇濆瓨鍏呯數妗?
         </button>
 
       </form>
@@ -7010,10 +6877,10 @@ function editPricing(id) {
   modal(
     id
       ? tr(
-          "编辑分时价格",
+          "缂栬緫鍒嗘椂浠锋牸",
         )
       : tr(
-          "添加分时价格",
+          "娣诲姞鍒嗘椂浠锋牸",
         ),
 
     trHtml`
@@ -7025,7 +6892,7 @@ function editPricing(id) {
         <div class="field">
 
           <label>
-            所属电站
+            鎵€灞炵數绔?
           </label>
 
           <select
@@ -7049,7 +6916,7 @@ function editPricing(id) {
 
           ${field(
             tr(
-              "开始时间",
+              "寮€濮嬫椂闂?,
             ),
             "start_time",
             p.start_time ||
@@ -7060,14 +6927,14 @@ function editPricing(id) {
 
           ${field(
             tr(
-              "结束时间",
+              "缁撴潫鏃堕棿",
             ),
             "end_time",
             p.end_time ||
               "08:00",
             "text",
             tr(
-              'required pattern="[0-9]{2}:[0-9]{2}" placeholder="可填写 24:00"',
+              'required pattern="[0-9]{2}:[0-9]{2}" placeholder="鍙～鍐?24:00"',
             ),
           )}
 
@@ -7080,7 +6947,7 @@ function editPricing(id) {
 
           ${field(
             tr(
-              "电费（元/度）",
+              "鐢佃垂锛堝厓/搴︼級",
             ),
             "electricity_fee",
             p.id
@@ -7094,7 +6961,7 @@ function editPricing(id) {
 
           ${field(
             tr(
-              "服务费（元/度）",
+              "鏈嶅姟璐癸紙鍏?搴︼級",
             ),
             "service_fee",
             p.id
@@ -7112,7 +6979,7 @@ function editPricing(id) {
           class="btn"
           type="submit"
         >
-          保存价格规则
+          淇濆瓨浠锋牸瑙勫垯
         </button>
 
       </form>
@@ -7123,7 +6990,7 @@ function editPricing(id) {
 function newFaultModal() {
   modal(
     tr(
-      "登记设备故障",
+      "鐧昏璁惧鏁呴殰",
     ),
 
     trHtml`
@@ -7132,7 +6999,7 @@ function newFaultModal() {
         <div class="field">
 
           <label>
-            故障设备
+            鏁呴殰璁惧
           </label>
 
           <select
@@ -7153,7 +7020,7 @@ function newFaultModal() {
                   opt(
                     c.id,
                     c.station_name +
-                      " · " +
+                      " 路 " +
                       c.number,
                   ),
               )
@@ -7164,23 +7031,23 @@ function newFaultModal() {
 
         ${field(
           tr(
-            "故障类型",
+            "鏁呴殰绫诲瀷",
           ),
           "fault_type",
-          "通信故障",
+          "閫氫俊鏁呴殰",
           "text",
           'required maxlength="60"',
         )}
 
         ${field(
           tr(
-            "故障描述",
+            "鏁呴殰鎻忚堪",
           ),
           "description",
           "",
           "text",
           tr(
-            'required maxlength="300" placeholder="请描述故障现象"',
+            'required maxlength="300" placeholder="璇锋弿杩版晠闅滅幇璞?',
           ),
         )}
 
@@ -7188,7 +7055,7 @@ function newFaultModal() {
           class="btn"
           type="submit"
         >
-          登记故障
+          鐧昏鏁呴殰
         </button>
 
       </form>
@@ -7205,7 +7072,7 @@ function processFaultModal(id) {
 
   modal(
     tr(
-      "处理故障 · #",
+      "澶勭悊鏁呴殰 路 #",
     ) + id,
 
     trHtml`
@@ -7218,7 +7085,7 @@ function processFaultModal(id) {
           ${esc(
             f.station_name,
           )}
-          ·
+          路
           ${esc(
             f.charger_number,
           )}
@@ -7228,7 +7095,7 @@ function processFaultModal(id) {
           ${esc(
             f.fault_type,
           )}
-          ：
+          锛?
           ${esc(
             f.description,
           )}
@@ -7237,7 +7104,7 @@ function processFaultModal(id) {
         <div class="field">
 
           <label>
-            处理状态
+            澶勭悊鐘舵€?
           </label>
 
           <select name="status">
@@ -7245,7 +7112,7 @@ function processFaultModal(id) {
             ${opt(
               "pending",
               tr(
-                "待处理",
+                "寰呭鐞?,
               ),
               f.status,
             )}
@@ -7253,7 +7120,7 @@ function processFaultModal(id) {
             ${opt(
               "processing",
               tr(
-                "处理中",
+                "澶勭悊涓?,
               ),
               f.status,
             )}
@@ -7261,7 +7128,7 @@ function processFaultModal(id) {
             ${opt(
               "resolved",
               tr(
-                "已解决",
+                "宸茶В鍐?,
               ),
               f.status,
             )}
@@ -7271,14 +7138,14 @@ function processFaultModal(id) {
 
         ${field(
           tr(
-            "处理结果",
+            "澶勭悊缁撴灉",
           ),
           "resolution",
           f.resolution ||
             "",
           "text",
           tr(
-            'maxlength="300" placeholder="解决时必须填写，例如：更换通信模块后恢复正常"',
+            'maxlength="300" placeholder="瑙ｅ喅鏃跺繀椤诲～鍐欙紝渚嬪锛氭洿鎹㈤€氫俊妯″潡鍚庢仮澶嶆甯?',
           ),
         )}
 
@@ -7286,7 +7153,7 @@ function processFaultModal(id) {
           class="btn"
           type="submit"
         >
-          更新故障状态
+          鏇存柊鏁呴殰鐘舵€?
         </button>
 
       </form>
@@ -7324,7 +7191,7 @@ function qrModal(id) {
 
   modal(
     tr(
-      "充电桩二维码 · ",
+      "鍏呯數妗╀簩缁寸爜 路 ",
     ) + number,
 
     trHtml`
@@ -7334,11 +7201,11 @@ function qrModal(id) {
           src="/api/chargers/${id}/qr"
           alt="${esc(
             number,
-          )} 充电二维码"
+          )} 鍏呯數浜岀淮鐮?
         >
 
         <p>
-          用手机相机/微信扫码后进入对应充电桩页面。
+          鐢ㄦ墜鏈虹浉鏈?寰俊鎵爜鍚庤繘鍏ュ搴斿厖鐢垫々椤甸潰銆?
         </p>
 
         <code>
@@ -7359,7 +7226,7 @@ function mapModal(id) {
     S.detail;
 
   modal(
-    tr("前往 ") +
+    tr("鍓嶅線 ") +
       s.name,
 
     trHtml`
@@ -7370,25 +7237,25 @@ function mapModal(id) {
       </p>
 
       <div class="note">
-        起点：
+        璧风偣锛?
         ${esc(
           tr(
             S.location,
           ),
         )}
-        （${S.lat},
-        ${S.lng}）
+        锛?{S.lat},
+        ${S.lng}锛?
 
         <br>
 
-        终点：
-        （${s.lat},
-        ${s.lng}）
+        缁堢偣锛?
+        锛?{s.lat},
+        ${s.lng}锛?
 
         <br>
 
-        路线将在浏览器地图页面规划，
-        需要联网。
+        璺嚎灏嗗湪娴忚鍣ㄥ湴鍥鹃〉闈㈣鍒掞紝
+        闇€瑕佽仈缃戙€?
       </div>
 
       <div class="field">
@@ -7396,22 +7263,22 @@ function mapModal(id) {
         <label
           for="travel-mode"
         >
-          出行方式
+          鍑鸿鏂瑰紡
         </label>
 
         <select
           id="travel-mode"
         >
           <option value="drive">
-            驾车
+            椹捐溅
           </option>
 
           <option value="walk">
-            步行
+            姝ヨ
           </option>
 
           <option value="bus">
-            公交
+            鍏氦
           </option>
         </select>
 
@@ -7423,7 +7290,7 @@ function mapModal(id) {
         target="_blank"
         rel="noopener noreferrer"
       >
-        打开腾讯地图 ↗
+        鎵撳紑鑵捐鍦板浘 鈫?
       </a>
     `,
   );
@@ -7491,14 +7358,14 @@ function confirmModal(
      >
        ${btn(
          tr(
-           "取消",
+           "鍙栨秷",
          ),
          "close",
        )}
 
        ${btn(
          tr(
-           "确认",
+           "纭",
          ),
          "confirm",
          "",
@@ -7760,10 +7627,10 @@ async function act(
           name ===
           "reserve"
             ? tr(
-                "预约成功，电桩为你保留 15 分钟",
+                "棰勭害鎴愬姛锛岀數妗╀负浣犱繚鐣?15 鍒嗛挓",
               )
             : tr(
-                "充电已开始",
+                "鍏呯數宸插紑濮?,
               ),
         );
       } catch (e) {
@@ -7776,7 +7643,7 @@ async function act(
 
           toast(
             tr(
-              "您有未完成的充电订单，请先处理",
+              "鎮ㄦ湁鏈畬鎴愮殑鍏呯數璁㈠崟锛岃鍏堝鐞?,
             ),
           );
         } else {
@@ -7787,17 +7654,29 @@ async function act(
       break;
 
     case "order-finish":
-      await finishOrderModal(id);
+      confirmModal(
+        tr(
+          "缁撴潫鍏呯數骞剁粨绠?,
+        ),
+
+        tr(
+          "纭鍚庡仠姝㈡ā鎷熷厖鐢碉紝鎸夋渶缁堢數閲忔墸娆惧苟閲婃斁鍏呯數妗┿€?,
+        ),
+
+        "finish",
+
+        `data-id="${id}"`,
+      );
       break;
 
     case "order-cancel":
       confirmModal(
         tr(
-          "取消预约",
+          "鍙栨秷棰勭害",
         ),
 
         tr(
-          "确认取消此预约并释放充电桩？",
+          "纭鍙栨秷姝ら绾﹀苟閲婃斁鍏呯數妗╋紵",
         ),
 
         "cancel",
@@ -7833,7 +7712,7 @@ async function act(
 
       toast(
         tr(
-          "欠费补缴成功",
+          "娆犺垂琛ョ即鎴愬姛",
         ),
       );
       break;
@@ -7851,40 +7730,8 @@ async function act(
 
       toast(
         tr(
-          "优惠券领取成功",
+          "浼樻儬鍒搁鍙栨垚鍔?,
         ),
-      );
-
-      break;
-    }
-
-    case "finish-submit": {
-      const couponSelect = $("#finish-coupon");
-
-      const couponId = couponSelect?.value
-        ? Number(couponSelect.value)
-        : null;
-
-      const payload = couponId
-        ? { coupon_id: couponId }
-        : {};
-
-      await api(
-        `/orders/${id}/finish`,
-        "POST",
-        payload,
-      );
-
-      $("#modal").close();
-
-      await refresh();
-      await go("orders");
-      await receipt(id);
-
-      toast(
-        couponId
-          ? tr("\u5145\u7535\u5b8c\u6210\uff0c\u4f18\u60e0\u5238\u5df2\u4f7f\u7528")
-          : tr("\u5145\u7535\u5b8c\u6210\uff0c\u7ed3\u7b97\u6210\u529f"),
       );
 
       break;
@@ -7922,7 +7769,7 @@ async function act(
         } else {
           toast(
             tr(
-              "预约已取消",
+              "棰勭害宸插彇娑?,
             ),
           );
         }
@@ -7942,7 +7789,7 @@ async function act(
 
         toast(
           tr(
-            "电站已删除",
+            "鐢电珯宸插垹闄?,
           ),
         );
       } else if (
@@ -7969,7 +7816,7 @@ async function act(
 
         toast(
           tr(
-            "操作成功",
+            "鎿嶄綔鎴愬姛",
           ),
         );
       } else if (
@@ -7988,7 +7835,7 @@ async function act(
 
         toast(
           tr(
-            "价格规则已删除",
+            "浠锋牸瑙勫垯宸插垹闄?,
           ),
         );
       }
@@ -8021,11 +7868,11 @@ async function act(
     case "delete-station":
       confirmModal(
         tr(
-          "删除电站",
+          "鍒犻櫎鐢电珯",
         ),
 
         tr(
-          "仅允许删除没有关联电桩的电站。确定继续？",
+          "浠呭厑璁稿垹闄ゆ病鏈夊叧鑱旂數妗╃殑鐢电珯銆傜‘瀹氱户缁紵",
         ),
 
         "delete-station",
@@ -8041,16 +7888,16 @@ async function act(
     case "charger-action":
       confirmModal(
         tr(
-          "设备操作",
+          "璁惧鎿嶄綔",
         ),
 
         b.dataset.op ===
         "delete"
           ? tr(
-              "删除此设备？有历史订单的设备无法删除。",
+              "鍒犻櫎姝よ澶囷紵鏈夊巻鍙茶鍗曠殑璁惧鏃犳硶鍒犻櫎銆?,
             )
           : tr(
-              "确认更改此充电桩状态？",
+              "纭鏇存敼姝ゅ厖鐢垫々鐘舵€侊紵",
             ),
 
         "charger-action",
@@ -8073,11 +7920,11 @@ async function act(
     case "delete-pricing":
       confirmModal(
         tr(
-          "删除价格规则",
+          "鍒犻櫎浠锋牸瑙勫垯",
         ),
 
         tr(
-          "确定删除这个分时时段？每个电站至少保留一条规则。",
+          "纭畾鍒犻櫎杩欎釜鍒嗘椂鏃舵锛熸瘡涓數绔欒嚦灏戜繚鐣欎竴鏉¤鍒欍€?,
         ),
 
         "delete-pricing",
@@ -8114,7 +7961,7 @@ async function act(
 
       toast(
         tr(
-          "用户状态已更新",
+          "鐢ㄦ埛鐘舵€佸凡鏇存柊",
         ),
       );
       break;
@@ -8129,14 +7976,14 @@ async function act(
       ) {
         throw Error(
           tr(
-            "此浏览器不支持定位，请使用区域选择",
+            "姝ゆ祻瑙堝櫒涓嶆敮鎸佸畾浣嶏紝璇蜂娇鐢ㄥ尯鍩熼€夋嫨",
           ),
         );
       }
 
       toast(
         tr(
-          "正在请求浏览器定位权限…",
+          "姝ｅ湪璇锋眰娴忚鍣ㄥ畾浣嶆潈闄愨€?,
         ),
       );
 
@@ -8157,7 +8004,7 @@ async function act(
                 );
 
               S.location =
-                "自定义位置";
+                "鑷畾涔変綅缃?;
 
               await go(
                 "stations",
@@ -8165,7 +8012,7 @@ async function act(
 
               toast(
                 tr(
-                  "已按浏览器位置排序",
+                  "宸叉寜娴忚鍣ㄤ綅缃帓搴?,
                 ),
               );
             } catch (e) {
@@ -8176,7 +8023,7 @@ async function act(
           () =>
             toast(
               tr(
-                "定位未成功，请允许定位权限或选择预置区域",
+                "瀹氫綅鏈垚鍔燂紝璇峰厑璁稿畾浣嶆潈闄愭垨閫夋嫨棰勭疆鍖哄煙",
               ),
             ),
 
@@ -8191,7 +8038,7 @@ async function act(
     case "help":
       modal(
         tr(
-          "使用帮助",
+          "浣跨敤甯姪",
         ),
 
         trHtml`
@@ -8199,31 +8046,31 @@ async function act(
 
             <p>
               <b>
-                扫码充电
+                鎵爜鍏呯數
               </b>
 
-              管理员可以在电桩管理查看每个设备二维码。
-              手机扫描后登录用户账号，
-              系统会自动识别该设备。
+              绠＄悊鍛樺彲浠ュ湪鐢垫々绠＄悊鏌ョ湅姣忎釜璁惧浜岀淮鐮併€?
+              鎵嬫満鎵弿鍚庣櫥褰曠敤鎴疯处鍙凤紝
+              绯荤粺浼氳嚜鍔ㄨ瘑鍒璁惧銆?
             </p>
 
             <p>
               <b>
-                分时计价
+                鍒嗘椂璁′环
               </b>
 
-              管理员在价格管理维护电费与服务费；
-              开始充电时锁定当前时段价格。
+              绠＄悊鍛樺湪浠锋牸绠＄悊缁存姢鐢佃垂涓庢湇鍔¤垂锛?
+              寮€濮嬪厖鐢垫椂閿佸畾褰撳墠鏃舵浠锋牸銆?
             </p>
 
             <p>
               <b>
-                故障处理
+                鏁呴殰澶勭悊
               </b>
 
-              登记故障后设备变为故障，
-              进入处理中时变为维修中，
-              解决后恢复空闲。
+              鐧昏鏁呴殰鍚庤澶囧彉涓烘晠闅滐紝
+              杩涘叆澶勭悊涓椂鍙樹负缁翠慨涓紝
+              瑙ｅ喅鍚庢仮澶嶇┖闂层€?
             </p>
 
           </div>
@@ -8577,7 +8424,7 @@ document.addEventListener(
 
           toast(
             tr(
-              "模拟充值成功，余额已更新",
+              "妯℃嫙鍏呭€兼垚鍔燂紝浣欓宸叉洿鏂?,
             ),
           );
 
@@ -8598,7 +8445,7 @@ document.addEventListener(
 
           toast(
             tr(
-              "资料已保存",
+              "璧勬枡宸蹭繚瀛?,
             ),
           );
 
@@ -8615,7 +8462,7 @@ document.addEventListener(
 
           toast(
             tr(
-              "密码已更新",
+              "瀵嗙爜宸叉洿鏂?,
             ),
           );
 
@@ -8652,7 +8499,7 @@ document.addEventListener(
 
           toast(
             tr(
-              "电站已保存",
+              "鐢电珯宸蹭繚瀛?,
             ),
           );
 
@@ -8689,7 +8536,7 @@ document.addEventListener(
 
           toast(
             tr(
-              "电桩已保存",
+              "鐢垫々宸蹭繚瀛?,
             ),
           );
 
@@ -8724,7 +8571,7 @@ document.addEventListener(
 
           toast(
             tr(
-              "分时价格已保存",
+              "鍒嗘椂浠锋牸宸蹭繚瀛?,
             ),
           );
 
@@ -8748,7 +8595,7 @@ document.addEventListener(
 
           toast(
             tr(
-              "故障已登记",
+              "鏁呴殰宸茬櫥璁?,
             ),
           );
 
@@ -8770,7 +8617,7 @@ document.addEventListener(
 
           toast(
             tr(
-              "故障状态已更新",
+              "鏁呴殰鐘舵€佸凡鏇存柊",
             ),
           );
 
@@ -8976,7 +8823,7 @@ document.addEventListener(
             .join("") ||
           empty(
             tr(
-              "没有匹配的电站",
+              "娌℃湁鍖归厤鐨勭數绔?,
             ),
           );
     }
@@ -9021,27 +8868,27 @@ document.addEventListener(
         "region"
       ) {
         const rs = {
-          海淀区: [
+          娴锋穩鍖? [
             39.9593,
             116.2981,
           ],
 
-          东城区: [
+          涓滃煄鍖? [
             39.9042,
             116.4074,
           ],
 
-          朝阳区: [
+          鏈濋槼鍖? [
             39.9219,
             116.4435,
           ],
 
-          丰台区: [
+          涓板彴鍖? [
             39.8584,
             116.2869,
           ],
 
-          石景山区: [
+          鐭虫櫙灞卞尯: [
             39.9062,
             116.2229,
           ],
@@ -9072,7 +8919,7 @@ document.addEventListener(
 
         toast(
           tr(
-            "已切换为区域预置位置",
+            "宸插垏鎹负鍖哄煙棰勭疆浣嶇疆",
           ),
         );
       }
@@ -9233,7 +9080,7 @@ document.addEventListener(
 
         toast(
           tr(
-            "角色已更新，新的权限立即生效",
+            "瑙掕壊宸叉洿鏂帮紝鏂扮殑鏉冮檺绔嬪嵆鐢熸晥",
           ),
         );
       }
@@ -9301,7 +9148,7 @@ async function boot() {
           e.message,
         ) +
           tr(
-            "<br>请确认 Python 服务已启动，然后刷新页面。",
+            "<br>璇风‘璁?Python 鏈嶅姟宸插惎鍔紝鐒跺悗鍒锋柊椤甸潰銆?,
           ),
       );
   }
@@ -9316,19 +9163,19 @@ function preferenceControls() {
       class="preference-controls"
       role="group"
       aria-label="${tr(
-        "语言与外观",
+        "璇█涓庡瑙?,
       )}"
     >
 
       <select
         data-pref="language"
         aria-label="${tr(
-          "语言",
+          "璇█",
         )}"
       >
         ${opt(
           "zh",
-          "中文",
+          "涓枃",
           p.language,
         )}
 
@@ -9342,13 +9189,13 @@ function preferenceControls() {
       <select
         data-pref="theme"
         aria-label="${tr(
-          "外观",
+          "澶栬",
         )}"
       >
         ${opt(
           "system",
           tr(
-            "跟随系统",
+            "璺熼殢绯荤粺",
           ),
           p.theme,
         )}
@@ -9356,7 +9203,7 @@ function preferenceControls() {
         ${opt(
           "light",
           tr(
-            "浅色",
+            "娴呰壊",
           ),
           p.theme,
         )}
@@ -9364,7 +9211,7 @@ function preferenceControls() {
         ${opt(
           "dark",
           tr(
-            "深色",
+            "娣辫壊",
           ),
           p.theme,
         )}
@@ -9388,13 +9235,13 @@ function preferencesCard() {
         <div>
           <h2>
             ${tr(
-              "偏好设置",
+              "鍋忓ソ璁剧疆",
             )}
           </h2>
 
           <p class="sub">
             ${tr(
-              "界面语言和外观会自动保存，重新登录后继续使用。",
+              "鐣岄潰璇█鍜屽瑙備細鑷姩淇濆瓨锛岄噸鏂扮櫥褰曞悗缁х画浣跨敤銆?,
             )}
           </p>
         </div>
@@ -9405,7 +9252,7 @@ function preferencesCard() {
 
       <p class="sub">
         ${tr(
-          "跟随设备的浅色或深色设置；你也可以固定选择喜欢的主题。",
+          "璺熼殢璁惧鐨勬祬鑹叉垨娣辫壊璁剧疆锛涗綘涔熷彲浠ュ浐瀹氶€夋嫨鍠滄鐨勪富棰樸€?,
         )}
       </p>
 
@@ -9421,7 +9268,7 @@ function preferencesCard() {
 function openPreferences() {
   modal(
     tr(
-      "语言与外观",
+      "璇█涓庡瑙?,
     ),
 
     preferencesCard(),
@@ -9689,7 +9536,7 @@ async function changePreference(
                   (
                     el.textContent =
                       tr(
-                        "偏好已保存",
+                        "鍋忓ソ宸蹭繚瀛?,
                       )
                   ),
               );
@@ -9699,7 +9546,7 @@ async function changePreference(
 
             const msg =
               tr(
-                "偏好已保存在此浏览器，账号同步失败，请稍后重试",
+                "鍋忓ソ宸蹭繚瀛樺湪姝ゆ祻瑙堝櫒锛岃处鍙峰悓姝ュけ璐ワ紝璇风◢鍚庨噸璇?,
               );
 
             document
@@ -9771,15 +9618,15 @@ document.addEventListener(
 
     const message =
       v.valueMissing
-        ? "必填项"
+        ? "蹇呭～椤?
         : v.badInput
-          ? "请输入有效的数值"
+          ? "璇疯緭鍏ユ湁鏁堢殑鏁板€?
           : v.rangeUnderflow ||
               v.rangeOverflow
-            ? "数值超出允许范围"
+            ? "鏁板€艰秴鍑哄厑璁歌寖鍥?
             : v.tooShort
-              ? "请输入足够长度的内容"
-              : "输入格式不正确";
+              ? "璇疯緭鍏ヨ冻澶熼暱搴︾殑鍐呭"
+              : "杈撳叆鏍煎紡涓嶆纭?;
 
     if (!v.valid) {
       el.setCustomValidity(
@@ -9792,3 +9639,5 @@ document.addEventListener(
 );
 
 boot();
+
+

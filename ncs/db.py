@@ -346,8 +346,11 @@ def init_db():
 
         migrate_db(db)
     from .preferences import SQLITE_SCHEMA as PREF_SQLITE, MYSQL_SCHEMA as PREF_MYSQL
+    from .loyalty import ensure_schema as ensure_loyalty_schema
+
     db.execute(PREF_MYSQL if backend == 'mysql' else PREF_SQLITE)
     _ensure_rbac_schema(db, backend)
+    ensure_loyalty_schema(db)
 
     count = db.execute(
         "SELECT COUNT(*) AS count FROM users"

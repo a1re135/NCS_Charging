@@ -117,7 +117,7 @@ const can = (permission) =>
 const paymentBadge = (status) =>
   `<span class="pay-badge ${esc(String(status || "").replaceAll(" ", "-"))}">
     <i class="dot"></i>
-    ${esc(tr(paymentNames[status] || status || "?"))}
+    ${esc(paymentNames[status] || status || "—")}
   </span>`;
 
 const paths = {
@@ -131,10 +131,6 @@ const paths = {
   user:
     "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 21v-3a8 8 0 0 1 16 0v3",
   chart: "M4 3v18h17 M8 16v-5 M13 16V6 M18 16v-8",
-  trend: "M4 17l5-5 4 3 7-9 M17 6h3v3",
-  shield: "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z M9 12l2 2 4-4",
-  clipboard: "M9 4h6a2 2 0 0 1 2 2v15H7V6a2 2 0 0 1 2-2z M10 4V3h4v1 M10 9h4 M10 13h4 M10 17h3",
-  settings: "M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5.6 5.6l2.1 2.1 M16.3 16.3l2.1 2.1 M18.4 5.6l-2.1 2.1 M7.7 16.3l-2.1 2.1 M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z",
   grid:
     "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   logout: "M9 4H3v16h6 M9 12h12m-5-5 5 5-5 5",
@@ -144,8 +140,6 @@ const paths = {
   help:
     "M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
   menu: "M3 6h18M3 12h18M3 18h18",
-  activity:
-    "M3 12h4l2.5-7 5 14 2.5-7H21",
 };
 
 const ic = (n) =>
@@ -696,11 +690,11 @@ const roleNav = [
   ["users", "user", "用户管理", "user.manage"],
   ["orders", "orders", "订单管理", "order.view_all"],
   ["revenue", "chart", "营收统计", "analytics.view"],
-  ["prediction", "trend", "负荷预测", "prediction.view"],
-  ["roles", "shield", "角色与权限", "role.manage"],
-  ["logs", "clipboard", "操作日志", "log.view"],
-  ["settings", "settings", "偏好设置", null],
-  ['ops-center','activity','运营中心','system.monitor']
+  ["prediction", "chart", "负荷预测", "prediction.view"],
+  ["roles", "grid", "角色与权限", "role.manage"],
+  ["logs", "orders", "操作日志", "log.view"],
+  ["settings", "grid", "偏好设置", null],
+  ['ops-center','grid','运营中心','system.monitor']
 ];
 
 function currentNav() {
@@ -3023,133 +3017,6 @@ async function loadOrders() {
             orders.length
           } ${tr("条")}`;
   }
-}
-
-async function finishOrderModal(orderId) {
-  const [order, coupons] = await Promise.all([
-    api(`/orders/${orderId}/receipt`),
-    api("/member/coupons"),
-  ]);
-
-  const owned = (coupons.owned || []).filter(
-    (coupon) =>
-      coupon.status === undefined ||
-      coupon.status === "available",
-  );
-
-  const eligible = owned.filter(
-    (coupon) =>
-      Number(order.amount_cents || 0) >=
-      Number(coupon.min_spend_cents || 0),
-  );
-
-  modal(
-    tr("\u7ed3\u675f\u5145\u7535\u5e76\u7ed3\u7b97"),
-    trHtml`
-      <div style="margin-bottom:18px">
-        <div class="section-head">
-          <div>
-            <strong style="font-size:16px">
-              ${tr("\u672c\u6b21\u5145\u7535")}
-            </strong>
-            <div class="muted" style="margin-top:4px">
-              ${tr("\u5f53\u524d\u8d39\u7528")} \u00A5 ${yuan(order.amount_cents)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div
-        style="
-          border:1px solid var(--line);
-          border-radius:16px;
-          padding:14px;
-          margin-bottom:16px;
-        "
-      >
-        <label
-          for="finish-coupon"
-          style="
-            display:block;
-            font-weight:700;
-            margin-bottom:8px;
-          "
-        >
-          ${tr("\u4f18\u60e0\u5238")}
-        </label>
-
-        <select
-          id="finish-coupon"
-          style="
-            width:100%;
-            padding:12px 14px;
-            border:1px solid var(--line);
-            border-radius:12px;
-            background:var(--surface);
-            color:var(--ink);
-          "
-        >
-          <option value="">
-            ${tr("\u4e0d\u4f7f\u7528\u4f18\u60e0\u5238")}
-          </option>
-
-          ${eligible
-            .map(
-              (coupon) => `
-                <option value="${coupon.id}">
-                  ${esc(tr(coupon.name))}
-                  ?
-                  ${esc(tr(coupon.description))}
-                </option>
-              `,
-            )
-            .join("")}
-        </select>
-
-        <div
-          class="muted"
-          style="margin-top:8px;font-size:12px"
-        >
-          ${
-            eligible.length
-              ? tr("\u9009\u62e9\u4e00\u5f20\u4f18\u60e0\u5238\u540e\uff0c\u5c06\u5728\u7ed3\u7b97\u65f6\u81ea\u52a8\u62b5\u6263\u3002")
-              : tr("\u5f53\u524d\u6ca1\u6709\u7b26\u5408\u672c\u6b21\u8ba2\u5355\u6761\u4ef6\u7684\u53ef\u7528\u4f18\u60e0\u5238\u3002")
-          }
-        </div>
-      </div>
-
-      <div
-        style="
-          display:flex;
-          justify-content:space-between;
-          align-items:center;
-          padding:14px 0;
-          border-top:1px solid var(--line);
-        "
-      >
-        <span class="muted">
-          ${tr("\u4f1a\u5458\u6743\u76ca")}
-        </span>
-        <strong>
-          ${tr("\u4f1a\u5458\u6298\u6263\u5c06\u81ea\u52a8\u8ba1\u7b97")}
-        </strong>
-      </div>
-
-      <div class="actions" style="margin-top:18px">
-        ${btn(
-          tr("\u53d6\u6d88"),
-          "close",
-        )}
-
-        ${btn(
-          tr("\u786e\u8ba4\u7ed3\u7b97"),
-          "finish-submit",
-          "",
-          `data-id="${orderId}"`,
-        )}
-      </div>
-    `,
-  );
 }
 
 async function chargingPage() {
@@ -7787,7 +7654,19 @@ async function act(
       break;
 
     case "order-finish":
-      await finishOrderModal(id);
+      confirmModal(
+        tr(
+          "结束充电并结算",
+        ),
+
+        tr(
+          "确认后停止模拟充电，按最终电量扣款并释放充电桩。",
+        ),
+
+        "finish",
+
+        `data-id="${id}"`,
+      );
       break;
 
     case "order-cancel":
@@ -7853,38 +7732,6 @@ async function act(
         tr(
           "优惠券领取成功",
         ),
-      );
-
-      break;
-    }
-
-    case "finish-submit": {
-      const couponSelect = $("#finish-coupon");
-
-      const couponId = couponSelect?.value
-        ? Number(couponSelect.value)
-        : null;
-
-      const payload = couponId
-        ? { coupon_id: couponId }
-        : {};
-
-      await api(
-        `/orders/${id}/finish`,
-        "POST",
-        payload,
-      );
-
-      $("#modal").close();
-
-      await refresh();
-      await go("orders");
-      await receipt(id);
-
-      toast(
-        couponId
-          ? tr("\u5145\u7535\u5b8c\u6210\uff0c\u4f18\u60e0\u5238\u5df2\u4f7f\u7528")
-          : tr("\u5145\u7535\u5b8c\u6210\uff0c\u7ed3\u7b97\u6210\u529f"),
       );
 
       break;

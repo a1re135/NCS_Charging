@@ -670,8 +670,8 @@
   "查看权限矩阵": "View Permission Matrix",
   "通知": "Notifications",
   "笔订单": "orders",
-  "按近 28 天已完成订单的实际充电分钟数": "Based on actual charging minutes from completed orders in the last 28 days",
-  "÷ 电桩可服务分钟数计算。": "divided by the available charger service minutes.",
+  "按近 28 天已完成订单的实际充电分钟数": "Calculated from actual charging minutes of completed orders in the past 28 days",
+  "÷ 电桩可服务分钟数计算。": "divided by the available service minutes of charging piles.",
   "条未读通知": "unread notifications",
   "建议建立首个数据库备份": "Create Your First Database Backup",
   "当前还没有检测到数据库备份，建议先建立一份可恢复备份。": "No database backup has been detected yet. It is recommended to create a recoverable backup first.",
@@ -754,6 +754,5 @@
   "满 60 元享 9 折，最高减 10 元": "10% off when you spend ¥60, up to ¥10 off",
   "满 100 元享 8 折，最高减 20 元": "20% off when you spend ¥100, up to ¥20 off",
   "满 30 元减 5 元": "¥5 off when you spend ¥30",
-  "满 70 元减 12 元": "¥12 off when you spend ¥70",
-  "充电消费积分": "Charging spending points"
+  "满 70 元减 12 元": "¥12 off when you spend ¥70"
 }

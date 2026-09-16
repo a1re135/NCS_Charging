@@ -161,7 +161,7 @@ def create_order(uid,cid,reserve):
         db.execute('UPDATE chargers SET status=? WHERE id=?',(status,cid))
         return cur.lastrowid
 
-def act_order(uid,oid,action,payload=None):
+def act_order(uid,oid,action):
     with transaction() as db:
         o = db.execute(
             lock_sql(
@@ -212,44 +212,12 @@ def act_order(uid,oid,action,payload=None):
             db.execute("UPDATE chargers SET status='idle' WHERE id=? AND status='reserved'",(c['id'],))
         elif action=='finish':
             if o['status']!='charging': raise BusinessError('订单已处理或未开始，不能重复结算',409)
-            payload = payload or {}
-            locked_seconds = payload.get('simulated_seconds')
-            if locked_seconds not in (None, ""):
-                try:
-                    locked_seconds = max(0, int(locked_seconds))
-                except (TypeError, ValueError):
-                    raise BusinessError('模拟充电时长无效',400)
-
-                from decimal import Decimal, ROUND_HALF_UP
-                power = Decimal(str(o['power']))
-                energy = (
-                    power * Decimal(locked_seconds) / Decimal(3600)
-                )
-                q = dict(o)
-                q.update(
-                    simulated_seconds=locked_seconds,
-                    energy=round(float(energy), 3),
-                    amount_cents=int(
-                        (energy * Decimal(o['price_cents'])).quantize(
-                            Decimal('1'),
-                            rounding=ROUND_HALF_UP,
-                        )
-                    ),
-                )
-            else:
-                q=quote(o,datetime.now())
-            q['charger_id']=c['id']
-
-            from .loyalty import settle_with_loyalty
-
-            settle_with_loyalty(
-                db,
-                uid,
-                oid,
-                q,
-                u,
-                payload or {},
-            )
+            end=datetime.now(); q=quote(o,end); paid=min(u['balance_cents'],q['amount_cents'])
+            db.execute('''UPDATE orders SET status='completed',ended_at=?,energy=?,amount_cents=?,paid_cents=?,debt_cents=?,balance_after=?,simulated_seconds=? WHERE id=?''',
+                (end.isoformat(timespec='seconds'),q['energy'],q['amount_cents'],paid,q['amount_cents']-paid,u['balance_cents']-paid,q['simulated_seconds'],oid))
+            db.execute('UPDATE users SET balance_cents=balance_cents-? WHERE id=?',(paid,uid))
+            db.execute("UPDATE chargers SET status=CASE WHEN status='charging' THEN 'idle' ELSE status END,total_count=total_count+1,total_minutes=total_minutes+? WHERE id=?",(q['simulated_seconds']//60,c['id']))
+            db.execute("INSERT INTO wallet_log(user_id,amount_cents,kind,created_at) VALUES(?,?,'充电结算',?)",(uid,-paid,now()))
         elif action=='pay':
             if o['debt_cents']<=0: raise BusinessError('该订单没有欠费',409)
             if u['balance_cents']<o['debt_cents']: raise BusinessError('余额不足，请先充值')

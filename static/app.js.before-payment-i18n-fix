@@ -117,7 +117,7 @@ const can = (permission) =>
 const paymentBadge = (status) =>
   `<span class="pay-badge ${esc(String(status || "").replaceAll(" ", "-"))}">
     <i class="dot"></i>
-    ${esc(tr(paymentNames[status] || status || "?"))}
+    ${esc(paymentNames[status] || status || "—")}
   </span>`;
 
 const paths = {
@@ -131,10 +131,6 @@ const paths = {
   user:
     "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 21v-3a8 8 0 0 1 16 0v3",
   chart: "M4 3v18h17 M8 16v-5 M13 16V6 M18 16v-8",
-  trend: "M4 17l5-5 4 3 7-9 M17 6h3v3",
-  shield: "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z M9 12l2 2 4-4",
-  clipboard: "M9 4h6a2 2 0 0 1 2 2v15H7V6a2 2 0 0 1 2-2z M10 4V3h4v1 M10 9h4 M10 13h4 M10 17h3",
-  settings: "M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5.6 5.6l2.1 2.1 M16.3 16.3l2.1 2.1 M18.4 5.6l-2.1 2.1 M7.7 16.3l-2.1 2.1 M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z",
   grid:
     "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   logout: "M9 4H3v16h6 M9 12h12m-5-5 5 5-5 5",
@@ -144,8 +140,6 @@ const paths = {
   help:
     "M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
   menu: "M3 6h18M3 12h18M3 18h18",
-  activity:
-    "M3 12h4l2.5-7 5 14 2.5-7H21",
 };
 
 const ic = (n) =>
@@ -696,11 +690,11 @@ const roleNav = [
   ["users", "user", "用户管理", "user.manage"],
   ["orders", "orders", "订单管理", "order.view_all"],
   ["revenue", "chart", "营收统计", "analytics.view"],
-  ["prediction", "trend", "负荷预测", "prediction.view"],
-  ["roles", "shield", "角色与权限", "role.manage"],
-  ["logs", "clipboard", "操作日志", "log.view"],
-  ["settings", "settings", "偏好设置", null],
-  ['ops-center','activity','运营中心','system.monitor']
+  ["prediction", "chart", "负荷预测", "prediction.view"],
+  ["roles", "grid", "角色与权限", "role.manage"],
+  ["logs", "orders", "操作日志", "log.view"],
+  ["settings", "grid", "偏好设置", null],
+  ['ops-center','grid','运营中心','system.monitor']
 ];
 
 function currentNav() {
@@ -3026,37 +3020,178 @@ async function loadOrders() {
 }
 
 async function finishOrderModal(orderId) {
-  const [order, coupons] = await Promise.all([
+  const [order, coupons, member] = await Promise.all([
     api(`/orders/${orderId}/receipt`),
     api("/member/coupons"),
+    api("/member/summary"),
   ]);
 
-  const owned = (coupons.owned || []).filter(
-    (coupon) =>
-      coupon.status === undefined ||
-      coupon.status === "available",
-  );
+  const originalCents =
+    Number(order.amount_cents || 0);
 
-  const eligible = owned.filter(
-    (coupon) =>
-      Number(order.amount_cents || 0) >=
-      Number(coupon.min_spend_cents || 0),
-  );
+  const tier =
+    member.summary?.tier || {};
+
+  const memberDiscountPct =
+    Number(tier.discount_pct || 0);
+
+  const owned =
+    (coupons.owned || []).filter(
+      (coupon) =>
+        coupon.status === undefined ||
+        coupon.status === "available",
+    );
+
+  const eligible =
+    owned.filter(
+      (coupon) =>
+        originalCents >=
+        Number(coupon.min_spend_cents || 0),
+    );
+
+  const calculateBreakdown = (
+    couponId,
+  ) => {
+    const memberDiscount = Math.min(
+      originalCents,
+      Math.round(
+        originalCents *
+          memberDiscountPct /
+          100,
+      ),
+    );
+
+    const afterMember =
+      originalCents - memberDiscount;
+
+    const coupon =
+      couponId
+        ? eligible.find(
+            (item) =>
+              Number(item.id) ===
+              Number(couponId),
+          )
+        : null;
+
+    let couponDiscount = 0;
+
+    if (coupon) {
+      const minSpend =
+        Number(
+          coupon.min_spend_cents || 0,
+        );
+
+      if (afterMember >= minSpend) {
+        if (
+          coupon.discount_type ===
+          "fixed"
+        ) {
+          couponDiscount =
+            Number(
+              coupon.discount_value || 0,
+            );
+        } else if (
+          coupon.discount_type ===
+          "percent"
+        ) {
+          couponDiscount = Math.round(
+            afterMember *
+              Number(
+                coupon.discount_value ||
+                  0,
+              ) /
+              100,
+          );
+        }
+
+        const maxDiscount =
+          Number(
+            coupon.max_discount_cents ||
+              0,
+          );
+
+        if (
+          maxDiscount > 0
+        ) {
+          couponDiscount =
+            Math.min(
+              couponDiscount,
+              maxDiscount,
+            );
+        }
+
+        couponDiscount =
+          Math.min(
+            couponDiscount,
+            afterMember,
+          );
+      }
+    }
+
+    const totalDiscount =
+      memberDiscount +
+      couponDiscount;
+
+    const grandTotal =
+      Math.max(
+        0,
+        originalCents -
+          totalDiscount,
+      );
+
+    return {
+      memberDiscount,
+      couponDiscount,
+      totalDiscount,
+      grandTotal,
+    };
+  };
+
+  const money = (cents) =>
+    `&#165;${(
+      Number(cents || 0) / 100
+    ).toFixed(2)}`;
 
   modal(
-    tr("\u7ed3\u675f\u5145\u7535\u5e76\u7ed3\u7b97"),
+    tr("???????"),
     trHtml`
-      <div style="margin-bottom:18px">
-        <div class="section-head">
-          <div>
-            <strong style="font-size:16px">
-              ${tr("\u672c\u6b21\u5145\u7535")}
-            </strong>
-            <div class="muted" style="margin-top:4px">
-              ${tr("\u5f53\u524d\u8d39\u7528")} \u00A5 ${yuan(order.amount_cents)}
-            </div>
-          </div>
+      <div
+        style="
+          margin-bottom:18px;
+          padding:16px;
+          border:1px solid var(--line);
+          border-radius:16px;
+          background:var(--surface-raised);
+        "
+      >
+        <div
+          style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:14px;
+          "
+        >
+          <strong>
+            ${tr("????")}
+          </strong>
+
+          <span
+            class="muted"
+            style="font-size:12px"
+          >
+            #${orderId}
+          </span>
         </div>
+
+        <div
+          id="finish-price-breakdown"
+          style="
+            display:grid;
+            gap:9px;
+            font-size:14px;
+          "
+        ></div>
       </div>
 
       <div
@@ -3075,7 +3210,7 @@ async function finishOrderModal(orderId) {
             margin-bottom:8px;
           "
         >
-          ${tr("\u4f18\u60e0\u5238")}
+          ${tr("???")}
         </label>
 
         <select
@@ -3090,7 +3225,7 @@ async function finishOrderModal(orderId) {
           "
         >
           <option value="">
-            ${tr("\u4e0d\u4f7f\u7528\u4f18\u60e0\u5238")}
+            ${tr("??????")}
           </option>
 
           ${eligible
@@ -3108,41 +3243,34 @@ async function finishOrderModal(orderId) {
 
         <div
           class="muted"
-          style="margin-top:8px;font-size:12px"
+          style="
+            margin-top:8px;
+            font-size:12px;
+          "
         >
           ${
             eligible.length
-              ? tr("\u9009\u62e9\u4e00\u5f20\u4f18\u60e0\u5238\u540e\uff0c\u5c06\u5728\u7ed3\u7b97\u65f6\u81ea\u52a8\u62b5\u6263\u3002")
-              : tr("\u5f53\u524d\u6ca1\u6709\u7b26\u5408\u672c\u6b21\u8ba2\u5355\u6761\u4ef6\u7684\u53ef\u7528\u4f18\u60e0\u5238\u3002")
+              ? tr(
+                  "?????????????????",
+                )
+              : tr(
+                  "???????????????????",
+                )
           }
         </div>
       </div>
 
       <div
-        style="
-          display:flex;
-          justify-content:space-between;
-          align-items:center;
-          padding:14px 0;
-          border-top:1px solid var(--line);
-        "
+        class="actions"
+        style="margin-top:18px"
       >
-        <span class="muted">
-          ${tr("\u4f1a\u5458\u6743\u76ca")}
-        </span>
-        <strong>
-          ${tr("\u4f1a\u5458\u6298\u6263\u5c06\u81ea\u52a8\u8ba1\u7b97")}
-        </strong>
-      </div>
-
-      <div class="actions" style="margin-top:18px">
         ${btn(
-          tr("\u53d6\u6d88"),
+          tr("??"),
           "close",
         )}
 
         ${btn(
-          tr("\u786e\u8ba4\u7ed3\u7b97"),
+          tr("????"),
           "finish-submit",
           "",
           `data-id="${orderId}"`,
@@ -3150,6 +3278,137 @@ async function finishOrderModal(orderId) {
       </div>
     `,
   );
+
+  const select =
+    $("#finish-coupon");
+
+  const breakdown =
+    $("#finish-price-breakdown");
+
+  const updateBreakdown = () => {
+    if (!breakdown) {
+      return;
+    }
+
+    const selectedId =
+      select?.value
+        ? Number(select.value)
+        : null;
+
+    const result =
+      calculateBreakdown(
+        selectedId,
+      );
+
+    breakdown.innerHTML = `
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+        "
+      >
+        <span class="muted">
+          ${tr("??")}
+        </span>
+        <strong>
+          ${money(originalCents)}
+        </strong>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+        "
+      >
+        <span class="muted">
+          ${tr("????")}
+        </span>
+        <strong
+          style="
+            color:var(--accent-text);
+          "
+        >
+          -${money(result.memberDiscount)}
+        </strong>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+        "
+      >
+        <span class="muted">
+          ${tr("?????")}
+        </span>
+        <strong
+          style="
+            color:var(--accent-text);
+          "
+        >
+          -${money(result.couponDiscount)}
+        </strong>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          padding-top:10px;
+          margin-top:4px;
+          border-top:1px solid var(--line);
+        "
+      >
+        <span class="muted">
+          ${tr("???")}
+        </span>
+        <strong
+          style="
+            color:var(--accent-text);
+          "
+        >
+          -${money(result.totalDiscount)}
+        </strong>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:baseline;
+          padding-top:10px;
+        "
+      >
+        <span
+          style="
+            font-size:15px;
+            font-weight:700;
+          "
+        >
+          ${tr("????")}
+        </span>
+
+        <strong
+          style="
+            font-size:24px;
+            letter-spacing:-0.5px;
+          "
+        >
+          ${money(result.grandTotal)}
+        </strong>
+      </div>
+    `;
+  };
+
+  if (select) {
+    select.addEventListener(
+      "change",
+      updateBreakdown,
+    );
+  }
+
+  updateBreakdown();
 }
 
 async function chargingPage() {
