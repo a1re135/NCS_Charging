@@ -618,6 +618,8 @@
 .trend-cell {
   box-shadow: none;
   padding: 18px 20px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .trend-cell .section-head {
@@ -631,13 +633,22 @@
 
 .trend-cell .chart-labels {
   margin-top: 8px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.trend-cell .chart-labels span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .kind-stats {
   font-size: 12px;
-  color: var(--muted, #888);
-  background: #faf8fe;
-  border: 1px solid #eee9f7;
+  color: var(--muted);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px 15px;
   margin-bottom: 14px;
@@ -645,7 +656,7 @@
 }
 
 .kind-stats b {
-  color: #5c5470;
+  color: var(--ink);
   font-weight: 600;
 }
 

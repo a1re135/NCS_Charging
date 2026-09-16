@@ -136,21 +136,12 @@ class MySQLDatabase:
     def _convert_sql(self, sql):
         sql = sql.strip()
 
-        upper = sql.upper()
-
-        if upper == "BEGIN IMMEDIATE":
-            return None
-
-        # Application placeholders -> PyMySQL placeholders
-        sql = sql.replace("?", "%s")
-
-        # Normalize application SQL for MySQL
-        sql = sql.replace(
-            "INSERT OR IGNORE",
-            "INSERT IGNORE"
+        # Convert application placeholders
+        # into PyMySQL placeholders.
+        return sql.replace(
+            "?",
+            "%s",
         )
-
-        return sql
 
     def execute(self, sql, params=()):
         converted = self._convert_sql(sql)
@@ -235,68 +226,206 @@ ROLE_PERMISSION_KEYS = {
     'admin': {k for k,_,_ in PERMISSION_DEFINITIONS},
 }
 
-def _ensure_rbac_schema(db, backend):
-    if backend == 'mysql':
-        statements = [
-            """CREATE TABLE IF NOT EXISTS roles(
-                `key` VARCHAR(64) NOT NULL PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                description VARCHAR(255) NOT NULL,
-                level INT NOT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
-            """CREATE TABLE IF NOT EXISTS permissions(
-                `key` VARCHAR(64) NOT NULL PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                module VARCHAR(100) NOT NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
-            """CREATE TABLE IF NOT EXISTS role_permissions(
-                role_key VARCHAR(64) NOT NULL,
-                permission_key VARCHAR(64) NOT NULL,
-                PRIMARY KEY(role_key, permission_key),
-                CONSTRAINT fk_role_permission_role
-                    FOREIGN KEY(role_key) REFERENCES roles(`key`) ON DELETE CASCADE,
-                CONSTRAINT fk_role_permission_permission
-                    FOREIGN KEY(permission_key) REFERENCES permissions(`key`) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"""
-        ]
-        for statement in statements:
-            db.execute(statement)
+def _ensure_rbac_schema(db):
+    statements = [
+        """
+        CREATE TABLE IF NOT EXISTS roles(
+            `key` VARCHAR(64) NOT NULL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            description VARCHAR(255) NOT NULL,
+            level INT NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """,
+
+        """
+        CREATE TABLE IF NOT EXISTS permissions(
+            `key` VARCHAR(64) NOT NULL PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            module VARCHAR(100) NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """,
+
+        """
+        CREATE TABLE IF NOT EXISTS role_permissions(
+            role_key VARCHAR(64) NOT NULL,
+            permission_key VARCHAR(64) NOT NULL,
+
+            PRIMARY KEY(
+                role_key,
+                permission_key
+            ),
+
+            CONSTRAINT fk_role_permission_role
+                FOREIGN KEY(role_key)
+                REFERENCES roles(`key`)
+                ON DELETE CASCADE,
+
+            CONSTRAINT fk_role_permission_permission
+                FOREIGN KEY(permission_key)
+                REFERENCES permissions(`key`)
+                ON DELETE CASCADE
+
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    ]
+
+    for statement in statements:
+        db.execute(statement)
 
 def _ensure_rbac(db):
-    for key,name,description,level in ROLE_DEFINITIONS:
+    for (
+        key,
+        name,
+        description,
+        level,
+    ) in ROLE_DEFINITIONS:
         db.execute(
-            'INSERT OR IGNORE INTO roles(`key`,name,description,level) VALUES(?,?,?,?)',
-            (key,name,description,level)
+            '''
+            INSERT IGNORE INTO roles(
+                `key`,
+                name,
+                description,
+                level
+            )
+            VALUES(?,?,?,?)
+            ''',
+            (
+                key,
+                name,
+                description,
+                level,
+            ),
         )
-    for key,name,module in PERMISSION_DEFINITIONS:
+
+    for (
+        key,
+        name,
+        module,
+    ) in PERMISSION_DEFINITIONS:
         db.execute(
-            'INSERT OR IGNORE INTO permissions(`key`,name,module) VALUES(?,?,?)',
-            (key,name,module)
+            '''
+            INSERT IGNORE INTO permissions(
+                `key`,
+                name,
+                module
+            )
+            VALUES(?,?,?)
+            ''',
+            (
+                key,
+                name,
+                module,
+            ),
         )
-    for role, keys in ROLE_PERMISSION_KEYS.items():
-        db.execute('DELETE FROM role_permissions WHERE role_key=?',(role,))
+
+    for (
+        role,
+        keys,
+    ) in ROLE_PERMISSION_KEYS.items():
+
+        db.execute(
+            '''
+            DELETE FROM role_permissions
+            WHERE role_key=?
+            ''',
+            (
+                role,
+            ),
+        )
+
         for key in sorted(keys):
             db.execute(
-                'INSERT OR IGNORE INTO role_permissions(role_key,permission_key) VALUES(?,?)',
-                (role,key)
+                '''
+                INSERT IGNORE INTO role_permissions(
+                    role_key,
+                    permission_key
+                )
+                VALUES(?,?)
+                ''',
+                (
+                    role,
+                    key,
+                ),
             )
 
     demos = [
-        ('operator','运营演示','operator','Operator123456'),
-        ('tech','运维演示','technician','Tech123456'),
+        (
+            'operator',
+            '运营演示',
+            'operator',
+            'Operator123456',
+        ),
+        (
+            'tech',
+            '运维演示',
+            'technician',
+            'Tech123456',
+        ),
     ]
-    for account,nickname,role,password in demos:
-        row=db.execute('SELECT id FROM users WHERE phone=?',(account,)).fetchone()
+
+    for (
+        account,
+        nickname,
+        role,
+        password,
+    ) in demos:
+
+        row = db.execute(
+            '''
+            SELECT id
+            FROM users
+            WHERE phone=?
+            ''',
+            (
+                account,
+            ),
+        ).fetchone()
+
         if row:
-            db.execute('UPDATE users SET role=? WHERE id=?',(role,row['id']))
-        else:
             db.execute(
-                'INSERT INTO users(phone,nickname,password_hash,role,balance_cents,created_at) '
-                'VALUES(?,?,?,?,?,?)',
-                (account,nickname,generate_password_hash(password),role,0,now())
+                '''
+                UPDATE users
+                SET role=?
+                WHERE id=?
+                ''',
+                (
+                    role,
+                    row['id'],
+                ),
             )
 
-    db.execute("UPDATE users SET role='admin' WHERE phone='admin'")
+        else:
+            db.execute(
+                '''
+                INSERT INTO users(
+                    phone,
+                    nickname,
+                    password_hash,
+                    role,
+                    balance_cents,
+                    created_at
+                )
+                VALUES(?,?,?,?,?,?)
+                ''',
+                (
+                    account,
+                    nickname,
+                    generate_password_hash(
+                        password
+                    ),
+                    role,
+                    0,
+                    now(),
+                ),
+            )
+
+    db.execute(
+        """
+        UPDATE users
+        SET role='admin'
+        WHERE phone='admin'
+        """
+    )
 
 
 def init_db():
@@ -318,10 +447,7 @@ def init_db():
     # =====================================================
     # 3. Initialize RBAC tables
     # =====================================================
-    _ensure_rbac_schema(
-        db,
-        "mysql",
-    )
+    _ensure_rbac_schema(db)
 
     # =====================================================
     # 4. Initialize avatar table

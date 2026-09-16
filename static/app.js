@@ -2369,7 +2369,9 @@ function trendChartSVG(
   const vs =
     ds.map(
       (d) =>
-        d[key] || 0,
+        Number(
+          d[key] || 0,
+        ),
     );
 
   const max =
@@ -2412,10 +2414,58 @@ function trendChartSVG(
 
   const fmt =
     gran === "month"
-      ? (l) =>
-          l.slice(2)
-      : (l) =>
-          l.slice(5);
+      ? (label) =>
+          label.slice(2)
+      : (label) =>
+          label.slice(5);
+
+  /*
+   * Never render hundreds of labels on the X axis.
+   *
+   * For example:
+   *   按天 + 本年度
+   *
+   * may contain more than 300 points.
+   * We keep all points in the line chart,
+   * but only show a maximum of 8 evenly
+   * distributed labels and markers.
+   */
+  const maxLabels = 8;
+
+  const labelCount =
+    Math.min(
+      ds.length,
+      maxLabels,
+    );
+
+  const labelIndexes =
+    labelCount
+      ? [
+          ...new Set(
+            Array.from(
+              {
+                length:
+                  labelCount,
+              },
+              (_, i) =>
+                Math.round(
+                  (
+                    i *
+                    (
+                      ds.length -
+                      1
+                    )
+                  ) /
+                    Math.max(
+                      labelCount -
+                        1,
+                      1,
+                    ),
+                ),
+            ),
+          ),
+        ]
+      : [];
 
   return trHtml`
     <svg
@@ -2463,7 +2513,11 @@ function trendChartSVG(
         .join("")}
 
       <polygon
-        points="10,145 ${ln} 590,145"
+        points="
+          10,145
+          ${ln}
+          590,145
+        "
         fill="url(#trfill)"
       />
 
@@ -2476,29 +2530,47 @@ function trendChartSVG(
         vector-effect="non-scaling-stroke"
       />
 
-      ${pts
+      ${labelIndexes
         .map(
-          (p, i) =>
-            `<circle
-              cx="${p[0].toFixed(1)}"
-              cy="${p[1].toFixed(1)}"
-              r="3.5"
-              fill="#fff"
-              stroke="#ad9bdf"
-              stroke-width="2"
-            >
-              <title>
-                ${esc(ds[i].label)}：
-                ${
-                  key === "cents"
-                    ? "¥ " +
-                      yuan(
-                        vs[i],
-                      )
-                    : vs[i]
-                }
-              </title>
-            </circle>`,
+          (i) => {
+            const p =
+              pts[i];
+
+            if (!p) {
+              return "";
+            }
+
+            return `
+              <circle
+                cx="${p[0].toFixed(
+                  1,
+                )}"
+                cy="${p[1].toFixed(
+                  1,
+                )}"
+                r="3.5"
+                fill="#fff"
+                stroke="#ad9bdf"
+                stroke-width="2"
+              >
+                <title>
+                  ${esc(
+                    ds[i]
+                      .label,
+                  )}：
+                  ${
+                    key ===
+                    "cents"
+                      ? "¥ " +
+                        yuan(
+                          vs[i],
+                        )
+                      : vs[i]
+                  }
+                </title>
+              </circle>
+            `;
+          },
         )
         .join("")}
 
@@ -2506,12 +2578,13 @@ function trendChartSVG(
 
     <div class="chart-labels">
 
-      ${ds
+      ${labelIndexes
         .map(
-          (d) =>
+          (i) =>
             `<span>
               ${fmt(
-                d.label,
+                ds[i]
+                  .label,
               )}
             </span>`,
         )

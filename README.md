@@ -1,6 +1,6 @@
 # NCS Charging — 智能充电管理平台
 
-NCS Charging 是一个基于 **Flask + JavaScript + MySQL/SQLite** 的智能充电管理平台课程项目。
+NCS Charging 是一个基于 **Flask + JavaScript + MySQL** 的智能充电管理平台课程项目。
 
 项目包含：
 
@@ -20,7 +20,7 @@ NCS Charging 是一个基于 **Flask + JavaScript + MySQL/SQLite** 的智能充�
 
 > 推荐所有组员第一次配置时按照：
 >
-> **安装环境 → 安装依赖 → 配置数据库 → 配置 `.env` → 配置 AI Agent → 启动 → 测试**
+> **安装环境 → 安装依赖 → 配置 MySQL → 配置 `.env` → 启动 → 测试**
 >
 > 当前主要开发分支：`dev`
 
@@ -31,7 +31,7 @@ NCS Charging 是一个基于 **Flask + JavaScript + MySQL/SQLite** 的智能充�
 1. [环境要求](#1-环境要求)
 2. [获取代码](#2-获取代码)
 3. [安装 Python 依赖](#3-安装-python-依赖)
-4. [选择数据库：SQLite 或 MySQL](#4-选择数据库sqlite-或-mysql)
+4. [配置 MySQL 数据库](#4-配置-mysql-数据库)
 5. [配置 `.env`](#5-配置-env)
 6. [配置 AI Agent](#6-配置-ai-agent)
 7. [启动项目](#7-启动项目)
@@ -45,6 +45,8 @@ NCS Charging 是一个基于 **Flask + JavaScript + MySQL/SQLite** 的智能充�
 15. [常见问题](#15-常见问题)
 16. [项目结构](#16-项目结构)
 17. [团队开发建议](#17-团队开发建议)
+18. [第一次配置推荐流程](#18-第一次配置推荐流程)
+19. [安全说明](#19-安全说明)
 
 ---
 
@@ -59,29 +61,29 @@ NCS Charging 是一个基于 **Flask + JavaScript + MySQL/SQLite** 的智能充�
 
   * 推荐 Python 3.12
 * **VS Code**
+* **MySQL 8.x**
 * Chrome / Edge 浏览器
+
+MySQL Workbench 可选，用于图形化管理数据库。
 
 ## VS Code 推荐扩展
 
-安装：
+建议安装：
 
 * Python
 * Python Debugger
 
-## 完整模式推荐额外安装
-
-如果要使用完整 MySQL 环境：
-
-* **MySQL 8.x**
-* MySQL Workbench（可选）
-
-如果需要做 JavaScript 语法检查：
+如果需要检查 JavaScript：
 
 * Node.js
 
 如果需要容器运行：
 
-* Docker Desktop
+* Docker Desktop（可选）
+
+> Docker 不是本项目本地开发的必需条件。
+>
+> Windows + Python + MySQL 即可运行完整项目。
 
 ---
 
@@ -94,16 +96,23 @@ git --version
 python --version
 ```
 
-Windows 如果安装了 Python Launcher：
+如果安装了 Python Launcher：
 
 ```powershell
 py --version
+```
+
+检查 MySQL：
+
+```powershell
+mysql --version
 ```
 
 例如：
 
 ```text
 Python 3.12.x
+MySQL 8.x
 ```
 
 即可。
@@ -207,13 +216,13 @@ DBUtils
 其中：
 
 * `Flask`：Web 后端
-* `Waitress`：运行 Web Server
+* `Waitress`：Web Server
 * `PyMySQL`：连接 MySQL
-* `DBUtils`：MySQL connection pool
+* `DBUtils`：MySQL Connection Pool
 * `python-dotenv`：读取 `.env`
-* `openai`：用于连接 OpenAI-compatible 的 BigModel / GLM API
+* `openai`：连接 OpenAI-compatible 的 BigModel / GLM API
 * `qrcode`：生成充电桩二维码
-* `Pillow`：图片相关处理
+* `Pillow`：头像图片处理
 
 > 项目安装 `openai` SDK 并不代表必须使用 OpenAI API。
 >
@@ -243,90 +252,33 @@ Python: Select Interpreter
 
 ---
 
-# 4. 选择数据库：SQLite 或 MySQL
+# 4. 配置 MySQL 数据库
 
-NCS Charging 同时支持：
+NCS Charging 使用 **MySQL 8.x** 作为唯一数据库。
 
-### SQLite
+项目运行、业务数据、用户数据、订单、电站、电桩、钱包、RBAC、用户偏好和头像数据均存储在 MySQL 中。
 
-优点：
-
-* 最简单
-* 不需要安装 MySQL
-* 适合第一次运行
-* 适合 UI 开发
-* 适合功能测试
-
-### MySQL
-
-优点：
-
-* 推荐完整演示
-* 推荐多人统一开发
-* 推荐 L1 性能测试
-* 支持 connection pooling
-* 更接近正式部署环境
-
-当前项目默认：
-
-```text
-DB_BACKEND=mysql
-```
-
-因此第一次运行之前，请明确选择数据库。
+自动测试使用独立的 MySQL 测试数据库，避免影响正常开发数据库。
 
 ---
 
-# 4.1 SQLite 快速启动
+## 4.1 安装 MySQL
 
-如果只是想最快把整个系统跑起来，推荐先使用 SQLite。
-
-创建 `.env` 后写：
-
-```env
-DB_BACKEND=sqlite
-NCS_DATABASE=data/ncs.db
-```
-
-第一次运行时系统会自动创建：
+推荐安装：
 
 ```text
-data/ncs.db
+MySQL Server 8.x
 ```
 
-并自动：
-
-* 建表
-* 创建演示账号
-* 创建电站
-* 创建电桩
-* 创建历史订单
-* 创建 RBAC 权限
-* 创建分时价格
-* 创建示例故障数据
-
-不需要自己导入 SQL。
-
----
-
-# 4.2 MySQL 完整模式
-
-推荐项目最终演示和性能测试使用 MySQL。
-
-## 安装 MySQL
-
-推荐：
+Windows 用户也可以安装：
 
 ```text
-MySQL 8.x
+MySQL Workbench
 ```
 
-Windows 可以安装：
+用于图形化管理数据库。
 
-* MySQL Server
-* MySQL Workbench
-
-安装时记住：
+安装 MySQL Server 时，请记住设置的：
 
 ```text
 root password
@@ -334,15 +286,41 @@ root password
 
 ---
 
-## 创建数据库
+## 4.2 确认 MySQL Server 正常运行
+
+打开 PowerShell：
+
+```powershell
+mysql -u root -p
+```
+
+输入 MySQL root 密码。
+
+如果进入：
+
+```text
+mysql>
+```
+
+说明 MySQL Server 已正常运行。
+
+也可以使用 MySQL Workbench：
+
+```text
+Host: localhost
+Port: 3306
+User: root
+```
+
+---
+
+## 4.3 创建正常运行数据库
 
 进入 MySQL：
 
 ```powershell
 mysql -u root -p
 ```
-
-或者直接使用 MySQL Workbench。
 
 执行：
 
@@ -352,20 +330,106 @@ CHARACTER SET utf8mb4
 COLLATE utf8mb4_unicode_ci;
 ```
 
+检查：
+
+```sql
+SHOW DATABASES;
+```
+
+应该可以看到：
+
+```text
+ncs_charging
+```
+
 ---
 
-## 创建项目专用 MySQL 用户
+## 4.4 创建自动测试数据库
 
-建议不要让项目直接使用 `root`。
+自动测试必须使用独立数据库：
+
+```text
+ncs_charging_test
+```
 
 执行：
+
+```sql
+CREATE DATABASE ncs_charging_test
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+检查：
+
+```sql
+SHOW DATABASES;
+```
+
+应该同时看到：
+
+```text
+ncs_charging
+ncs_charging_test
+```
+
+其中：
+
+```text
+ncs_charging
+```
+
+用于：
+
+* 正常开发
+* 本地运行
+* 演示
+* 性能测试
+* 保存正常业务数据
+
+而：
+
+```text
+ncs_charging_test
+```
+
+仅用于：
+
+* Python 自动测试
+* 回归测试
+* 并发测试
+* 数据库初始化测试
+
+> **不要把 `MYSQL_TEST_DATABASE` 设置成 `ncs_charging`。**
+>
+> 测试会清理测试数据库中的表，因此测试数据库必须与正常数据库完全分开。
+
+---
+
+## 4.5 创建项目专用 MySQL 用户
+
+不建议应用直接使用 `root`。
+
+创建：
 
 ```sql
 CREATE USER 'ncs_app'@'localhost'
 IDENTIFIED BY 'CHANGE_THIS_PASSWORD';
 ```
 
-授权：
+将：
+
+```text
+CHANGE_THIS_PASSWORD
+```
+
+替换成自己的密码。
+
+---
+
+## 4.6 给项目用户授权
+
+授权正常数据库：
 
 ```sql
 GRANT ALL PRIVILEGES
@@ -373,77 +437,203 @@ ON ncs_charging.*
 TO 'ncs_app'@'localhost';
 ```
 
-然后：
+授权测试数据库：
+
+```sql
+GRANT ALL PRIVILEGES
+ON ncs_charging_test.*
+TO 'ncs_app'@'localhost';
+```
+
+最后：
 
 ```sql
 FLUSH PRIVILEGES;
 ```
 
+检查：
+
+```sql
+SHOW GRANTS FOR 'ncs_app'@'localhost';
+```
+
 ---
 
-## MySQL `.env`
+## 4.7 数据库配置
 
-例如：
+项目通过 `.env` 读取 MySQL 配置。
 
 ```env
-DB_BACKEND=mysql
-
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
 MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging_test
 MYSQL_USER=ncs_app
 MYSQL_PASSWORD=CHANGE_THIS_PASSWORD
 ```
 
 其中：
 
-```text
-MYSQL_PASSWORD
+### `MYSQL_HOST`
+
+本机安装 MySQL：
+
+```env
+MYSQL_HOST=localhost
 ```
 
-必须与你刚才创建 MySQL user 时设置的密码一致。
+### `MYSQL_PORT`
+
+默认：
+
+```env
+MYSQL_PORT=3306
+```
+
+### `MYSQL_DATABASE`
+
+正常运行：
+
+```env
+MYSQL_DATABASE=ncs_charging
+```
+
+### `MYSQL_TEST_DATABASE`
+
+自动测试：
+
+```env
+MYSQL_TEST_DATABASE=ncs_charging_test
+```
+
+### `MYSQL_USER`
+
+```env
+MYSQL_USER=ncs_app
+```
+
+### `MYSQL_PASSWORD`
+
+填写创建 `ncs_app` 时设置的密码。
 
 ---
 
-## 不需要手动导入 schema
+## 4.8 正常数据库与测试数据库必须分开
 
-只需要：
+正确：
+
+```env
+MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging_test
+```
+
+错误：
+
+```env
+MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging
+```
+
+测试代码包含安全保护：
+
+* `MYSQL_TEST_DATABASE` 不能等于 `MYSQL_DATABASE`
+* 测试数据库名称必须以 `_test` 结尾
+
+例如：
+
+```text
+ncs_charging_test
+```
+
+这样可以避免自动测试误操作正常业务数据库。
+
+---
+
+## 4.9 不需要手动导入 Schema
+
+NCS Charging 会在启动时自动创建需要的数据库结构。
+
+只需要确保：
 
 1. MySQL Server 已运行
-2. `ncs_charging` database 已存在
-3. MySQL user 可以访问 database
+2. `ncs_charging` 已创建
+3. `ncs_charging_test` 已创建
+4. `ncs_app` 已创建
+5. `ncs_app` 已获得两个数据库的权限
+6. `.env` 配置正确
 
-启动 NCS 后，Python 会自动创建项目需要的数据表。
+程序会自动初始化：
+
+* 用户表
+* 电站表
+* 电桩表
+* 订单表
+* 钱包流水
+* 分时收费规则
+* 故障记录
+* 操作日志
+* RBAC 角色
+* RBAC 权限
+* 角色权限关系
+* 用户偏好
+* 用户头像
+* 数据迁移记录
+* 其他业务表
+
+已有数据库不会因为普通启动而直接清空。
 
 ---
 
-## 判断是否使用 MySQL
+## 4.10 检查 MySQL 连接
 
-启动时终端会显示类似：
+运行：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+启动时应该看到类似：
 
 ```text
 [Database] MySQL localhost:3306/ncs_charging
 ```
 
-表示当前正在使用 MySQL。
-
-如果使用 SQLite，则会看到类似：
+打开：
 
 ```text
-[Database] SQLite ...\data\ncs.db
+http://127.0.0.1:5000/api/health
 ```
+
+正常情况下类似：
+
+```json
+{
+  "ok": true,
+  "service": "ncs-charging",
+  "capacity_level": "L1",
+  "database": "ok"
+}
+```
+
+其中：
+
+```json
+"database": "ok"
+```
+
+表示应用可以正常访问 MySQL。
 
 ---
 
 # 5. 配置 `.env`
 
-项目已经提供：
+项目提供：
 
 ```text
 .env.example
 ```
 
-请复制为：
+复制为：
 
 ```text
 .env
@@ -461,7 +651,7 @@ CMD：
 copy .env.example .env
 ```
 
-`.env` 已经被 `.gitignore` 排除，因此正常情况下不会提交到 GitHub。
+`.env` 已被 `.gitignore` 排除，不应该提交到 GitHub。
 
 ---
 
@@ -485,24 +675,15 @@ NCS_TRUST_PROXY=0
 
 
 # =========================================================
-# Database
+# MySQL
 # =========================================================
-
-DB_BACKEND=mysql
 
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
 MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging_test
 MYSQL_USER=ncs_app
 MYSQL_PASSWORD=CHANGE_THIS_PASSWORD
-
-
-# =========================================================
-# SQLite alternative
-# =========================================================
-
-# DB_BACKEND=sqlite
-# NCS_DATABASE=data/ncs.db
 
 
 # =========================================================
@@ -518,7 +699,7 @@ BIGMODEL_MODEL=glm-4-flashx-250414
 
 
 # =========================================================
-# Web server
+# Web Server
 # =========================================================
 
 NCS_THREADS=48
@@ -526,51 +707,69 @@ NCS_THREADS=48
 
 ---
 
-# 5.1 NCS_SECRET_KEY
+## 5.1 `NCS_SECRET_KEY`
 
-建议每个人生成自己的随机 Secret Key。
-
-运行：
+每个人建议生成自己的随机 Secret Key。
 
 ```powershell
 .\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-例如输出：
-
-```text
-52c7d4....
-```
-
-复制到：
+将输出复制到：
 
 ```env
-NCS_SECRET_KEY=52c7d4....
+NCS_SECRET_KEY=YOUR_RANDOM_SECRET
 ```
 
 不要把真实 Secret Key 提交到 GitHub。
 
 ---
 
-# 5.2 NCS_THREADS
+## 5.2 `NCS_THREADS`
 
-当前 Web Server 使用 Waitress。
+项目使用 Waitress。
 
-例如：
+推荐：
 
 ```env
 NCS_THREADS=48
 ```
 
-表示 Waitress 最多使用 48 个 worker threads 处理请求。
-
-本地普通开发也可以降低，例如：
+普通本地开发也可以使用：
 
 ```env
 NCS_THREADS=16
 ```
 
-但性能测试推荐保持项目指定值。
+L1 性能测试建议使用项目规定的线程配置。
+
+---
+
+## 5.3 修改端口
+
+默认端口：
+
+```text
+5000
+```
+
+可以临时使用：
+
+```powershell
+$env:NCS_PORT="5001"
+```
+
+然后：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+访问：
+
+```text
+http://127.0.0.1:5001
+```
 
 ---
 
@@ -590,75 +789,59 @@ GLM / BigModel Agent
 
 ---
 
-# 6.1 Local Agent
+## 6.1 Local Agent
 
-Local Agent 不需要任何 API Key。
+Local Agent 不需要 API Key。
 
-只要：
+设置：
 
 ```env
 NCS_LLM_ENABLED=0
 ```
 
-即可。
-
-此时：
+工作方式：
 
 ```text
 用户问题
 ↓
-本地 Agent 判断 intent
+Local Agent 判断 intent
 ↓
 调用 NCS Python 业务函数
 ↓
-查询真实业务数据
+查询 MySQL
 ↓
 返回答案
 ```
 
 优点：
 
-* 不需要联网
+* 不需要 BigModel API Key
 * 不消耗 API 额度
-* 不需要 BigModel Key
-* 更稳定
-* 自动测试使用该模式
+* 网络要求低
+* 自动测试可以稳定运行
 
 ---
 
-# 6.2 GLM / BigModel Agent
+## 6.2 GLM / BigModel Agent
 
-如果希望使用真正的 LLM 做自然语言理解，可以开启 GLM。
-
-需要获取：
+需要：
 
 ```text
 BIGMODEL_API_KEY
 ```
 
-然后修改 `.env`：
+设置：
 
 ```env
 NCS_LLM_ENABLED=1
-
 NCS_LLM_PROVIDER=bigmodel
 
 BIGMODEL_API_KEY=YOUR_REAL_API_KEY
-
 BIGMODEL_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
-
 BIGMODEL_MODEL=glm-4-flashx-250414
 ```
 
-保存后必须重启项目。
-
-停止：
-
-```text
-Ctrl + C
-```
-
-重新：
+修改后重新启动：
 
 ```powershell
 .\.venv\Scripts\python.exe app.py
@@ -666,29 +849,29 @@ Ctrl + C
 
 ---
 
-# 6.3 AI Agent 的工作方式
+## 6.3 AI Agent 工作方式
 
-GLM **不会直接连接数据库**。
+GLM 不直接连接数据库。
 
-架构是：
+架构：
 
 ```text
 User
- ↓
+↓
 AI Agent UI
- ↓
+↓
 /api/agent/chat
- ↓
+↓
 GLM
- ↓
+↓
 选择允许调用的 NCS Tool
- ↓
+↓
 Python 本地业务函数
- ↓
-MySQL / SQLite
- ↓
+↓
+MySQL
+↓
 真实业务数据
- ↓
+↓
 返回答案
 ```
 
@@ -696,52 +879,40 @@ MySQL / SQLite
 
 ```text
 LLM = 理解问题
-Python Tool = 读取真实业务数据
+Python Tool = 查询真实业务数据
 ```
 
 GLM 不能：
 
-* 自己写 SQL
-* 直接访问数据库
-* 越过 RBAC
+* 直接连接 MySQL
+* 随意执行 SQL
+* 绕过 RBAC
 * 调用当前角色没有权限的工具
 
 ---
 
-# 6.4 Local fallback
+## 6.4 Local fallback
 
-如果发生：
+如果出现：
 
 * `NCS_LLM_ENABLED=0`
 * 没有填写 API Key
 * 网络失败
-* BigModel API timeout
+* API timeout
 * API Key 无效
 * BigModel 服务异常
 
-系统会自动：
+系统可以使用：
 
 ```text
-GLM
- ↓ 失败
 Local Agent
- ↓
-继续回答
 ```
 
-因此 AI Agent 页面不会因为 GLM 服务出问题而完全不能使用。
-
-终端可能会看到：
-
-```text
-GLM Agent failed; using local fallback
-```
-
-这是 fallback 机制正常工作的表现。
+继续完成支持的查询。
 
 ---
 
-# 6.5 AI Agent 用户问题示例
+## 6.5 用户 Agent 示例
 
 普通用户可以问：
 
@@ -771,9 +942,9 @@ GLM Agent failed; using local fallback
 
 ---
 
-# 6.6 运营 / 管理员 Agent
+## 6.6 运营 / 管理员 Agent
 
-运营人员 / 管理员可以问：
+可以查询：
 
 ```text
 今天哪个充电站订单最多？
@@ -801,9 +972,9 @@ GLM Agent failed; using local fallback
 
 ---
 
-# 6.7 运维人员 Agent
+## 6.7 运维人员 Agent
 
-运维人员主要可以查询：
+主要可以查询：
 
 ```text
 现在有多少故障设备？
@@ -819,29 +990,24 @@ GLM Agent failed; using local fallback
 
 ---
 
-# 6.8 GLM 没生效怎么办
+## 6.8 GLM 没生效怎么办
 
-检查 `.env`：
+检查：
 
 ```env
 NCS_LLM_ENABLED=1
+BIGMODEL_API_KEY=YOUR_REAL_API_KEY
 ```
 
-以及：
-
-```env
-BIGMODEL_API_KEY=真实APIKey
-```
-
-确认：
+并确认：
 
 * `.env` 与 `app.py` 同级
-* 修改 `.env` 后重启 Python
-* 网络能访问 BigModel
+* 修改 `.env` 后已经重启 Python
+* 网络可以访问 BigModel
 * API Key 有效
-* `openai` package 已安装
+* requirements 已安装
 
-可以重新安装 requirements：
+重新安装：
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -849,31 +1015,21 @@ BIGMODEL_API_KEY=真实APIKey
 
 ---
 
-## 自动测试不会调用 GLM
+## 6.9 自动测试
 
-当 Flask 运行：
+自动测试建议关闭远程 LLM：
 
-```python
-TESTING=True
+```env
+NCS_LLM_ENABLED=0
 ```
 
-时，系统强制使用：
-
-```text
-Local Agent
-```
-
-所以运行测试：
-
-```powershell
-python -m unittest
-```
-
-不会消耗 BigModel API 额度。
+这样不会消耗 BigModel API 额度。
 
 ---
 
 # 7. 启动项目
+
+确保 MySQL Server 正在运行。
 
 Windows：
 
@@ -881,9 +1037,11 @@ Windows：
 .\.venv\Scripts\python.exe app.py
 ```
 
-正常情况下会看到：
+正常情况下会看到类似：
 
 ```text
+[Database] MySQL localhost:3306/ncs_charging
+
 NCS Charging: http://127.0.0.1:5000
 Waitress threads: 48
 Press Ctrl+C to stop.
@@ -899,19 +1057,23 @@ http://127.0.0.1:5000
 
 ## 健康检查
 
-浏览器打开：
+打开：
 
 ```text
 http://127.0.0.1:5000/api/health
 ```
 
-如果返回系统信息，说明后端正常。
+如果：
+
+```json
+"database": "ok"
+```
+
+说明后端和 MySQL 正常。
 
 ---
 
 ## 停止系统
-
-终端：
 
 ```text
 Ctrl + C
@@ -928,17 +1090,13 @@ cd NCS_Charging
 .\.venv\Scripts\python.exe app.py
 ```
 
-不需要每次重新：
-
-```text
-pip install
-```
+不需要每次重新安装 requirements。
 
 ---
 
 # 8. 演示账号
 
-系统初始化后提供以下演示账号。
+系统初始化后提供演示账号：
 
 | 角色     | 账号            | 密码               |
 | ------ | ------------- | ---------------- |
@@ -948,28 +1106,29 @@ pip install
 | 运维人员   | `tech`        | `Tech123456`     |
 | 系统管理员  | `admin`       | `Admin123456`    |
 
-登录页面也有演示账号快捷填入按钮。
+登录页面也提供演示账号快捷填入。
 
 ---
 
-## 角色说明
-
-### 普通用户
+## 普通用户
 
 可以：
 
 * 找充电站
+* 查看电站详情
 * 预约
-* 充电
+* 开始充电
+* 结束充电
 * 查看订单
 * 钱包充值
-* 处理欠费
+* 补缴欠费
 * 使用 AI Agent
 * 修改个人资料
+* 设置语言和主题
 
 ---
 
-### 运营人员
+## 运营人员
 
 主要负责：
 
@@ -982,7 +1141,7 @@ pip install
 
 ---
 
-### 运维人员
+## 运维人员
 
 主要负责：
 
@@ -995,7 +1154,7 @@ pip install
 
 ---
 
-### 系统管理员
+## 系统管理员
 
 拥有完整管理权限，包括：
 
@@ -1013,11 +1172,11 @@ pip install
 
 # 9. 首次启动会自动做什么
 
-只要数据库连接成功，系统启动时会自动初始化数据库。
+只要 MySQL 配置正确，程序启动时会自动初始化需要的数据结构和演示数据。
 
 包括：
 
-* 创建数据表
+* 创建业务表
 * 创建 RBAC tables
 * 创建角色
 * 创建权限
@@ -1025,21 +1184,14 @@ pip install
 * 创建电站
 * 创建电桩
 * 创建价格规则
-* 创建历史订单
-* 创建钱包数据
-* 创建故障演示数据
+* 创建演示业务数据
+* 创建故障数据
 * 创建操作日志相关表
 * 创建用户 preferences
-* 初始化 avatar 数据
+* 创建 avatar table
 * 扩展演示电站网络
 
-因此正常情况下不需要运行：
-
-```text
-schema.sql
-```
-
-或手动导入数据库结构。
+因此正常情况下不需要手动导入 schema。
 
 ---
 
@@ -1055,9 +1207,9 @@ schema.sql
 * 累计充电量
 * 已完成订单
 * 累计消费
-* 最近 7 天趋势
+* 最近趋势
 * 钱包余额
-* 电桩实时状态
+* 电桩状态
 * 最近订单
 
 ---
@@ -1074,7 +1226,7 @@ schema.sql
 * 距离排序
 * 充电次数排序
 
-每个电站显示：
+每个电站可显示：
 
 ```text
 快充数量
@@ -1091,28 +1243,23 @@ schema.sql
 
 1. 电站信息
 2. 分时收费标准
-3. 选择充电桩
+3. 充电桩列表
 
-充电桩支持：
+充电桩状态支持：
 
-* 全部状态
-* 空闲
-* 预约中
-* 充电中
+```text
+全部状态
+空闲
+预约中
+充电中
+```
 
-类型筛选：
+类型支持：
 
 ```text
 快充
 慢充
 ```
-
-可以：
-
-* 都不选 → 显示全部
-* 只选快充
-* 只选慢充
-* 两个都选
 
 ---
 
@@ -1120,7 +1267,7 @@ schema.sql
 
 用户可以预约空闲设备。
 
-预约时间：
+预约有效时间：
 
 ```text
 15 分钟
@@ -1129,8 +1276,8 @@ schema.sql
 预约期间：
 
 * 可以开始充电
-* 可以取消
-* 超时后自动释放
+* 可以取消预约
+* 超时自动释放
 
 ---
 
@@ -1144,39 +1291,33 @@ schema.sql
 * 实时费用
 * 模拟充电时间
 
-系统默认：
-
-```text
-60× 时间模拟
-```
+系统默认使用时间加速模拟。
 
 ---
 
 ## 结算
 
-结束充电后：
+结束充电后系统会：
 
-* 计算最终能量
+* 计算最终电量
 * 锁定计费快照
 * 计算订单金额
 * 自动扣除余额
-* 更新 charger
-* 写入 wallet log
-* 保存 order receipt
+* 更新充电桩状态
+* 写入钱包流水
+* 保存订单结算结果
 
 ---
 
 ## 欠费
 
-余额不足时：
+余额不足时，订单可以产生：
 
 ```text
-订单完成
-+
-产生 debt_cents
+debt_cents
 ```
 
-用户可以在：
+用户可以进入：
 
 ```text
 我的钱包
@@ -1184,17 +1325,17 @@ schema.sql
 → 查看欠费订单
 ```
 
-直接：
+进行：
 
 * 查看欠费订单
-* 查看详情
-* 补缴
+* 查看订单详情
+* 在线补缴
 
 补缴成功后：
 
-* 钱包余额立即刷新
-* 待补缴金额立即刷新
-* 欠费列表立即刷新
+* 钱包余额刷新
+* 待补缴金额刷新
+* 欠费订单状态刷新
 
 ---
 
@@ -1224,6 +1365,7 @@ schema.sql
 * 当前余额
 * 欠费总额
 * 欠费订单
+* 在线补缴
 
 ---
 
@@ -1237,7 +1379,7 @@ schema.sql
 公交
 ```
 
-然后打开腾讯地图路线。
+然后打开地图路线。
 
 ---
 
@@ -1256,9 +1398,9 @@ schema.sql
 
 # 管理端
 
-# 运营总览
+## 运营总览
 
-管理员 / 运营人员可以看到：
+管理员 / 运营人员可以查看：
 
 * 累计电量
 * 已完成订单
@@ -1266,14 +1408,15 @@ schema.sql
 * 营收
 * 用户统计
 * 设备统计
+* 快充 / 慢充统计
+* 订单趋势
+* 收入趋势
 
 ---
 
 ## 订单与收入趋势
 
-支持：
-
-### 粒度
+支持粒度：
 
 ```text
 按天
@@ -1281,7 +1424,7 @@ schema.sql
 按月
 ```
 
-### 范围
+支持范围：
 
 ```text
 最近 7 天
@@ -1289,49 +1432,38 @@ schema.sql
 本年度
 ```
 
-### 电站
+支持：
 
 ```text
 全部电站
 指定电站
 ```
 
-### 订单口径
+订单口径支持：
 
 ```text
 有效完成
 全部订单
 ```
 
-同时显示：
-
-* 订单趋势
-* 收入趋势
-
 ---
 
-## 快充 / 慢充平台资源统计
+## 平台资源统计
 
-总览会统计：
+可以查看：
 
-* 快充总数量
+* 快充总数
 * 快充空闲
 * 快充故障
-* 慢充总数量
+* 慢充总数
 * 慢充空闲
 * 慢充故障
 
 ---
 
-# 实时监控
+## 实时监控
 
-实时监控页面每：
-
-```text
-5 秒
-```
-
-刷新一次。
+实时监控页面定时刷新。
 
 包含：
 
@@ -1342,29 +1474,21 @@ schema.sql
 * 电桩状态分布
 * 电站利用率
 * 系统设备健康率
-* 最近 5 分钟设备趋势
+* 最近设备趋势
 * 各电站异常设备
-
-状态趋势包括：
-
-```text
-空闲
-使用中
-异常
-```
 
 ---
 
-# 电站管理
+## 电站管理
 
 支持：
 
 * 添加
 * 编辑
 * 删除
-* 运营状态
+* 修改运营状态
 
-排序：
+排序支持：
 
 ```text
 充电次数最多
@@ -1373,16 +1497,14 @@ schema.sql
 
 ---
 
-# 分时收费
+## 分时收费
 
-价格管理已经整合到：
+价格管理整合在：
 
 ```text
 电站详情
 → 分时收费标准
 ```
-
-不再作为独立侧栏页面。
 
 管理员可以：
 
@@ -1390,7 +1512,7 @@ schema.sql
 * 编辑价格
 * 删除价格
 
-价格由：
+价格组成：
 
 ```text
 电费
@@ -1400,11 +1522,9 @@ schema.sql
 最终单价
 ```
 
-组成。
-
 ---
 
-# 电桩管理
+## 电桩管理
 
 支持：
 
@@ -1413,7 +1533,7 @@ schema.sql
 * QR Code
 * 快充 / 慢充
 * 功率
-* 电站筛选
+* 所属电站筛选
 * 状态筛选
 * 充电次数排序
 
@@ -1428,7 +1548,7 @@ schema.sql
 
 ---
 
-# 故障管理
+## 故障管理
 
 支持：
 
@@ -1438,13 +1558,13 @@ schema.sql
 * 已解决
 * 记录处理结果
 
-故障状态会同步更新 charger 状态。
+故障状态会影响对应充电桩状态。
 
 ---
 
-# 用户管理
+## 用户管理
 
-用户有三类状态：
+用户状态包括：
 
 ```text
 正常
@@ -1452,7 +1572,7 @@ schema.sql
 冻结
 ```
 
-可以：
+支持：
 
 * 状态筛选
 * 注册日期筛选
@@ -1466,38 +1586,26 @@ schema.sql
 
 ## 冻结用户规则
 
-冻结用户：
-
-### 不可以
+冻结用户不能：
 
 ```text
 创建新的充电订单
 ```
 
-### 仍然可以
+但仍然可以：
 
 * 取消已有预约
-* 结束正在进行的充电
+* 结束已有充电
 * 钱包充值
 * 补缴欠费
 
-这样避免：
-
-```text
-用户被冻结
-↓
-无法充值
-↓
-无法补缴
-↓
-欠费永远无法处理
-```
+这样可以避免被冻结用户无法处理已有订单和欠费。
 
 ---
 
-# RBAC
+## RBAC
 
-系统有四个角色：
+系统角色：
 
 ```text
 user
@@ -1514,15 +1622,15 @@ permissions
 role_permissions
 ```
 
-前端菜单只是展示层。
+前端菜单只负责展示。
 
-真正权限检查在：
+真正权限控制在：
 
 ```text
 Python Backend API
 ```
 
-即使用户手动调用 API，没有权限也会返回：
+没有权限时 API 返回：
 
 ```text
 403
@@ -1530,7 +1638,7 @@ Python Backend API
 
 ---
 
-# 营收统计
+## 营收统计
 
 包括：
 
@@ -1541,23 +1649,13 @@ Python Backend API
 * 平均每站营收
 * 最近 7 天营收
 
-电站营收：
-
-```text
-从高到低排序
-```
+电站营收可以按金额排序。
 
 ---
 
-# 负荷预测
+## 负荷预测
 
-根据历史订单提供：
-
-```text
-未来 12 小时
-```
-
-负荷参考。
+根据历史订单提供未来负荷参考。
 
 包括：
 
@@ -1568,11 +1666,9 @@ Python Backend API
 
 ---
 
-# 操作日志
+## 操作日志
 
-管理员可以查看重要后台操作记录。
-
-例如：
+管理员可以查看重要后台操作，例如：
 
 * 设备状态修改
 * 电站操作
@@ -1583,7 +1679,29 @@ Python Backend API
 
 # 11. 运行测试
 
-合并代码或 Push 前推荐运行完整测试。
+自动测试使用独立的 MySQL 测试数据库：
+
+```text
+ncs_charging_test
+```
+
+测试启动前会清理该测试数据库中的表，然后重新初始化测试数据。
+
+测试代码包含安全检查：
+
+* `MYSQL_TEST_DATABASE` 不能与 `MYSQL_DATABASE` 相同
+* 测试数据库名称必须以 `_test` 结尾
+
+因此正确配置应该是：
+
+```env
+MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging_test
+```
+
+---
+
+## 运行完整测试
 
 Windows：
 
@@ -1591,31 +1709,59 @@ Windows：
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-自动测试使用：
+---
 
-```text
-temporary SQLite databases
+## 单独运行 Workflow Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_workflows.py" -v
 ```
 
-不会修改：
+---
 
-* MySQL 正式数据
-* 本地 demo SQLite
-* 当前用户数据
+## 单独运行 Expansion / Avatar Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_expansion_avatars.py" -v
+```
+
+---
+
+## 单独运行 Preference Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_preferences.py" -v
+```
 
 ---
 
 ## Python 编译检查
 
 ```powershell
-.\.venv\Scripts\python.exe -m compileall app.py ncs tests
+.\.venv\Scripts\python.exe -m py_compile app.py
+```
+
+检查 `ncs/`：
+
+```powershell
+Get-ChildItem ncs\*.py | ForEach-Object {
+    .\.venv\Scripts\python.exe -m py_compile $_.FullName
+}
+```
+
+检查 tests：
+
+```powershell
+Get-ChildItem tests\*.py | ForEach-Object {
+    .\.venv\Scripts\python.exe -m py_compile $_.FullName
+}
 ```
 
 ---
 
 ## JavaScript 检查
 
-如果安装 Node.js：
+如果已经安装 Node.js：
 
 ```powershell
 node --check static/app.js
@@ -1628,7 +1774,7 @@ node --check static/app.js
 ## 检查 Git Merge Conflict
 
 ```powershell
-git grep -n -E "^(<<<<<<<|=======|>>>>>>>)"
+git grep -n -E '^(<<<<<<<|=======|>>>>>>>)'
 ```
 
 正常情况下：
@@ -1636,6 +1782,24 @@ git grep -n -E "^(<<<<<<<|=======|>>>>>>>)"
 ```text
 没有输出
 ```
+
+---
+
+## 检查旧数据库代码是否残留
+
+```powershell
+git grep -n "DB_BACKEND"
+```
+
+```powershell
+git grep -ni "INSERT OR IGNORE"
+```
+
+```powershell
+git grep -ni "BEGIN IMMEDIATE"
+```
+
+正常情况下都应该没有输出。
 
 ---
 
@@ -1650,15 +1814,13 @@ performance_report.json
 PERFORMANCE_REPORT.md
 ```
 
-L1 测试推荐：
+性能测试使用正常的 MySQL 开发 / 演示数据库。
 
-```text
-MySQL mode
-```
+不要对包含重要真实数据的数据库随意执行写入型压力测试。
 
 ---
 
-## 启动服务器
+## 12.1 启动服务器
 
 终端 1：
 
@@ -1668,7 +1830,7 @@ MySQL mode
 
 ---
 
-## 准备 L1 测试数据
+## 12.2 准备 L1 测试数据
 
 终端 2：
 
@@ -1678,25 +1840,78 @@ MySQL mode
 
 ---
 
-## 运行测试
+## 12.3 运行基础性能测试
 
 例如：
 
 ```powershell
-.\.venv\Scripts\python.exe performance_test.py --base-url http://127.0.0.1:5000 --duration 15 --concurrency 20
+.\.venv\Scripts\python.exe performance_test.py --base-url http://127.0.0.1:5000 --duration 30 --workers 60
 ```
 
-测试会统计：
+参数：
+
+```text
+--base-url
+--duration
+--workers
+```
+
+测试会记录：
 
 * QPS
-* 平均延迟
+* Avg Latency
 * P95
 * P99
 * Error Rate
+* 是否达到目标
 
 ---
 
-## 清理测试数据
+## 12.4 写业务压力测试
+
+如果需要测试真实订单写链路：
+
+```powershell
+.\.venv\Scripts\python.exe performance_test.py --base-url http://127.0.0.1:5000 --duration 30 --workers 40 --write-test
+```
+
+该模式会调用真实订单接口。
+
+---
+
+## 12.5 压力分级
+
+运行：
+
+```powershell
+.\.venv\Scripts\python.exe performance_test.py --base-url http://127.0.0.1:5000 --duration 30 --workers 60 --stages
+```
+
+压力阶段：
+
+```text
+25%
+50%
+75%
+100%
+125%
+```
+
+---
+
+## 12.6 Agent 性能测试
+
+如果要测试真实 GLM Agent：
+
+```powershell
+.\.venv\Scripts\python.exe performance_test.py --base-url http://127.0.0.1:5000 --duration 30 --workers 60 --agent-test
+```
+
+> `--agent-test` 会真实调用远程 AI API，并可能消耗 API 额度。
+
+---
+
+## 12.7 清理性能测试用户
 
 ```powershell
 .\.venv\Scripts\python.exe prepare_l1_loadtest.py --cleanup
@@ -1704,15 +1919,15 @@ MySQL mode
 
 ---
 
-## Waitress threads
+## 12.8 Waitress Threads
 
-性能测试时注意：
+推荐：
 
 ```env
 NCS_THREADS=48
 ```
 
-服务器线程数会影响高并发结果。
+服务器线程数量会影响并发性能。
 
 ---
 
@@ -1724,7 +1939,7 @@ NCS_THREADS=48
 0.0.0.0
 ```
 
-因此可以让同一局域网内的手机访问。
+作为服务器监听地址，因此同一局域网内的手机可以访问电脑上的服务。
 
 ---
 
@@ -1758,169 +1973,167 @@ http://192.168.1.100:5000
 
 ## 手机打不开怎么办
 
-确认：
+检查：
 
-1. Python 正在运行
-2. 手机和电脑连接同一个 Wi-Fi
-3. Windows Firewall 允许 Python
-4. Port 5000 没有被拦截
-5. Wi-Fi 没有启用 Client Isolation
+1. Python 是否正在运行
+2. 手机与电脑是否连接同一个 Wi-Fi
+3. Windows Firewall 是否允许 Python
+4. Port 5000 是否被阻止
+5. Wi-Fi 是否启用了 Client Isolation
 
-公共 Wi-Fi 很可能禁止设备之间通信。
+校园网 / 公共 Wi-Fi 可能禁止设备之间互相访问。
 
-这种情况下电脑自己访问：
+这种情况下：
 
 ```text
-127.0.0.1
+http://127.0.0.1:5000
 ```
 
-正常，但手机仍然无法连接。
+在电脑正常，但手机仍可能无法连接。
 
 ---
 
 # 14. Docker
+
+Docker 是可选功能。
+
+普通 Windows 本地开发不需要安装 Docker，只需要：
+
+```text
+Python
++
+MySQL
+```
+
+即可。
 
 项目包含：
 
 ```text
 Dockerfile
 docker-compose.yml
-Procfile
+docker-compose.prod.yml
+nginx.conf
+```
+
+如果没有安装 Docker，可以直接跳过本节。
+
+---
+
+## Docker 架构
+
+推荐 Compose 环境：
+
+```text
+Browser
+↓
+NCS Flask / Waitress
+↓
+MySQL
+```
+
+生产模式可以增加：
+
+```text
+Nginx
+↓
+NCS Flask / Waitress
+↓
+MySQL
 ```
 
 ---
 
-# Docker + SQLite
+## Docker Compose
 
-最容易测试的方法：
+如果已经安装 Docker Desktop：
 
-```bash
-docker build -t ncs-charging .
+```powershell
+docker compose up -d --build
 ```
 
-然后：
+检查：
 
-```bash
-docker run --rm \
-  -p 5000:5000 \
-  -e DB_BACKEND=sqlite \
-  -e NCS_SECRET_KEY=change-me \
-  -v ncs-data:/app/data \
-  ncs-charging
+```powershell
+docker compose ps
 ```
 
-访问：
+停止：
 
-```text
-http://127.0.0.1:5000
+```powershell
+docker compose down
 ```
 
----
-
-# Docker + MySQL
-
-如果 Flask 在 Docker 中，而 MySQL 在其他地方，需要配置：
-
-```text
-DB_BACKEND=mysql
-MYSQL_HOST
-MYSQL_PORT
-MYSQL_DATABASE
-MYSQL_USER
-MYSQL_PASSWORD
-```
-
-例如：
+Docker 内的 Flask 应用连接 MySQL service 时：
 
 ```env
-DB_BACKEND=mysql
-
-MYSQL_HOST=host.docker.internal
-MYSQL_PORT=3306
-
-MYSQL_DATABASE=ncs_charging
-MYSQL_USER=ncs_app
-MYSQL_PASSWORD=YOUR_PASSWORD
+MYSQL_HOST=mysql
 ```
 
-如果 MySQL 在 Windows Host，Docker Desktop 中：
+而普通 Windows 本地运行时：
+
+```env
+MYSQL_HOST=localhost
+```
+
+这是因为 Docker container 中的：
 
 ```text
 localhost
 ```
 
-通常表示 Docker container 自己，而不是 Windows Host。
-
-因此可以尝试：
-
-```text
-host.docker.internal
-```
+表示 container 本身。
 
 ---
 
-## 当前 docker-compose 注意事项
+## Docker 健康检查
 
-当前：
-
-```text
-docker-compose.yml
-```
-
-主要配置的是：
+启动后：
 
 ```text
-NCS Web Application
+http://127.0.0.1:5000/api/health
 ```
 
-它目前 **不会自动帮你创建 MySQL Server**。
+数据库正常时应返回：
 
-所以直接运行：
-
-```bash
-docker compose up -d --build
+```json
+"database": "ok"
 ```
-
-之前，需要确保：
-
-### 方案 1
-
-明确设置：
-
-```text
-DB_BACKEND=sqlite
-```
-
-或者：
-
-### 方案 2
-
-已经有可访问的 MySQL，并传入完整 MySQL 配置。
 
 ---
 
 # 15. 常见问题
 
-# 15.1 `Access denied for user 'ncs_app'`
+## 15.1 `Access denied for user 'ncs_app'`
 
 通常表示：
 
 * MySQL password 错误
-* user 不存在
-* user 没有权限
+* MySQL user 不存在
+* user 没有数据库权限
 
-检查 `.env`：
+检查：
 
 ```env
 MYSQL_USER=ncs_app
-MYSQL_PASSWORD=...
+MYSQL_PASSWORD=YOUR_PASSWORD
 ```
 
-MySQL：
+然后在 MySQL：
+
+```sql
+SHOW GRANTS FOR 'ncs_app'@'localhost';
+```
+
+如果需要重新授权：
 
 ```sql
 GRANT ALL PRIVILEGES
 ON ncs_charging.*
+TO 'ncs_app'@'localhost';
+
+GRANT ALL PRIVILEGES
+ON ncs_charging_test.*
 TO 'ncs_app'@'localhost';
 
 FLUSH PRIVILEGES;
@@ -1928,7 +2141,7 @@ FLUSH PRIVILEGES;
 
 ---
 
-# 15.2 `Unknown database 'ncs_charging'`
+## 15.2 `Unknown database 'ncs_charging'`
 
 创建：
 
@@ -1940,62 +2153,84 @@ COLLATE utf8mb4_unicode_ci;
 
 ---
 
-# 15.3 我不想安装 MySQL
+## 15.3 测试数据库不存在
 
-使用：
+创建：
 
-```env
-DB_BACKEND=sqlite
-NCS_DATABASE=data/ncs.db
+```sql
+CREATE DATABASE ncs_charging_test
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
 ```
 
-然后：
+并授权：
 
-```powershell
-.\.venv\Scripts\python.exe app.py
+```sql
+GRANT ALL PRIVILEGES
+ON ncs_charging_test.*
+TO 'ncs_app'@'localhost';
+
+FLUSH PRIVILEGES;
 ```
-
-即可运行完整 Web App。
 
 ---
 
-# 15.4 AI Agent 可以回答，但不是 GLM
+## 15.4 `Can't connect to MySQL server`
+
+检查 MySQL Server 是否运行。
+
+Windows：
+
+```text
+Services
+```
+
+找到类似：
+
+```text
+MySQL84
+```
+
+确认状态：
+
+```text
+Running
+```
+
+也可以测试：
+
+```powershell
+mysql -u root -p
+```
+
+---
+
+## 15.5 AI Agent 可以回答，但不是 GLM
 
 检查：
 
 ```env
 NCS_LLM_ENABLED=1
-```
-
-以及：
-
-```env
 BIGMODEL_API_KEY=YOUR_REAL_KEY
 ```
 
 然后重启 Python。
 
-如果 GLM 调用失败，系统会自动切换：
-
-```text
-Local Agent
-```
-
-所以页面仍然可以正常工作。
+如果远程模型不可用，系统可能使用 Local Agent fallback。
 
 ---
 
-# 15.5 修改 `.env` 没有效果
+## 15.6 修改 `.env` 没有效果
 
-`.env` 是应用启动时读取。
+`.env` 在应用启动时读取。
 
-先：
+停止：
 
 ```text
-Ctrl+C
+Ctrl + C
 ```
 
-然后：
+重新运行：
 
 ```powershell
 .\.venv\Scripts\python.exe app.py
@@ -2003,29 +2238,13 @@ Ctrl+C
 
 ---
 
-# 15.6 `ModuleNotFoundError`
+## 15.7 `ModuleNotFoundError`
 
 通常表示：
 
 * requirements 没安装
-* 用错 Python
+* 使用了错误 Python
 * VS Code interpreter 不正确
-
-重新：
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-然后：
-
-```powershell
-.\.venv\Scripts\python.exe app.py
-```
-
----
-
-# 15.7 `openai` module 找不到
 
 运行：
 
@@ -2033,15 +2252,19 @@ Ctrl+C
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-或者：
+---
+
+## 15.8 `openai` module 找不到
+
+运行：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install openai
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ---
 
-# 15.8 `dbutils` 找不到
+## 15.9 `dbutils` 找不到
 
 运行：
 
@@ -2049,17 +2272,15 @@ Ctrl+C
 .\.venv\Scripts\python.exe -m pip install DBUtils
 ```
 
-通常直接重新安装：
+或者直接：
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-即可。
-
 ---
 
-# 15.9 Port 5000 被占用
+## 15.10 Port 5000 被占用
 
 PowerShell：
 
@@ -2067,7 +2288,7 @@ PowerShell：
 $env:NCS_PORT="5001"
 ```
 
-然后：
+运行：
 
 ```powershell
 .\.venv\Scripts\python.exe app.py
@@ -2081,39 +2302,17 @@ http://127.0.0.1:5001
 
 ---
 
-# 15.10 SQLite 想完全重置
+## 15.11 MySQL 数据库想完全重置
 
-停止程序。
+> 警告：下面操作会删除正常数据库中的所有数据。
 
-删除：
-
-```text
-data/ncs.db
-```
-
-然后重新启动：
-
-```powershell
-.\.venv\Scripts\python.exe app.py
-```
-
-系统会重新生成 demo data。
-
-> 如果里面有需要保留的数据，不要删除。
-
----
-
-# 15.11 MySQL 想完全重置
-
-警告：下面操作会删除当前数据库数据。
-
-可以：
+进入 MySQL：
 
 ```sql
 DROP DATABASE ncs_charging;
 ```
 
-然后：
+重新创建：
 
 ```sql
 CREATE DATABASE ncs_charging
@@ -2121,11 +2320,53 @@ CHARACTER SET utf8mb4
 COLLATE utf8mb4_unicode_ci;
 ```
 
-重新启动 NCS 后会重新初始化。
+重新授权：
+
+```sql
+GRANT ALL PRIVILEGES
+ON ncs_charging.*
+TO 'ncs_app'@'localhost';
+
+FLUSH PRIVILEGES;
+```
+
+然后重新运行：
+
+```powershell
+.\.venv\Scripts\python.exe app.py
+```
+
+系统会重新初始化空数据库。
 
 ---
 
-# 15.12 手机无法访问，但电脑可以
+## 15.12 测试失败并提示数据库安全检查
+
+确认：
+
+```env
+MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging_test
+```
+
+不要设置成：
+
+```env
+MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging
+```
+
+测试数据库还必须以：
+
+```text
+_test
+```
+
+结尾。
+
+---
+
+## 15.13 手机无法访问，但电脑可以
 
 多数情况是：
 
@@ -2133,13 +2374,13 @@ COLLATE utf8mb4_unicode_ci;
 Windows Firewall
 ```
 
-或者：
+或：
 
 ```text
 Wi-Fi Client Isolation
 ```
 
-尤其校园网 / 公共 Wi-Fi 很常见。
+校园网和公共 Wi-Fi 很常见。
 
 ---
 
@@ -2155,8 +2396,11 @@ NCS_Charging/
 │
 ├─ Dockerfile
 ├─ docker-compose.yml
+├─ docker-compose.prod.yml
+├─ nginx.conf
 ├─ Procfile
 │
+├─ backup_mysql.ps1
 ├─ performance_test.py
 ├─ prepare_l1_loadtest.py
 ├─ performance_report.json
@@ -2168,11 +2412,13 @@ NCS_Charging/
 │  ├─ mysql_schema.py
 │  ├─ routes.py
 │  ├─ services.py
+│  ├─ capacity.py
 │  ├─ agent.py
 │  ├─ llm_agent.py
 │  ├─ preferences.py
 │  ├─ avatars.py
 │  ├─ expansion.py
+│  ├─ i18n.py
 │  └─ ...
 │
 ├─ static/
@@ -2187,47 +2433,62 @@ NCS_Charging/
 │  └─ index.html
 │
 ├─ tests/
-│  └─ test_workflows.py
+│  ├─ mysql_test_utils.py
+│  ├─ test_workflows.py
+│  ├─ test_expansion_avatars.py
+│  └─ test_preferences.py
+│
+├─ previews/
 │
 └─ data/
-   └─ ncs.db
+   └─ secret.key
 ```
 
-其中：
+`data/` 是本地运行数据目录，不应该提交到 Git。
 
-```text
-data/
+如果 `.env` 中提供了：
+
+```env
+NCS_SECRET_KEY=...
 ```
 
-不会提交到 Git。
+则建议始终使用该环境变量作为应用 Secret Key。
 
 ---
 
 # 重要文件说明
 
-| 文件                        | 作用                           |
-| ------------------------- | ---------------------------- |
-| `app.py`                  | 启动 Flask + Waitress          |
-| `requirements.txt`        | Python dependencies          |
-| `.env.example`            | 环境变量模板                       |
-| `ncs/__init__.py`         | Flask 配置、CSRF、数据库初始化         |
-| `ncs/db.py`               | SQLite / MySQL、连接池、Seed Data |
-| `ncs/mysql_schema.py`     | MySQL Schema                 |
-| `ncs/routes.py`           | API Routes                   |
-| `ncs/services.py`         | 预约、充电、结算等核心业务                |
-| `ncs/agent.py`            | Local AI Agent               |
-| `ncs/llm_agent.py`        | GLM + Local fallback Agent   |
-| `static/app.js`           | 前端逻辑                         |
-| `static/style.css`        | 前端 UI / Realtime / Agent 样式  |
-| `tests/test_workflows.py` | 核心业务 Regression Tests        |
-| `performance_test.py`     | 性能测试                         |
-| `prepare_l1_loadtest.py`  | L1 测试数据准备                    |
+| 文件                                | 作用                              |
+| --------------------------------- | ------------------------------- |
+| `app.py`                          | 启动 Flask + Waitress             |
+| `requirements.txt`                | Python dependencies             |
+| `.env.example`                    | 环境变量模板                          |
+| `ncs/__init__.py`                 | Flask 配置、CSRF、错误处理、数据库初始化       |
+| `ncs/db.py`                       | MySQL 连接池、数据库初始化、Seed Data、RBAC |
+| `ncs/mysql_schema.py`             | MySQL Schema                    |
+| `ncs/routes.py`                   | API Routes                      |
+| `ncs/services.py`                 | 预约、充电、结算等核心业务                   |
+| `ncs/capacity.py`                 | L1 容量配置                         |
+| `ncs/agent.py`                    | Local AI Agent                  |
+| `ncs/llm_agent.py`                | GLM + Local fallback            |
+| `ncs/preferences.py`              | 用户偏好                            |
+| `ncs/avatars.py`                  | 用户头像                            |
+| `ncs/expansion.py`                | 演示网络扩展                          |
+| `static/app.js`                   | 前端业务逻辑                          |
+| `static/style.css`                | UI 样式                           |
+| `tests/mysql_test_utils.py`       | MySQL 测试数据库安全与清理工具              |
+| `tests/test_workflows.py`         | 核心业务 Regression Tests           |
+| `tests/test_expansion_avatars.py` | 网络扩展和头像测试                       |
+| `tests/test_preferences.py`       | 偏好设置测试                          |
+| `performance_test.py`             | L1 性能测试                         |
+| `prepare_l1_loadtest.py`          | L1 测试数据准备                       |
+| `backup_mysql.ps1`                | MySQL 数据库备份                     |
 
 ---
 
 # 17. 团队开发建议
 
-不要直接长期在：
+不建议所有成员长期直接在：
 
 ```text
 dev
@@ -2242,11 +2503,13 @@ dev
 ↓
 features/name
 ↓
-完成开发
+开发
 ↓
 测试
 ↓
-merge 回 dev
+Pull Request / Integration
+↓
+dev
 ```
 
 ---
@@ -2260,7 +2523,7 @@ git pull origin dev
 
 ---
 
-## 创建个人 branch
+## 创建个人 Branch
 
 例如：
 
@@ -2273,6 +2536,19 @@ git checkout -b features/rey
 ```powershell
 git checkout -b features/jiaqi
 ```
+
+---
+
+## 开发过程中同步 dev
+
+如果团队的 `dev` 更新：
+
+```powershell
+git fetch origin
+git merge origin/dev
+```
+
+如有 conflict，解决后再继续开发。
 
 ---
 
@@ -2293,10 +2569,10 @@ node --check static/app.js
 检查 conflict marker：
 
 ```powershell
-git grep -n -E "^(<<<<<<<|=======|>>>>>>>)"
+git grep -n -E '^(<<<<<<<|=======|>>>>>>>)'
 ```
 
-检查：
+检查状态：
 
 ```powershell
 git status
@@ -2310,6 +2586,8 @@ git status
 git add .
 ```
 
+然后：
+
 ```powershell
 git commit -m "feat: describe your feature"
 ```
@@ -2322,38 +2600,22 @@ git commit -m "feat: describe your feature"
 git push -u origin features/your-name
 ```
 
-然后：
-
-* Pull Request
-* 或交给 Integration branch 合并
+然后创建 Pull Request 或交给 Integration branch 合并。
 
 ---
 
-# 不要提交这些文件
+## 不要提交这些文件
 
 不要提交：
 
 ```text
 .env
-```
-
-```text
 .venv/
-```
-
-```text
 data/
-```
-
-```text
-*.db
-```
-
-```text
 backups/
 ```
 
-以及：
+也不要提交：
 
 ```text
 API Key
@@ -2361,7 +2623,7 @@ MySQL Password
 Secret Key
 ```
 
-这些大部分已经在 `.gitignore` 中，但仍应该在 commit 前检查：
+Commit 前检查：
 
 ```powershell
 git status
@@ -2369,11 +2631,11 @@ git status
 
 ---
 
-# 推荐第一次配置顺序
+# 18. 第一次配置推荐流程
 
-如果你刚拿到这个项目，可以直接按下面执行。
+如果刚拿到项目，可以按照下面顺序执行。
 
-## Step 1
+## Step 1 — 安装环境
 
 安装：
 
@@ -2381,13 +2643,12 @@ git status
 Git
 Python 3.11+
 VS Code
+MySQL 8.x
 ```
 
 ---
 
-## Step 2
-
-Clone：
+## Step 2 — Clone
 
 ```powershell
 git clone https://github.com/a1re135/NCS_Charging.git
@@ -2397,9 +2658,7 @@ git checkout dev
 
 ---
 
-## Step 3
-
-Virtual Environment：
+## Step 3 — 创建 Virtual Environment
 
 ```powershell
 py -3 -m venv .venv
@@ -2407,9 +2666,7 @@ py -3 -m venv .venv
 
 ---
 
-## Step 4
-
-Dependencies：
+## Step 4 — 安装依赖
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -2417,30 +2674,72 @@ Dependencies：
 
 ---
 
-## Step 5
+## Step 5 — 创建 MySQL 数据库
 
-复制 `.env`：
+进入：
+
+```powershell
+mysql -u root -p
+```
+
+执行：
+
+```sql
+CREATE DATABASE ncs_charging
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+
+CREATE DATABASE ncs_charging_test
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+---
+
+## Step 6 — 创建 MySQL 用户
+
+```sql
+CREATE USER 'ncs_app'@'localhost'
+IDENTIFIED BY 'YOUR_PASSWORD';
+
+GRANT ALL PRIVILEGES
+ON ncs_charging.*
+TO 'ncs_app'@'localhost';
+
+GRANT ALL PRIVILEGES
+ON ncs_charging_test.*
+TO 'ncs_app'@'localhost';
+
+FLUSH PRIVILEGES;
+```
+
+---
+
+## Step 7 — 创建 `.env`
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
----
-
-## Step 6
-
-如果想最快运行：
+填写：
 
 ```env
-DB_BACKEND=sqlite
+NCS_SECRET_KEY=YOUR_RANDOM_SECRET
+
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging_test
+MYSQL_USER=ncs_app
+MYSQL_PASSWORD=YOUR_PASSWORD
+
 NCS_LLM_ENABLED=0
+NCS_THREADS=48
 ```
 
 ---
 
-## Step 7
-
-运行：
+## Step 8 — 启动
 
 ```powershell
 .\.venv\Scripts\python.exe app.py
@@ -2448,9 +2747,7 @@ NCS_LLM_ENABLED=0
 
 ---
 
-## Step 8
-
-打开：
+## Step 9 — 打开
 
 ```text
 http://127.0.0.1:5000
@@ -2458,16 +2755,16 @@ http://127.0.0.1:5000
 
 ---
 
-## Step 9
+## Step 10 — 登录
 
-登录：
+管理员：
 
 ```text
 admin
 Admin123456
 ```
 
-或者：
+普通用户：
 
 ```text
 13800138000
@@ -2476,54 +2773,59 @@ User123456
 
 ---
 
-## Step 10
+## Step 11 — 运行测试
 
-确认基本功能正常后，再切换：
-
-```text
-SQLite
-↓
-MySQL
-```
-
-以及：
-
-```text
-Local Agent
-↓
-GLM Agent
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 ---
 
-# 最快运行方案
+## Step 12 — 检查 JavaScript
 
-如果只是要最快看到系统：
+如果安装 Node.js：
+
+```powershell
+node --check static/app.js
+```
+
+---
+
+# 最快正常运行方案
+
+如果只是希望尽快运行项目，需要：
+
+```text
+Python
++
+MySQL
+```
 
 `.env`：
 
 ```env
-DB_BACKEND=sqlite
-
-NCS_LLM_ENABLED=0
-
 NCS_SECRET_KEY=local-development-secret
 
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging_test
+MYSQL_USER=ncs_app
+MYSQL_PASSWORD=YOUR_PASSWORD
+
+NCS_LLM_ENABLED=0
 NCS_THREADS=16
 ```
 
-然后：
+运行：
 
 ```powershell
 .\.venv\Scripts\python.exe app.py
 ```
 
-即可。
-
 不需要：
 
-* MySQL
-* BigModel Key
+* BigModel API Key
 * Docker
 * Node.js
 
@@ -2536,7 +2838,7 @@ NCS_THREADS=16
 ```text
 Python 3.12
 +
-MySQL 8
+MySQL 8.x
 +
 Waitress
 +
@@ -2549,14 +2851,15 @@ GLM Agent
 
 ```env
 NCS_SECRET_KEY=YOUR_RANDOM_SECRET
-
 NCS_CAPACITY_LEVEL=L1
 
-DB_BACKEND=mysql
+NCS_COOKIE_SECURE=0
+NCS_TRUST_PROXY=0
 
 MYSQL_HOST=localhost
 MYSQL_PORT=3306
 MYSQL_DATABASE=ncs_charging
+MYSQL_TEST_DATABASE=ncs_charging_test
 MYSQL_USER=ncs_app
 MYSQL_PASSWORD=YOUR_PASSWORD
 
@@ -2572,9 +2875,79 @@ NCS_THREADS=48
 
 ---
 
+# 数据库备份
+
+项目提供：
+
+```text
+backup_mysql.ps1
+```
+
+用于备份 MySQL。
+
+运行备份前确保：
+
+* `mysqldump` 已安装
+* MySQL Server 正常运行
+* 备份脚本中的数据库信息符合当前环境
+
+备份文件保存到：
+
+```text
+backups/
+```
+
+建议在：
+
+* 演示前
+* 大规模修改数据前
+* 数据库结构调整前
+
+执行备份。
+
+---
+
+# GitHub CI
+
+项目使用：
+
+```text
+.github/workflows/ci.yml
+```
+
+进行自动检查。
+
+CI 应包含：
+
+```text
+Checkout
+↓
+Python 3.12
+↓
+启动 MySQL Test Service
+↓
+安装 requirements
+↓
+Python compile check
+↓
+运行 tests
+↓
+Docker build
+```
+
+GitHub CI 使用独立的：
+
+```text
+ncs_charging_test
+```
+
+数据库，不会访问开发者电脑上的本地数据库。
+
+---
+
 # 相关文档
 
-项目中还有：
+项目还包含：
 
 ```text
 VALIDATION.md
@@ -2600,9 +2973,15 @@ UPGRADE_I18N_DARK.md
 
 中英文与深色模式说明。
 
+```text
+deploy.md
+```
+
+部署和性能验收说明。
+
 ---
 
-# 安全说明
+# 19. 安全说明
 
 本项目是：
 
@@ -2610,7 +2989,7 @@ UPGRADE_I18N_DARK.md
 课程项目 / Demo System
 ```
 
-不应直接作为真实商业充电系统上线。
+不应该直接作为真实商业充电平台上线。
 
 当前包括：
 
@@ -2627,7 +3006,16 @@ UPGRADE_I18N_DARK.md
 * 真实充电桩硬件协议
 * 真实短信验证码
 * 商业级身份验证
-* 生产环境 Key Management
+* Production Key Management
+
+开发时不要将以下内容提交到 Git：
+
+```text
+.env
+API Key
+MySQL Password
+Secret Key
+```
 
 ---
 
@@ -2635,8 +3023,10 @@ UPGRADE_I18N_DARK.md
 
 ```text
 A LITTLE ENERGY.
+
 A BETTER DAY.
 ```
 
 Smart Charging Management Platform
+
 Course Project / Demonstration System
