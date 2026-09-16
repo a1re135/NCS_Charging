@@ -59,6 +59,73 @@ const S = {
     : null,
 };
 
+let notificationTimer = null;
+let notificationInitialized = false;
+let notificationSeen = new Set();
+
+async function refreshUserNotifications(showPopup = true) {
+  if (!S.user) return;
+  try {
+    const data = await api("/notifications");
+    const items = Array.isArray(data.items) ? data.items : [];
+    const ids = new Set(items.map((x) => String(x.id)));
+    if (!notificationInitialized) {
+      notificationSeen = ids;
+      notificationInitialized = true;
+    } else if (showPopup) {
+      for (const item of items.slice().reverse()) {
+        const id = String(item.id);
+        if (!notificationSeen.has(id)) {
+          const title = tr(item.title || "通知");
+          const body = tr(item.body || "");
+          toast(`${title}: ${body}`);
+        }
+      }
+      notificationSeen = ids;
+    }
+    const badge = document.querySelector("[data-user-notification-badge]");
+    if (badge) {
+      const unread = Number(data.unread || 0);
+      badge.textContent = unread > 99 ? "99+" : String(unread);
+      badge.hidden = unread <= 0;
+    }
+  } catch (_) {}
+}
+
+function startNotificationPolling() {
+  clearInterval(notificationTimer);
+  notificationInitialized = false;
+  notificationSeen = new Set();
+  refreshUserNotifications(false);
+  notificationTimer = setInterval(() => refreshUserNotifications(true), 5000);
+}
+
+async function showUserNotifications() {
+  const data = await api("/notifications");
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (!items.length) {
+    modal(tr("通知"), tr("暂无通知"));
+    return;
+  }
+  const html = items.map((item) => {
+    const title = tr(item.title || "通知");
+    const body = tr(item.body || "");
+    const timeText = time(item.created_at);
+    const unread = !Number(item.read);
+    return `<div class="note" style="margin-bottom:10px;${unread ? "border-left:3px solid var(--accent);" : ""}">
+      <strong>${esc(title)}</strong>
+      <small style="display:block;margin-top:4px">${esc(timeText)}</small>
+      <p style="margin:6px 0 0">${esc(body)}</p>
+      ${unread ? `<button class="btn secondary small" data-action="notification-read" data-nid="${esc(item.id)}">${tr("标记已读")}</button>` : ""}
+    </div>`;
+  }).join("");
+  modal(tr("通知"), html);
+  await api("/notifications/read-all", "POST", {});
+  notificationSeen = new Set(items.map((x) => String(x.id)));
+  const badge = document.querySelector("[data-user-notification-badge]");
+  if (badge) { badge.hidden = true; badge.textContent = "0"; }
+}
+
 const names = new Proxy(
   {
     idle: "空闲",
@@ -142,6 +209,10 @@ const paths = {
   user:
     "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M4 21v-3a8 8 0 0 1 16 0v3",
   chart: "M4 3v18h17 M8 16v-5 M13 16V6 M18 16v-8",
+  trend: "M4 17l5-5 4 3 7-9 M17 6h3v3",
+  shield: "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6l7-3z M9 12l2 2 4-4",
+  clipboard: "M9 4h6a2 2 0 0 1 2 2v15H7V6a2 2 0 0 1 2-2z M10 4V3h4v1 M10 9h4 M10 13h4 M10 17h3",
+  settings: "M12 3v3 M12 18v3 M3 12h3 M18 12h3 M5.6 5.6l2.1 2.1 M16.3 16.3l2.1 2.1 M18.4 5.6l-2.1 2.1 M7.7 16.3l-2.1 2.1 M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z",
   grid:
     "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   logout: "M9 4H3v16h6 M9 12h12m-5-5 5 5-5 5",
@@ -150,7 +221,11 @@ const paths = {
     "M20 3C5 2 1 13 7 18c5 5 15-1 13-15ZM5 21l10-12",
   help:
     "M9 8a3 3 0 1 1 5 2c-2 1-2 2-2 3 M12 17h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
+  bell:
+    "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4",
   menu: "M3 6h18M3 12h18M3 18h18",
+  activity:
+    "M3 12h4l2.5-7 5 14 2.5-7H21",
 };
 
 const ic = (n) =>
@@ -692,7 +767,6 @@ const userNav = [
     "个人中心",
   ],
 ];
-
 const roleNav = [
   ["dashboard", "home", "运营总览", null],
   ["stations", "pin", "电站管理", "station.view"],
@@ -720,15 +794,26 @@ function currentNav() {
     .map((item) => {
       const copy = [...item];
 
-      if (S.user.role === "technician" && copy[0] === "dashboard") {
-        copy[2] = "运维总览";
-      }
-      if (S.user.role === "technician" && copy[0] === "stations") {
-        copy[2] = "电站运维";
-      }
-      if (S.user.role === "technician" && copy[0] === "chargers") {
-        copy[2] = "设备运维";
-      }
+if (
+  S.user.role === "technician" &&
+  copy[0] === "dashboard"
+) {
+  copy[2] = "运维总览";
+}
+
+if (
+  S.user.role === "technician" &&
+  copy[0] === "stations"
+) {
+  copy[2] = "电站运维";
+}
+
+if (
+  S.user.role === "technician" &&
+  copy[0] === "chargers"
+) {
+  copy[2] = "设备运维";
+}
 
       return copy;
     });
@@ -912,6 +997,20 @@ function shell() {
                     },
                   )}
               </span>
+
+              <button
+                class="circle-btn"
+                data-action="notifications"
+                aria-label="通知"
+                style="position:relative"
+              >
+                ${ic("bell")}
+                <span
+                  data-user-notification-badge
+                  hidden
+                  style="position:absolute;right:-2px;top:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;font-size:10px;line-height:16px;background:#e5484d;color:#fff"
+                >0</span>
+              </button>
 
               <button
                 class="circle-btn"
@@ -2771,10 +2870,10 @@ async function dashboard() {
         <section class="hero">
           <div class="hero-text">
             <div class="eyebrow">MAINTENANCE CONTROL</div>
-            <h2>让每一台设备，<br>都保持在最佳状态。</h2>
+            <h2>${tr("让每一台设备，")}<br>${tr("都保持在最佳状态。")}</h2>
             <p>
-              统一查看电站健康度、设备状态与异常情况，<br>
-              直接从电站进入设备运维。
+              ${tr("统一查看电站健康度、设备状态与异常情况，")}<br>
+              ${tr("直接从电站进入设备运维。")}
             </p>
             ${pageBtn(
               "stations",
@@ -2785,7 +2884,7 @@ async function dashboard() {
           <div class="hero-badge">
             ${m.total || 0}
             <br>
-            <small>设备</small>
+            <small>${tr("设备")}</small>
           </div>
         </section>
 
@@ -3338,7 +3437,7 @@ async function dashboard() {
             <span>
               ${free}
 
-              <small>
+              <small style="font-size:8px; line-height:1.3; white-space:nowrap;">
                 空闲充电桩 /
                 ${total}
               </small>
@@ -4708,6 +4807,133 @@ async function loadOrders() {
   }
 }
 
+async function finishOrderModal(orderId) {
+  const [order, coupons] = await Promise.all([
+    api(`/orders/${orderId}/receipt`),
+    api("/member/coupons"),
+  ]);
+
+  const owned = (coupons.owned || []).filter(
+    (coupon) =>
+      coupon.status === undefined ||
+      coupon.status === "available",
+  );
+
+  const eligible = owned.filter(
+    (coupon) =>
+      Number(order.amount_cents || 0) >=
+      Number(coupon.min_spend_cents || 0),
+  );
+
+  modal(
+    tr("\u7ed3\u675f\u5145\u7535\u5e76\u7ed3\u7b97"),
+    trHtml`
+      <div style="margin-bottom:18px">
+        <div class="section-head">
+          <div>
+            <strong style="font-size:16px">
+              ${tr("\u672c\u6b21\u5145\u7535")}
+            </strong>
+            <div class="muted" style="margin-top:4px">
+              ${tr("\u5f53\u524d\u8d39\u7528")} \u00A5 ${yuan(order.amount_cents)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        style="
+          border:1px solid var(--line);
+          border-radius:16px;
+          padding:14px;
+          margin-bottom:16px;
+        "
+      >
+        <label
+          for="finish-coupon"
+          style="
+            display:block;
+            font-weight:700;
+            margin-bottom:8px;
+          "
+        >
+          ${tr("\u4f18\u60e0\u5238")}
+        </label>
+
+        <select
+          id="finish-coupon"
+          style="
+            width:100%;
+            padding:12px 14px;
+            border:1px solid var(--line);
+            border-radius:12px;
+            background:var(--surface);
+            color:var(--ink);
+          "
+        >
+          <option value="">
+            ${tr("\u4e0d\u4f7f\u7528\u4f18\u60e0\u5238")}
+          </option>
+
+          ${eligible
+            .map(
+              (coupon) => `
+                <option value="${coupon.id}">
+                  ${esc(tr(coupon.name))}
+                  ?
+                  ${esc(tr(coupon.description))}
+                </option>
+              `,
+            )
+            .join("")}
+        </select>
+
+        <div
+          class="muted"
+          style="margin-top:8px;font-size:12px"
+        >
+          ${
+            eligible.length
+              ? tr("\u9009\u62e9\u4e00\u5f20\u4f18\u60e0\u5238\u540e\uff0c\u5c06\u5728\u7ed3\u7b97\u65f6\u81ea\u52a8\u62b5\u6263\u3002")
+              : tr("\u5f53\u524d\u6ca1\u6709\u7b26\u5408\u672c\u6b21\u8ba2\u5355\u6761\u4ef6\u7684\u53ef\u7528\u4f18\u60e0\u5238\u3002")
+          }
+        </div>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          padding:14px 0;
+          border-top:1px solid var(--line);
+        "
+      >
+        <span class="muted">
+          ${tr("\u4f1a\u5458\u6743\u76ca")}
+        </span>
+        <strong>
+          ${tr("\u4f1a\u5458\u6298\u6263\u5c06\u81ea\u52a8\u8ba1\u7b97")}
+        </strong>
+      </div>
+
+      <div class="actions" style="margin-top:18px">
+        ${btn(
+          tr("\u53d6\u6d88"),
+          "close",
+        )}
+
+        ${btn(
+          tr("\u786e\u8ba4\u7ed3\u7b97"),
+          "finish-submit",
+          "",
+          `data-id="${orderId}"`,
+        )}
+      </div>
+    `,
+  );
+}
+
 async function chargingPage() {
   const d =
       await api(
@@ -5845,12 +6071,11 @@ async function pricingPage() {
       <div class="section-head">
 
         <h2>
-          分时计价
+          ${tr("分时计价")}
         </h2>
 
         <small>
-          电费 + 服务费 =
-          用户实际单价
+          ${tr("电费 + 服务费 = 用户实际单价")}
         </small>
 
       </div>
@@ -5924,13 +6149,7 @@ async function pricingPage() {
       )}
 
       <div class="note">
-        时段不能重叠。
-        若需要跨午夜，
-        请拆成
-        18:00-24:00
-        和
-        00:00-08:00
-        两条规则。
+        ${tr("时段不能重叠。若需要跨午夜，请拆成 18:00-24:00 和 00:00-08:00 两条规则。")}
       </div>
 
     </div>
@@ -6189,9 +6408,9 @@ async function usersPage() {
       <section class="card role-banner">
         <div>
           <div class="eyebrow">RBAC · ACCESS CONTROL</div>
-          <h2>四种角色统一管理</h2>
+          <h2>${tr("四种角色统一管理")}</h2>
           <p class="sub">
-            权限在服务端强制校验，页面只展示当前角色可用的功能。
+            ${tr("权限在服务端强制校验，页面只展示当前角色可用的功能。")}
           </p>
         </div>
 
@@ -6380,7 +6599,7 @@ async function rolesPage() {
           <div class="eyebrow">RBAC · PERMISSIONS</div>
           <h2>${tr("角色与权限")}</h2>
           <p class="sub">
-            后端按权限强制校验；这里显示四种业务角色的权限矩阵。
+            ${tr("后端按权限强制校验；这里显示四种业务角色的权限矩阵。")}
           </p>
         </div>
       </section>
@@ -6797,7 +7016,7 @@ async function logsPage() {
       <h2
         style="margin-bottom:22px"
       >
-        最近操作
+        ${tr("最近操作")}
       </h2>
 
       ${table(
@@ -6820,8 +7039,10 @@ async function logsPage() {
 
               <td>
                 ${esc(
-                  l.operation_display ||
-                    l.operation,
+                  translateOperation(
+                    l.operation_display ||
+                      l.operation,
+                  ),
                 )}
               </td>
 
@@ -6843,8 +7064,1228 @@ async function logsPage() {
   `;
 }
 
+async function memberPage() {
+  const [
+    summaryResponse,
+    couponsResponse,
+    pointsResponse,
+  ] = await Promise.all([
+    api("/member/summary"),
+    api("/member/coupons"),
+    api("/member/points"),
+  ]);
+
+  const summary = summaryResponse.summary || {};
+  const couponData = couponsResponse || {};
+  const pointData = pointsResponse || {};
+
+  const availableCoupons = couponData.available || [];
+  const ownedCoupons = couponData.owned || [];
+  const pointItems = pointData.items || [];
+
+  const moneyText = (cents) =>
+    `¥${(Number(cents || 0) / 100).toFixed(2)}`;
+
+  const tier = summary.tier || {};
+  const nextTier = summary.next_tier || null;
+
+  const tierKey = String(
+    tier.code ||
+      tier.key ||
+      tier.slug ||
+      "bronze",
+  ).toLowerCase();
+
+  const progress = Math.max(
+    0,
+    Math.min(
+      100,
+      Number(summary.progress_pct || 0),
+    ),
+  );
+
+  const pointsBalance =
+    Number(summary.points_balance || 0);
+
+  const lifetimePoints =
+    Number(summary.lifetime_points || 0);
+
+  const discountPct =
+    Number(tier.discount_pct || 0);
+
+  const multiplier =
+    Number(tier.points_multiplier || 1);
+
+  const couponValue = (coupon) => {
+    if (
+      coupon.discount_type ===
+      "percent"
+    ) {
+      return `${Number(
+        coupon.discount_value || 0,
+      )}%`;
+    }
+
+    return moneyText(
+      coupon.discount_value,
+    );
+  };
+
+  const couponCard = (coupon) => {
+    const isPercent =
+      coupon.discount_type ===
+      "percent";
+
+    const cap =
+      Number(
+        coupon.max_discount_cents ||
+          0,
+      ) > 0
+        ? `
+          <span>
+            ${tr("最高可减")}
+            ${moneyText(
+              coupon.max_discount_cents,
+            )}
+          </span>
+        `
+        : "";
+
+    return `
+      <article class="member-v2-coupon">
+        <div class="member-v2-coupon-left">
+          <div class="member-v2-coupon-value">
+            ${couponValue(coupon)}
+          </div>
+
+          <div class="member-v2-coupon-label">
+            ${
+              isPercent
+                ? tr("充电折扣券")
+                : tr("充电优惠券")
+            }
+          </div>
+        </div>
+
+        <div class="member-v2-coupon-divider"></div>
+
+        <div class="member-v2-coupon-main">
+          <div>
+            <h3>
+              ${esc(
+                tr(
+                  coupon.name ||
+                    "充电优惠券",
+                ),
+              )}
+            </h3>
+
+            <p>
+              ${esc(
+                tr(
+                  coupon.description ||
+                    "",
+                ),
+              )}
+            </p>
+          </div>
+
+          <div class="member-v2-coupon-meta">
+            <span>
+              ${tr("满")}
+              ${moneyText(
+                coupon.min_spend_cents,
+              )}
+            </span>
+
+            ${cap}
+
+            ${
+              Number(
+                coupon.points_cost || 0,
+              ) > 0
+                ? `
+                  <span>
+                    ${coupon.points_cost}
+                    ${tr("积分")}
+                  </span>
+                `
+                : `
+                  <span>
+                    ${tr("免费领取")}
+                  </span>
+                `
+            }
+          </div>
+        </div>
+
+        <div class="member-v2-coupon-action">
+          <small>
+            ${esc(
+              coupon.code || "",
+            )}
+          </small>
+
+          ${
+            coupon.affordable
+              ? btn(
+                  tr("立即领取"),
+                  "member-claim-coupon",
+                  "primary",
+                  `data-id="${coupon.id}"`,
+                )
+              : `
+                <span class="member-v2-disabled">
+                  ${tr("积分不足")}
+                </span>
+              `
+          }
+        </div>
+      </article>
+    `;
+  };
+
+  const ownedCouponCard =
+    (coupon) => `
+      <article class="member-v2-owned-coupon">
+        <div class="member-v2-owned-icon">
+          ${ic("gift")}
+        </div>
+
+        <div class="member-v2-owned-info">
+          <strong>
+            ${esc(
+              tr(
+                coupon.name ||
+                  "充电优惠券",
+              ),
+            )}
+          </strong>
+
+          <span>
+            ${esc(
+              coupon.code || "",
+            )}
+          </span>
+        </div>
+
+        <div class="member-v2-owned-value">
+          <strong>
+            ${couponValue(coupon)}
+          </strong>
+
+          <small>
+            ${tr("可用于充电结算")}
+          </small>
+        </div>
+
+        <span class="member-v2-status">
+          ${tr("可用")}
+        </span>
+      </article>
+    `;
+
+  const pointRow = (item) => {
+    const amount =
+      Number(item.amount || 0);
+
+    const positive =
+      amount >= 0;
+
+    return `
+      <div class="member-v2-point-row">
+        <div class="member-v2-point-icon">
+          ${ic(
+            positive
+              ? "bolt"
+              : "wallet",
+          )}
+        </div>
+
+        <div class="member-v2-point-info">
+          <strong>
+            ${esc(
+              tr(
+                item.note ||
+                  item.kind ||
+                  "积分变动",
+              ),
+            )}
+          </strong>
+
+          <small>
+            ${item.created_at
+              ? time(
+                  item.created_at,
+                )
+              : ""}
+          </small>
+        </div>
+
+        <div
+          class="
+            member-v2-point-amount
+            ${positive ? "positive" : "negative"}
+          "
+        >
+          ${
+            positive
+              ? "+"
+              : ""
+          }${amount}
+        </div>
+      </div>
+    `;
+  };
+
+  return trHtml`
+    <style>
+      .member-v2-page {
+        display:flex;
+        flex-direction:column;
+        gap:24px;
+        padding-bottom:24px;
+      }
+
+      .member-v2-hero {
+        position:relative;
+        overflow:hidden;
+        border-radius:28px;
+        padding:32px;
+        background:
+          radial-gradient(
+            circle at 88% 15%,
+            rgba(184,164,232,.34),
+            transparent 34%
+          ),
+          linear-gradient(
+            135deg,
+            #f7f3fb 0%,
+            #f0ebf8 55%,
+            #ebe5f5 100%
+          );
+        border:1px solid rgba(137,112,177,.12);
+        box-shadow:
+          0 20px 45px rgba(82,63,111,.08);
+      }
+
+      .member-v2-hero::after {
+        content:"";
+        position:absolute;
+        width:250px;
+        height:250px;
+        right:-90px;
+        bottom:-110px;
+        border-radius:50%;
+        border:1px solid rgba(123,99,161,.13);
+      }
+
+      .member-v2-hero-top {
+        position:relative;
+        z-index:1;
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-start;
+        gap:28px;
+      }
+
+      .member-v2-eyebrow {
+        margin-bottom:8px;
+        font-size:11px;
+        font-weight:800;
+        letter-spacing:.14em;
+        text-transform:uppercase;
+        color:#8970b1;
+      }
+
+      .member-v2-hero h1 {
+        margin:0;
+        font-size:32px;
+        line-height:1.12;
+        letter-spacing:-.03em;
+        color:#2d2638;
+      }
+
+      .member-v2-hero-sub {
+        margin:10px 0 0;
+        max-width:620px;
+        color:#766d81;
+        line-height:1.65;
+      }
+
+      .member-v2-tier-pill {
+        display:flex;
+        align-items:center;
+        gap:10px;
+        flex-shrink:0;
+        padding:11px 15px;
+        border-radius:999px;
+        background:rgba(255,255,255,.78);
+        border:1px solid rgba(121,99,154,.12);
+        box-shadow:0 8px 22px rgba(82,63,111,.06);
+        font-weight:700;
+        color:#4e425e;
+      }
+
+      .member-v2-tier-dot {
+        width:9px;
+        height:9px;
+        border-radius:50%;
+        background:#9d88c5;
+      }
+
+      .member-v2-hero-bottom {
+        position:relative;
+        z-index:1;
+        margin-top:28px;
+      }
+
+      .member-v2-progress-head,
+      .member-v2-progress-foot {
+        display:flex;
+        justify-content:space-between;
+        gap:16px;
+      }
+
+      .member-v2-progress-head {
+        margin-bottom:9px;
+        font-size:13px;
+        font-weight:700;
+        color:#4f4659;
+      }
+
+      .member-v2-progress-foot {
+        margin-top:9px;
+        font-size:12px;
+        color:#83798d;
+      }
+
+      .member-v2-progress {
+        height:9px;
+        overflow:hidden;
+        border-radius:999px;
+        background:rgba(255,255,255,.68);
+      }
+
+      .member-v2-progress-fill {
+        height:100%;
+        border-radius:inherit;
+        background:
+          linear-gradient(
+            90deg,
+            #9b85c4,
+            #b7a2de
+          );
+        box-shadow:
+          0 2px 9px rgba(139,113,181,.25);
+      }
+
+      .member-v2-no-next {
+        display:flex;
+        align-items:center;
+        gap:8px;
+        color:#766884;
+        font-size:13px;
+        font-weight:600;
+      }
+
+      .member-v2-metrics {
+        display:grid;
+        grid-template-columns:
+          repeat(4, minmax(0, 1fr));
+        gap:16px;
+      }
+
+      .member-v2-metric {
+        padding:20px;
+        border-radius:20px;
+        background:#fff;
+        border:1px solid #eee9f3;
+        box-shadow:
+          0 10px 28px rgba(61,49,78,.045);
+      }
+
+      .member-v2-metric-top {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+        color:#81758c;
+        font-size:12px;
+        font-weight:700;
+      }
+
+      .member-v2-metric-icon {
+        display:grid;
+        place-items:center;
+        width:34px;
+        height:34px;
+        border-radius:11px;
+        background:#f4eef9;
+        color:#8d74b7;
+      }
+
+      .member-v2-metric-icon .ico {
+        width:17px;
+        height:17px;
+      }
+
+      .member-v2-metric strong {
+        display:block;
+        margin-top:13px;
+        font-size:25px;
+        line-height:1;
+        letter-spacing:-.03em;
+        color:#30283a;
+      }
+
+      .member-v2-section {
+        border-radius:24px;
+        padding:24px;
+        background:#fff;
+        border:1px solid #eee9f3;
+        box-shadow:
+          0 12px 32px rgba(61,49,78,.045);
+      }
+
+      .member-v2-section-head {
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-end;
+        gap:20px;
+        margin-bottom:18px;
+      }
+
+      .member-v2-section-head h2 {
+        margin:0;
+        color:#30283a;
+        font-size:20px;
+      }
+
+      .member-v2-section-head p {
+        margin:6px 0 0;
+        color:#867b8e;
+        font-size:13px;
+      }
+
+      .member-v2-section-badge {
+        padding:7px 11px;
+        border-radius:999px;
+        background:#f7f3fa;
+        color:#78688c;
+        font-size:12px;
+        font-weight:700;
+      }
+
+      .member-v2-coupon-list {
+        display:grid;
+        gap:14px;
+      }
+
+      .member-v2-coupon {
+        display:grid;
+        grid-template-columns:150px 1px minmax(0,1fr) auto;
+        align-items:center;
+        gap:18px;
+        min-height:116px;
+        padding:18px 20px;
+        border-radius:20px;
+        border:1px solid #eee8f4;
+        background:
+          linear-gradient(
+            180deg,
+            #fff,
+            #fcfbfd
+          );
+        transition:
+          transform .18s ease,
+          box-shadow .18s ease;
+      }
+
+      .member-v2-coupon:hover {
+        transform:translateY(-2px);
+        box-shadow:
+          0 12px 28px rgba(64,46,83,.08);
+      }
+
+      .member-v2-coupon-left {
+        text-align:center;
+      }
+
+      .member-v2-coupon-value {
+        font-size:30px;
+        line-height:1;
+        font-weight:850;
+        letter-spacing:-.04em;
+        color:#60458a;
+      }
+
+      .member-v2-coupon-label {
+        margin-top:7px;
+        color:#8a7d95;
+        font-size:11px;
+        font-weight:700;
+      }
+
+      .member-v2-coupon-divider {
+        height:72px;
+        border-left:1px dashed #ddd4e6;
+      }
+
+      .member-v2-coupon-main {
+        min-width:0;
+      }
+
+      .member-v2-coupon-main h3 {
+        margin:0;
+        color:#342b3d;
+        font-size:16px;
+      }
+
+      .member-v2-coupon-main p {
+        margin:6px 0 0;
+        color:#877c8e;
+        font-size:12px;
+        line-height:1.5;
+      }
+
+      .member-v2-coupon-meta {
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin-top:12px;
+      }
+
+      .member-v2-coupon-meta span {
+        padding:5px 9px;
+        border-radius:8px;
+        background:#f7f3fa;
+        color:#72647f;
+        font-size:11px;
+        font-weight:650;
+      }
+
+      .member-v2-coupon-action {
+        display:flex;
+        flex-direction:column;
+        align-items:flex-end;
+        gap:8px;
+        min-width:108px;
+      }
+
+      .member-v2-coupon-action small {
+        color:#a094a9;
+        font-size:10px;
+        letter-spacing:.05em;
+      }
+
+      .member-v2-coupon-action .btn {
+        white-space:nowrap;
+      }
+
+      .member-v2-disabled {
+        color:#9b909f;
+        font-size:12px;
+        font-weight:700;
+      }
+
+      .member-v2-owned-list {
+        display:grid;
+        grid-template-columns:
+          repeat(2, minmax(0, 1fr));
+        gap:12px;
+      }
+
+      .member-v2-owned-coupon {
+        display:grid;
+        grid-template-columns:42px minmax(0,1fr) auto auto;
+        align-items:center;
+        gap:12px;
+        padding:15px;
+        border-radius:16px;
+        background:#fbfafc;
+        border:1px solid #eeeaf1;
+      }
+
+      .member-v2-owned-icon {
+        display:grid;
+        place-items:center;
+        width:42px;
+        height:42px;
+        border-radius:13px;
+        background:#f0e9f7;
+        color:#8b70b3;
+      }
+
+      .member-v2-owned-icon .ico {
+        width:18px;
+        height:18px;
+      }
+
+      .member-v2-owned-info {
+        min-width:0;
+      }
+
+      .member-v2-owned-info strong,
+      .member-v2-owned-info span {
+        display:block;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      }
+
+      .member-v2-owned-info strong {
+        font-size:13px;
+        color:#3a3143;
+      }
+
+      .member-v2-owned-info span {
+        margin-top:4px;
+        color:#99909f;
+        font-size:10px;
+      }
+
+      .member-v2-owned-value {
+        text-align:right;
+      }
+
+      .member-v2-owned-value strong,
+      .member-v2-owned-value small {
+        display:block;
+      }
+
+      .member-v2-owned-value strong {
+        color:#67488f;
+        font-size:16px;
+      }
+
+      .member-v2-owned-value small {
+        margin-top:4px;
+        color:#968b9e;
+        font-size:10px;
+      }
+
+      .member-v2-status {
+        padding:6px 9px;
+        border-radius:999px;
+        background:#edf7f1;
+        color:#4f8c6b;
+        font-size:10px;
+        font-weight:800;
+      }
+
+      .member-v2-points {
+        display:grid;
+        grid-template-columns:
+          minmax(0,1fr) 300px;
+        gap:20px;
+      }
+
+      .member-v2-points-total {
+        display:flex;
+        flex-direction:column;
+        justify-content:center;
+        padding:24px;
+        border-radius:20px;
+        background:
+          linear-gradient(
+            145deg,
+            #f8f4fb,
+            #efe8f7
+          );
+      }
+
+      .member-v2-points-total span {
+        color:#83768c;
+        font-size:12px;
+        font-weight:700;
+      }
+
+      .member-v2-points-total strong {
+        margin-top:10px;
+        color:#34283e;
+        font-size:38px;
+        line-height:1;
+        letter-spacing:-.04em;
+      }
+
+      .member-v2-points-total small {
+        margin-top:10px;
+        color:#8e8297;
+        font-size:11px;
+      }
+
+      .member-v2-point-list {
+        overflow:hidden;
+        border:1px solid #eee9f2;
+        border-radius:18px;
+      }
+
+      .member-v2-point-row {
+        display:grid;
+        grid-template-columns:36px minmax(0,1fr) auto;
+        align-items:center;
+        gap:12px;
+        padding:14px 16px;
+        border-bottom:1px solid #f0ecf2;
+      }
+
+      .member-v2-point-row:last-child {
+        border-bottom:0;
+      }
+
+      .member-v2-point-icon {
+        display:grid;
+        place-items:center;
+        width:36px;
+        height:36px;
+        border-radius:11px;
+        background:#f6f2f9;
+        color:#8d74b0;
+      }
+
+      .member-v2-point-icon .ico {
+        width:16px;
+        height:16px;
+      }
+
+      .member-v2-point-info {
+        min-width:0;
+      }
+
+      .member-v2-point-info strong,
+      .member-v2-point-info small {
+        display:block;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      }
+
+      .member-v2-point-info strong {
+        color:#403646;
+        font-size:12px;
+      }
+
+      .member-v2-point-info small {
+        margin-top:4px;
+        color:#9a909f;
+        font-size:10px;
+      }
+
+      .member-v2-point-amount {
+        font-weight:850;
+        font-size:14px;
+      }
+
+      .member-v2-point-amount.positive {
+        color:#4e9270;
+      }
+
+      .member-v2-point-amount.negative {
+        color:#9a6973;
+      }
+
+      .member-v2-empty {
+        padding:28px;
+        text-align:center;
+        color:#9a909f;
+        font-size:13px;
+        background:#fbfafc;
+        border-radius:16px;
+      }
+
+      @media (max-width: 1050px) {
+        .member-v2-metrics {
+          grid-template-columns:
+            repeat(2, minmax(0,1fr));
+        }
+
+        .member-v2-coupon {
+          grid-template-columns:120px 1px minmax(0,1fr);
+        }
+
+        .member-v2-coupon-action {
+          grid-column:1 / -1;
+          flex-direction:row;
+          justify-content:space-between;
+          align-items:center;
+          padding-top:12px;
+          border-top:1px dashed #e4dce9;
+        }
+
+        .member-v2-owned-list {
+          grid-template-columns:1fr;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .member-v2-hero {
+          padding:24px;
+        }
+
+        .member-v2-hero-top {
+          flex-direction:column;
+        }
+
+        .member-v2-hero h1 {
+          font-size:26px;
+        }
+
+        .member-v2-metrics {
+          grid-template-columns:1fr 1fr;
+        }
+
+        .member-v2-coupon {
+          grid-template-columns:
+            1fr;
+          gap:12px;
+          text-align:left;
+        }
+
+        .member-v2-coupon-left {
+          text-align:left;
+        }
+
+        .member-v2-coupon-divider {
+          display:none;
+        }
+
+        .member-v2-points {
+          grid-template-columns:1fr;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .member-v2-metrics {
+          grid-template-columns:1fr;
+        }
+
+        .member-v2-section {
+          padding:18px;
+        }
+
+        .member-v2-owned-coupon {
+          grid-template-columns:
+            42px minmax(0,1fr);
+        }
+
+        .member-v2-owned-value,
+        .member-v2-status {
+          grid-column:2;
+          text-align:left;
+        }
+      }
+    </style>
+
+    <div class="member-v2-page">
+
+      <section class="member-v2-hero">
+        <div class="member-v2-hero-top">
+
+          <div>
+            <div class="member-v2-eyebrow">
+              NCS MEMBERSHIP
+            </div>
+
+            <h1>
+              ${esc(
+                tr(
+                  tier.name ||
+                    "青铜会员",
+                ),
+              )}
+            </h1>
+
+            <p class="member-v2-hero-sub">
+              ${esc(
+                tr(
+                  tier.description ||
+                    "享受专属充电权益和积分奖励",
+                ),
+              )}
+            </p>
+          </div>
+
+          <div class="member-v2-tier-pill">
+            <span class="member-v2-tier-dot"></span>
+            ${tr("当前会员等级")}
+          </div>
+
+        </div>
+
+        <div class="member-v2-hero-bottom">
+
+          ${
+            nextTier
+              ? `
+                <div
+                  class="
+                    member-v2-progress-head
+                  "
+                >
+                  <span>
+                    ${esc(
+                      tr(
+                        tier.name ||
+                          "",
+                      ),
+                    )}
+                    →
+                    ${esc(
+                      tr(
+                        nextTier.name ||
+                          "",
+                      ),
+                    )}
+                  </span>
+
+                  <strong>
+                    ${progress.toFixed(0)}%
+                  </strong>
+                </div>
+
+                <div class="member-v2-progress">
+                  <div
+                    class="
+                      member-v2-progress-fill
+                    "
+                    style="width:${progress}%"
+                  ></div>
+                </div>
+
+                <div
+                  class="
+                    member-v2-progress-foot
+                  "
+                >
+                  <span>
+                    ${lifetimePoints}
+                    ${tr("积分")}
+                  </span>
+
+                  <span>
+                    ${tr("升级需要")}
+                    ${Number(
+                      nextTier.min_points ||
+                        0,
+                    )}
+                    ${tr("积分")}
+                  </span>
+                </div>
+              `
+              : `
+                <div
+                  class="
+                    member-v2-no-next
+                  "
+                >
+                  ${ic("leaf")}
+                  ${tr("您已达到最高会员等级")}
+                </div>
+              `
+          }
+
+        </div>
+      </section>
+
+      <section class="member-v2-metrics">
+
+        <div class="member-v2-metric">
+          <div class="member-v2-metric-top">
+            <span>${tr("可用积分")}</span>
+            <div class="member-v2-metric-icon">
+              ${ic("bolt")}
+            </div>
+          </div>
+
+          <strong>
+            ${pointsBalance.toLocaleString()}
+          </strong>
+        </div>
+
+        <div class="member-v2-metric">
+          <div class="member-v2-metric-top">
+            <span>${tr("会员折扣")}</span>
+            <div class="member-v2-metric-icon">
+              ${ic("leaf")}
+            </div>
+          </div>
+
+          <strong>
+            ${discountPct}%
+          </strong>
+        </div>
+
+        <div class="member-v2-metric">
+          <div class="member-v2-metric-top">
+            <span>${tr("积分倍率")}</span>
+            <div class="member-v2-metric-icon">
+              ${ic("chart")}
+            </div>
+          </div>
+
+          <strong>
+            ${multiplier}×
+          </strong>
+        </div>
+
+        <div class="member-v2-metric">
+          <div class="member-v2-metric-top">
+            <span>${tr("我的优惠券")}</span>
+            <div class="member-v2-metric-icon">
+              ${ic("wallet")}
+            </div>
+          </div>
+
+          <strong>
+            ${ownedCoupons.length}
+          </strong>
+        </div>
+
+      </section>
+
+      <section class="member-v2-section">
+
+        <div class="member-v2-section-head">
+          <div>
+            <h2>${tr("优惠券")}</h2>
+            <p>
+              ${tr(
+                "领取优惠，让每一次充电都更划算",
+              )}
+            </p>
+          </div>
+
+          <span class="member-v2-section-badge">
+            ${availableCoupons.length}
+            ${tr("张可领取")}
+          </span>
+        </div>
+
+        <div class="member-v2-coupon-list">
+
+          ${
+            availableCoupons.length
+              ? availableCoupons
+                  .map(
+                    couponCard,
+                  )
+                  .join("")
+              : `
+                <div class="member-v2-empty">
+                  ${tr(
+                    "暂无可领取优惠券",
+                  )}
+                </div>
+              `
+          }
+
+        </div>
+      </section>
+
+      <section class="member-v2-section">
+
+        <div class="member-v2-section-head">
+          <div>
+            <h2>
+              ${tr("我的优惠券")}
+            </h2>
+
+            <p>
+              ${tr(
+                "已领取、可用于充电结算的优惠券",
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div class="member-v2-owned-list">
+
+          ${
+            ownedCoupons.length
+              ? ownedCoupons
+                  .map(
+                    ownedCouponCard,
+                  )
+                  .join("")
+              : `
+                <div
+                  class="member-v2-empty"
+                  style="grid-column:1/-1"
+                >
+                  ${tr(
+                    "暂无可用优惠券",
+                  )}
+                </div>
+              `
+          }
+
+        </div>
+      </section>
+
+      <section class="member-v2-section">
+
+        <div class="member-v2-section-head">
+          <div>
+            <h2>
+              ${tr("积分明细")}
+            </h2>
+
+            <p>
+              ${tr(
+                "查看积分获得与兑换记录",
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div class="member-v2-points">
+
+          <div class="member-v2-point-list">
+
+            ${
+              pointItems.length
+                ? pointItems
+                    .map(pointRow)
+                    .join("")
+                : `
+                  <div class="member-v2-empty">
+                    ${tr(
+                      "暂无积分记录",
+                    )}
+                  </div>
+                `
+            }
+
+          </div>
+
+          <div class="member-v2-points-total">
+            <span>
+              ${tr("当前积分余额")}
+            </span>
+
+            <strong>
+              ${pointsBalance.toLocaleString()}
+            </strong>
+
+            <small>
+              ${tr("累计获得")}
+              ${lifetimePoints.toLocaleString()}
+              ${tr("积分")}
+            </small>
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+  `;
+}
+
 const renderers = {
   dashboard,
+  member:
+    memberPage,
   stations:
     stationsPage,
   station:
@@ -6881,6 +8322,11 @@ const renderers = {
     logsPage,
   settings:
     preferencesCard,
+  'ops-center': async () => {
+  return await window.NCSOpsFeatures.renderOpsCenter(
+    S.user?.role || 'user'
+  );
+}
 };
 
 async function go(
@@ -7148,6 +8594,7 @@ async function refresh() {
 
 async function afterLogin() {
   await adoptAccountPreferences();
+  startNotificationPolling();
 
   if (
     S.scanNumber &&
@@ -8140,6 +9587,19 @@ async function act(
       $("#modal").close();
       break;
 
+    case "notifications":
+      await showUserNotifications();
+      break;
+
+    case "notification-read": {
+      const nid = b.dataset.nid;
+      if (nid) {
+        await api(`/notifications/${encodeURIComponent(nid)}/read`, "POST", {});
+        await showUserNotifications();
+      }
+      break;
+    }
+
     case "menu":
       $(".sidebar")
         .classList
@@ -8414,19 +9874,7 @@ async function act(
       break;
 
     case "order-finish":
-      confirmModal(
-        tr(
-          "结束充电并结算",
-        ),
-
-        tr(
-          "确认后停止模拟充电，按最终电量扣款并释放充电桩。",
-        ),
-
-        "finish",
-
-        `data-id="${id}"`,
-      );
+      await finishOrderModal(id);
       break;
 
     case "order-cancel":
@@ -8509,6 +9957,58 @@ async function act(
         ),
       );
       break;
+
+    case "member-claim-coupon": {
+      await api(
+        `/member/coupons/${id}/claim`,
+        "POST",
+        {},
+      );
+
+      await go(
+        "member",
+      );
+
+      toast(
+        tr(
+          "优惠券领取成功",
+        ),
+      );
+
+      break;
+    }
+
+    case "finish-submit": {
+      const couponSelect = $("#finish-coupon");
+
+      const couponId = couponSelect?.value
+        ? Number(couponSelect.value)
+        : null;
+
+      const payload = couponId
+        ? { coupon_id: couponId }
+        : {};
+
+      await api(
+        `/orders/${id}/finish`,
+        "POST",
+        payload,
+      );
+
+      $("#modal").close();
+
+      await refresh();
+      await go("orders");
+      await receipt(id);
+
+      toast(
+        couponId
+          ? tr("\u5145\u7535\u5b8c\u6210\uff0c\u4f18\u60e0\u5238\u5df2\u4f7f\u7528")
+          : tr("\u5145\u7535\u5b8c\u6210\uff0c\u7ed3\u7b97\u6210\u529f"),
+      );
+
+      break;
+    }
 
     case "confirm": {
       const op =

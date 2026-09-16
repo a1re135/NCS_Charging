@@ -63,19 +63,13 @@ def create_app(config=None):
         MYSQL_DATABASE=os.getenv("MYSQL_DATABASE", "ncs_charging"),
         MYSQL_USER=os.getenv("MYSQL_USER", "ncs_app"),
         MYSQL_PASSWORD=os.getenv("MYSQL_PASSWORD", ""),
-
         TIME_SCALE=60,
         MAX_CONTENT_LENGTH=6 * 1024 * 1024,
-
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=os.getenv(
-            "NCS_COOKIE_SECURE", "0"
-        ).lower() in ("1", "true", "yes"),
-
-        TRUST_PROXY=os.getenv(
-            "NCS_TRUST_PROXY", "0"
-        ).lower() in ("1", "true", "yes"),
+        SESSION_COOKIE_SECURE=os.getenv("NCS_COOKIE_SECURE", "0").lower() in ("1", "true", "yes"),
+        TRUST_PROXY=os.getenv("NCS_TRUST_PROXY", "0").lower() in ("1", "true", "yes"),
+        NCS_BACKUP_DIR=os.getenv("NCS_BACKUP_DIR", ""),
     )
 
     if config:
@@ -101,36 +95,19 @@ def create_app(config=None):
 
     @app.before_request
     def csrf_check():
-        if (
-            request.path.startswith("/api/")
-            and request.method not in ("GET", "HEAD", "OPTIONS")
-        ):
+        if request.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
             supplied = request.headers.get("X-CSRF-Token", "")
-
-            if (
-                not supplied
-                or not secrets.compare_digest(
-                    supplied,
-                    session.get("csrf", ""),
-                )
-            ):
-                raise BusinessError(
-                    "页面会话已过期，请刷新页面后重试",
-                    403,
-                )
+            if not supplied or not secrets.compare_digest(supplied, session.get("csrf", "")):
+                raise BusinessError("页面会话已过期，请刷新页面后重试", 403)
 
     @app.after_request
     def headers(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = (
-            "strict-origin-when-cross-origin"
-        )
-
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         if request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
             response.headers["Content-Language"] = current_language()
-
         return response
 
     @app.errorhandler(BusinessError)
@@ -142,9 +119,7 @@ def create_app(config=None):
     
     @app.errorhandler(pymysql.err.IntegrityError)
     def integrity_error(e):
-        return jsonify(
-            error=translate("数据冲突：编号已存在、资源正在使用，或记录仍被其他数据引用")
-        ), 409
+        return jsonify(error=translate("数据冲突：编号已存在、资源正在使用，或记录仍被其他数据引用")), 409
 
     @app.errorhandler(400)
     def bad_request(e):
@@ -160,15 +135,15 @@ def create_app(config=None):
 
     @app.get("/charge/<string:charger_number>")
     def charge_page(charger_number):
-        return render_template(
-            "index.html"
-    )
-    from .routes import api
+        return render_template("index.html")
 
-    app.register_blueprint(
-        api,
-        url_prefix="/api",
-    )
+    from .routes import api
+    from .ops_features import ops_api
+    from .loyalty import member_api
+
+    app.register_blueprint(api, url_prefix="/api")
+    app.register_blueprint(ops_api, url_prefix="/api")
+    app.register_blueprint(member_api, url_prefix="/api")
 
     with app.app_context():
         init_db()

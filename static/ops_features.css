@@ -1,0 +1,409 @@
+/* NCS Operations Center
+   Uses the same NCS theme tokens as style.css/themes.css.
+*/
+
+.ops-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--ink);
+}
+
+.ops-page .card,
+.ops-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.ops-page h2,
+.ops-page h3,
+.ops-page strong,
+.ops-table,
+.ops-table td {
+  color: var(--ink);
+}
+
+.ops-page p,
+.ops-mini,
+.ops-kpi small,
+.ops-kpi em,
+.ops-table th,
+.ops-notify-body,
+.ops-notify-time {
+  color: var(--muted);
+}
+
+.ops-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ops-card {
+  border-radius: 18px;
+  padding: 20px;
+}
+
+.ops-card h2,
+.ops-card h3 {
+  margin: 0;
+}
+
+.ops-card h2 {
+  font-size: 19px;
+}
+
+.ops-card h3 {
+  font-size: 16px;
+}
+
+.ops-kpi {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ops-kpi small {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.ops-kpi strong {
+  font-size: 28px;
+  line-height: 1.05;
+}
+
+.ops-kpi em {
+  font-style: normal;
+  font-size: 12px;
+  margin-left: 5px;
+}
+
+.ops-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: var(--purple-soft);
+  color: var(--purple);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.ops-health-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.ops-health-item {
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+}
+
+.ops-health-item small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ops-health-item .ops-status {
+  font-weight: 700;
+  margin-top: 5px;
+}
+
+.ops-status.ok {
+  color: var(--green);
+}
+
+.ops-status.warn {
+  color: var(--accent-text);
+}
+
+.ops-status.bad {
+  color: var(--purple);
+}
+
+.ops-meter {
+  height: 8px;
+  background: var(--line);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.ops-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--purple);
+}
+
+.ops-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.ops-toolbar input,
+.ops-toolbar select {
+  min-height: 40px;
+  border: 1px solid var(--control-border);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: var(--surface);
+  color: var(--ink);
+  outline: none;
+}
+
+.ops-toolbar input::placeholder {
+  color: var(--muted);
+}
+
+.ops-toolbar input:focus,
+.ops-toolbar select:focus {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px var(--purple-soft);
+}
+
+.ops-mini {
+  font-size: 12px;
+}
+
+.ops-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.ops-section-head .right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ops-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.ops-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ops-table th,
+.ops-table td {
+  padding: 11px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ops-table th {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.ops-table tbody tr:hover {
+  background: var(--surface-raised);
+}
+
+.ops-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--purple-soft);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ops-pill.warn,
+.ops-pill.danger,
+.ops-pill.success {
+  background: var(--surface-raised);
+}
+
+.ops-pill.warn {
+  color: var(--accent-text);
+}
+
+.ops-pill.danger {
+  color: var(--purple);
+}
+
+.ops-pill.success {
+  color: var(--green);
+}
+
+.ops-empty {
+  padding: 30px;
+  text-align: center;
+  color: var(--muted);
+  background: var(--surface-raised);
+  border-radius: 12px;
+}
+
+.ops-notify {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ops-notify:last-child {
+  border-bottom: 0;
+}
+
+.ops-notify-icon {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--purple-soft);
+  display: grid;
+  place-items: center;
+  color: var(--purple);
+}
+
+.ops-notify-icon.warn {
+  background: var(--blue);
+  color: var(--accent-text);
+}
+
+.ops-notify-icon.danger {
+  background: var(--pink);
+  color: var(--purple);
+}
+
+.ops-notify-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.ops-notify-title {
+  font-weight: 700;
+}
+
+.ops-notify-body {
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 3px;
+}
+
+.ops-notify-time {
+  font-size: 11px;
+  margin-top: 5px;
+}
+
+.ops-unread,
+.ops-notify-badge {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--purple);
+  color: var(--on-accent);
+  font-size: 10px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.ops-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 17px 20px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.ops-banner p {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.ops-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ops-notify-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 41px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.ops-notify-button:hover {
+  background: var(--surface-raised);
+  color: var(--accent-text);
+}
+
+.ops-bell {
+  font-size: 16px;
+  line-height: 1;
+}
+
+@media (max-width: 1100px) {
+  .ops-grid {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    ) !important;
+  }
+
+  .ops-health-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .ops-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ops-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ops-banner-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .ops-section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

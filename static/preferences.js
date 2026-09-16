@@ -26,7 +26,7 @@
     document.documentElement.dataset.themePreference = state.theme;
     document.documentElement.lang = state.language === "en" ? "en" : "zh-CN";
     document.documentElement.style.colorScheme = theme;
-    document.title = translate("NCS · 让每次出发，都充满能量");
+    document.title = translate("NCS SMART CHARGING");
   }
   function set(values, persist = true) {
     if (["zh", "en"].includes(values?.language))
@@ -94,3 +94,4 @@
 const tr = (value) => window.NCSPreferences.translate(value);
 const trHtml = (strings, ...values) =>
   window.NCSPreferences.template(strings, ...values);
+

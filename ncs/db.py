@@ -449,6 +449,10 @@ def init_db():
     # =====================================================
     _ensure_rbac_schema(db)
 
+    # LIM membership / points / coupon schema
+    from .loyalty import ensure_schema as ensure_loyalty_schema
+    ensure_loyalty_schema(db)
+
     # =====================================================
     # 4. Initialize avatar table
     # =====================================================

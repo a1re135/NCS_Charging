@@ -1036,7 +1036,8 @@ def order_action(oid,action):
     if not g.user['active'] and action not in ('finish','pay'):
         raise BusinessError('账号已冻结，无法执行该操作',403)
 
-    act_order(g.user['id'],oid,action)
+    data = body() if action == 'finish' else {}
+    act_order(g.user['id'],oid,action,data)
 
     return jsonify(
         order=quote(
