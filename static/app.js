@@ -9904,19 +9904,14 @@ async function act(
       break;
 
     case "order-finish":
-      // Stop charging immediately and freeze the
-      // time, energy and amount before opening
-      // the settlement window.
-      await api(
-        `/orders/${id}/stop`,
-        "POST",
-        {},
+      confirmModal(
+        tr("结束充电"),
+        tr(
+          "确认结束本次充电吗？确认后将立即停止计费，并进入结算页面。"
+        ),
+        "stop-and-settle",
+        `data-id="${id}"`,
       );
-
-      await finishOrderModal(
-        id,
-      );
-
       break;
 
     case "order-cancel":
@@ -10056,6 +10051,27 @@ async function act(
       const op =
         b.dataset.next;
 
+      if (
+        op === "stop-and-settle"
+      ) {
+        // Stop charging at the exact moment
+        // the user confirms.
+        await api(
+          `/orders/${id}/stop`,
+          "POST",
+          {},
+        );
+
+        $("#modal").close();
+
+        // Now open the settlement/coupon page.
+        await finishOrderModal(
+          id,
+        );
+
+        break;
+      }
+      
       if (
         [
           "finish",
