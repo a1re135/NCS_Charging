@@ -1,10 +1,12 @@
 """SQLite schema, lightweight migrations, and reproducible course-demo seed data."""
 import random
 import sqlite3
+import threading
 
 import pymysql
 from pymysql.cursors import DictCursor
 from .mysql_schema import MYSQL_SCHEMA
+from dbutils.pooled_db import PooledDB
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import current_app, g
@@ -87,6 +89,106 @@ class CompatRow(dict):
 class CompatCursor(DictCursor):
     dict_type = CompatRow
 
+_mysql_pool = None
+_mysql_pool_config = None
+_mysql_pool_lock = threading.Lock()
+
+
+def get_mysql_pool():
+    """
+    Create one shared PyMySQL connection pool for the process.
+
+    Each Flask request borrows a connection and close_db()
+    returns it to the pool instead of creating/destroying a
+    physical MySQL connection every request.
+    """
+
+    global _mysql_pool
+    global _mysql_pool_config
+
+    config_key = (
+        current_app.config["MYSQL_HOST"],
+        current_app.config["MYSQL_PORT"],
+        current_app.config["MYSQL_USER"],
+        current_app.config["MYSQL_PASSWORD"],
+        current_app.config["MYSQL_DATABASE"],
+    )
+
+    if (
+        _mysql_pool is not None
+        and _mysql_pool_config == config_key
+    ):
+        return _mysql_pool
+
+    with _mysql_pool_lock:
+        if (
+            _mysql_pool is not None
+            and _mysql_pool_config == config_key
+        ):
+            return _mysql_pool
+
+        # If configuration changed, discard idle
+        # connections from the previous pool.
+        if _mysql_pool is not None:
+            try:
+                _mysql_pool.close()
+            except Exception:
+                pass
+
+        _mysql_pool = PooledDB(
+            creator=pymysql,
+
+            # Keep a few ready connections alive.
+            mincached=4,
+
+            # Number of idle connections kept ready.
+            maxcached=32,
+
+            # Maximum simultaneous DB connections.
+            maxconnections=32,
+
+            # Wait for a free pooled connection instead
+            # of immediately throwing an exception.
+            blocking=True,
+
+            # Check the connection when borrowed.
+            ping=1,
+
+            host=current_app.config[
+                "MYSQL_HOST"
+            ],
+
+            port=current_app.config[
+                "MYSQL_PORT"
+            ],
+
+            user=current_app.config[
+                "MYSQL_USER"
+            ],
+
+            password=current_app.config[
+                "MYSQL_PASSWORD"
+            ],
+
+            database=current_app.config[
+                "MYSQL_DATABASE"
+            ],
+
+            charset="utf8mb4",
+
+            cursorclass=CompatCursor,
+
+            autocommit=True,
+
+            connect_timeout=10,
+            read_timeout=30,
+            write_timeout=30,
+        )
+
+        _mysql_pool_config = config_key
+
+        return _mysql_pool
+
 class MySQLDatabase:
     def __init__(self, connection):
         self.connection = connection
@@ -140,25 +242,8 @@ def get_db():
         backend = current_app.config.get("DB_BACKEND", "mysql")
 
         if backend == "mysql":
-            connection = pymysql.connect(
-                host=current_app.config["MYSQL_HOST"],
-                port=current_app.config["MYSQL_PORT"],
-                user=current_app.config["MYSQL_USER"],
-                password=current_app.config["MYSQL_PASSWORD"],
-                database=current_app.config["MYSQL_DATABASE"],
-                charset="utf8mb4",
-                cursorclass=CompatCursor,
-
-                # Important:
-                # Most existing routes expect individual INSERT/UPDATE
-                # statements to save automatically.
-                autocommit=True,
-
-                connect_timeout=10,
-                read_timeout=30,
-                write_timeout=30,
-            )
-
+            pool = get_mysql_pool()
+            connection = (pool.connection())
             g.db = MySQLDatabase(connection)
 
         else:

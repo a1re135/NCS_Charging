@@ -24,55 +24,57 @@ from .i18n import translate, current_language, operation_display
 api=Blueprint('api',__name__)
 _station_cache = {}
 
-_station_cache_lock = (
-    threading.Lock()
-)
+_station_cache_lock = threading.Lock()
 
-# Only one request may rebuild an expired
-# station-list cache entry at a time.
-_station_refresh_lock = (
-    threading.Lock()
-)
+_station_refresh_lock = threading.Lock()
 
-# Station list does not need millisecond-level
-# freshness. Realtime monitoring is handled by
-# the dedicated realtime endpoint/page.
+# Normal station browsing can tolerate a very short
+# delay. The dedicated realtime page handles faster
+# charger monitoring.
 _STATION_CACHE_TTL = 1.0
 
 _STATION_CACHE_MAX = 64
 
-def station_cache_get(key):
+
+def station_cache_lookup(key):
+    """
+    Return:
+        (cached_value, is_fresh)
+
+    Expired entries are intentionally kept so they can
+    still be served while another request refreshes them.
+    """
+
     now_value = time.monotonic()
 
     with _station_cache_lock:
-        item = _station_cache.get(key)
+        item = _station_cache.get(
+            key
+        )
 
         if item is None:
-            return None
+            return None, False
 
         created_at, value = item
 
-        if (
+        fresh = (
             now_value - created_at
-            > _STATION_CACHE_TTL
-        ):
-            _station_cache.pop(
-                key,
-                None,
-            )
-            return None
+            <= _STATION_CACHE_TTL
+        )
 
-        return value
+        return value, fresh
 
 
-def station_cache_set(key, value):
+def station_cache_set(
+    key,
+    value,
+):
     with _station_cache_lock:
 
-        # Prevent unlimited cache growth if clients
-        # supply many different coordinates.
         if (
             len(_station_cache)
             >= _STATION_CACHE_MAX
+            and key not in _station_cache
         ):
             _station_cache.clear()
 
@@ -81,40 +83,64 @@ def station_cache_set(key, value):
             value,
         )
 
-def station_cache_get_or_lock(
+
+def station_cache_begin_refresh(
     key,
 ):
     """
-    Return cached data when available.
+    Returns:
+        cached
+        refresh_owner
 
-    When the cache has expired, only one
-    request becomes the refresh owner.
-    Other requests wait briefly and then
-    reuse the refreshed value.
+    Fresh cache:
+        return immediately.
+
+    Expired cache:
+        one request refreshes;
+        everyone else keeps using stale data.
+
+    Cold cache:
+        one request refreshes;
+        other requests wait for that first result.
     """
 
-    cached = station_cache_get(
-        key
+    cached, fresh = (
+        station_cache_lookup(
+            key
+        )
     )
 
+    if fresh:
+        return cached, False
+
+    refresh_owner = (
+        _station_refresh_lock.acquire(
+            blocking=False
+        )
+    )
+
+    if refresh_owner:
+        # This request rebuilds the data.
+        return cached, True
+
+    # Somebody else is already refreshing.
+    #
+    # If we have an old value, serve it
+    # immediately instead of blocking.
     if cached is not None:
         return cached, False
 
-    _station_refresh_lock.acquire()
+    # Cold start only:
+    # no previous data exists, so wait for
+    # the first refresh to finish.
+    with _station_refresh_lock:
+        cached, _ = (
+            station_cache_lookup(
+                key
+            )
+        )
 
-    # Another request may have rebuilt the
-    # cache while this request was waiting.
-    cached = station_cache_get(
-        key
-    )
-
-    if cached is not None:
-        _station_refresh_lock.release()
-        return cached, False
-
-    # Caller owns the refresh lock and must
-    # release it after rebuilding the cache.
-    return None, True
+    return cached, False
 
 def body():
     data=request.get_json(silent=True)
@@ -451,13 +477,20 @@ def stations():
     )
 
     cached, refresh_owner = (
-        station_cache_get_or_lock(
+        station_cache_begin_refresh(
             cache_key
         )
     )
 
-    if cached is not None:
-        return jsonify(cached)
+    # Fresh cache OR stale cache while
+    # another request is refreshing.
+    if (
+        cached is not None
+        and not refresh_owner
+    ):
+        return jsonify(
+            cached
+        )
 
     # Only the refresh owner reaches this
     # section. The lock MUST always be
